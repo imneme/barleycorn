@@ -178,7 +178,8 @@ STATEMENTS  x = e   x += e   (-= *= /= %= &= |= ^= <<= >>=)   a; b on a line
             for k, v in m do ... end  case e when v1, v2 then ... else ... end
             break  continue  return [e]  assert c
 
-NUMBERS     byte word: unsigned 8, 16      int long quad: signed 16, 32, 64
+NUMBERS     byte word dword: unsigned 8, 16, 32
+            int long quad: signed 16, 32, 64
             bool: true false.  Overflow wraps; checked builds trap signed
             overflow.  Widen up freely; narrow with a cast: int(x)
             + - * / %  (as C: / truncates, % has the dividend's sign)
@@ -265,6 +266,11 @@ totals need more than 16 bits and much less than 64, and on a Z80 a
   range. Unsigned types wrap even when checked, because wrapping is what
   you want for a hash or a packed key, and it's never what you want for
   a running total. The type says which you meant.
+- **`dword`** is unsigned 32 bits, for the hash or packed key a `long`
+  would trap on. It widens from `byte` and `word` and to `quad`, and
+  meets `int` and `long` only through a cast, as `word` and `int` do. On
+  the Z80 its arithmetic is a small fragment of its own, so a program
+  without one doesn't carry it.
 - **`bool`** is a byte that's 0 or 1, with `true` and `false`. Barley's
   comparisons were already 0 or 1.
 
@@ -964,8 +970,8 @@ Barleycorn (HISTORY.md says why).
 6. *Answered (10 October):* BASIC's INK and PAPER 8 and 9, BRIGHT and
    FLASH 8, and `attr(r, c)` reading a square back, all as the ROM does
    them (section 5, "Screen and sound").
-7. **An unsigned 32-bit type**, for hashes that should wrap (a `long`
-   traps on overflow, by design).
+7. *Answered (10 October):* `dword`, unsigned 32 bits (section 5,
+   "Numbers").
 
 And the one that matters most, every time: **what would you reach for,
 and not find?**

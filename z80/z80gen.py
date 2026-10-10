@@ -35,7 +35,7 @@ from link import gather                                                # noqa: E
 import peephole                                                        # noqa: E402
 PEEP = os.environ.get('BLY_PEEP', '1') != '0'        # BLY_PEEP=0 turns the register cache off, to compare
 
-TYPE_CODE = {B.BYTE: 0, B.WORD: 1, B.INT: 2, B.LONG: 3, B.QUAD: 4}
+TYPE_CODE = {B.BYTE: 0, B.WORD: 1, B.INT: 2, B.LONG: 3, B.QUAD: 4, B.DWORD: 5}
 CMP_ROUTINE = {'<': 'bly_lt', '<=': 'bly_le', '>': 'bly_gt', '>=': 'bly_ge', '==': 'bly_eq', '!=': 'bly_ne'}
 NEG = {'<': '>=', '>=': '<', '>': '<=', '<=': '>', '==': '!=', '!=': '=='}
 SWAP = {'>': '<', '<=': '>='}                          # a > b is b < a; a <= b is b >= a
@@ -104,7 +104,7 @@ def size(t):
         return 1
     if t in (B.WORD, B.INT):
         return 2
-    if t is B.LONG or t is B.STR:
+    if t is B.LONG or t is B.DWORD or t is B.STR:
         return 4
     if t is B.QUAD:
         return 8
@@ -781,7 +781,8 @@ class Gen:
     # -- per-type helpers: printing and comparing through a pointer ----------------------------------------------------
     def printer(self, t):
         """a routine that prints the value at HL"""
-        lib = {B.LONG: 'bly_pr_i32', B.QUAD: 'bly_pr_i64', B.STR: 'bly_pr_str', B.FLOAT: 'bly_pr_f'}.get(t)
+        lib = {B.LONG: 'bly_pr_i32', B.QUAD: 'bly_pr_i64', B.STR: 'bly_pr_str', B.FLOAT: 'bly_pr_f',
+               B.DWORD: 'bly_pr_u32p'}.get(t)
         if lib:
             self.calls.add(lib)
             return lib
@@ -827,7 +828,8 @@ class Gen:
 
     def comparer(self, t):
         """a routine comparing the values at HL and DE: A = FFh/0/1, flags as after OR A"""
-        lib = {B.LONG: 'bly_cmp_i32', B.QUAD: 'bly_cmp_i64', B.STR: 'bly_cmp_str', B.FLOAT: 'bly_fcmp'}.get(t)
+        lib = {B.LONG: 'bly_cmp_i32', B.QUAD: 'bly_cmp_i64', B.STR: 'bly_cmp_str', B.FLOAT: 'bly_fcmp',
+               B.DWORD: 'bly_cmp_u32'}.get(t)
         if lib:
             self.calls.add(lib)
             return lib
@@ -1186,13 +1188,20 @@ class Gen:
             else:
                 self.emit(f'ld ({r.val}),hl')
             return r
-        if t in (B.LONG, B.QUAD) and op in ('&', '|', '^'):
+        if t in (B.LONG, B.QUAD, B.DWORD) and op in ('&', '|', '^'):
             return self.wide_bits(op, a, b, t, r)
         if t is B.LONG and op in ('/', '%') and b.kind == 'imm' and 2 <= b.val <= 1 << 30 and b.val & (b.val - 1) == 0:
             return self.long_pow2(op, a, b.val.bit_length() - 1, r)
-        # long and quad: the library, by address
+        # long, dword and quad: the library, by address
         a, b = self.mem(a), self.mem(b)
-        n = {B.LONG: 'i32', B.QUAD: 'i64'}[t]
+        n = {B.LONG: 'i32', B.QUAD: 'i64', B.DWORD: 'u32'}[t]
+        if op == '%' and t is B.DWORD:                      # the remainder alone: no quotient wanted (BC = 0)
+            self.emit(f'ld hl,{self.addr(a)}')
+            self.emit(f'ld de,{self.addr(b)}')
+            self.emit('ld bc,0')
+            self.emit(f'ld ix,{r.val}')
+            self.call('bly_divmod_u32')
+            return r
         if op == '%':                                       # MIN % -1 is 0, where / would overflow
             self.emit(f'ld hl,{self.addr(a)}')
             self.emit(f'ld de,{self.addr(b)}')
@@ -1349,18 +1358,23 @@ class Gen:
             self.emit(f'ld hl,({a.val})')
             self.emit(f'ld de,({a.val}+2)')
 
-    def shift_dehl(self, op, n):
-        """DE:HL shifted by 0 <= n < 32: << wraps, >> is arithmetic (as the interpreter's, on signed values)"""
+    def shift_dehl(self, op, n, signed=True):
+        """DE:HL shifted by 0 <= n < 32: << wraps, >> is arithmetic (as the interpreter's, on signed values), or
+        brings zeros in for a dword"""
         nbytes, bits = divmod(n, 8)
         for _ in range(nbytes):
             if op == '<<':
                 for ins in ('ld d,e', 'ld e,h', 'ld h,l', 'ld l,0'):
                     self.emit(ins)
-            else:
+            elif signed:
                 for ins in ('ld l,h', 'ld h,e', 'ld e,d', 'ld a,d', 'rla', 'sbc a,a', 'ld d,a'):
                     self.emit(ins)
+            else:
+                for ins in ('ld l,h', 'ld h,e', 'ld e,d', 'ld d,0'):
+                    self.emit(ins)
         for _ in range(bits):
-            for ins in (('add hl,hl', 'rl e', 'rl d') if op == '<<' else ('sra d', 'rr e', 'rr h', 'rr l')):
+            for ins in (('add hl,hl', 'rl e', 'rl d') if op == '<<' else
+                        (('sra d' if signed else 'srl d'), 'rr e', 'rr h', 'rr l')):
                 self.emit(ins)
 
     def const_shift(self, op, a, n, t, r):
@@ -1402,8 +1416,8 @@ class Gen:
                         self.emit('rr l')
             self.emit(f'ld ({r.val}),hl')
             return r
-        if n >= 32:                                          # a long, all the way out
-            if op == '>>':
+        if n >= 32:                                          # a long or a dword, all the way out
+            if op == '>>' and t is B.LONG:
                 a = self.mem(a)
                 self.emit(f'ld a,({a.val}+3)')
                 self.emit('rla')
@@ -1414,7 +1428,7 @@ class Gen:
                 self.emit(f'ld ({r.val}+{k}),a')
             return r
         self.load_dehl(a)
-        self.shift_dehl(op, n)
+        self.shift_dehl(op, n, t.signed)
         self.emit(f'ld ({r.val}),hl')
         self.emit(f'ld ({r.val}+2),de')
         return r
@@ -1491,7 +1505,7 @@ class Gen:
         self.helpers.setdefault('bly_count64', COUNT64)
 
     def shift(self, op, a, b, t, r, line):
-        if b.kind == 'imm' and b.val >= 0 and t in (B.BYTE, B.WORD, B.INT, B.LONG):
+        if b.kind == 'imm' and b.val >= 0 and t in (B.BYTE, B.WORD, B.INT, B.LONG, B.DWORD):
             return self.const_shift(op, a, b.val, t, r)
         if t in (B.BYTE, B.WORD, B.INT):
             self.count_de(b)
@@ -1504,7 +1518,9 @@ class Gen:
             else:
                 self.emit(f'ld ({r.val}),hl')
             return r
-        n = {B.LONG: 'i32', B.QUAD: 'i64'}[t]
+        n = {B.LONG: 'i32', B.QUAD: 'i64', B.DWORD: 'i32'}[t]   # a dword's << is a long's (the same bits)
+        if t is B.DWORD and op == '>>':
+            n = 'u32'                                        # but >> brings zeros in
         a = self.mem(a)
         self.count_de(b)
         self.emit(f'ld hl,{self.addr(a)}')
@@ -1550,7 +1566,7 @@ class Gen:
             self.call('bly_fneg')
         else:
             a = self.mem(a)
-            n = {B.LONG: 'i32', B.QUAD: 'i64'}[t]
+            n = {B.LONG: 'i32', B.QUAD: 'i64', B.DWORD: 'u32'}[t]
             self.emit(f'ld hl,{self.addr(a)}')
             self.emit(f'ld bc,{r.val}')
             self.call(f'bly_neg_{n}')
@@ -2214,7 +2230,7 @@ class Gen:
                 self.emit(f'ld a,{"l" if k == 0 else "h"}')
                 self.emit(f'ld ({r.val}+{k}),a')
             return r
-        if name == 'abs' and t in (B.BYTE, B.WORD):         # unsigned: already its own size
+        if name == 'abs' and t in (B.BYTE, B.WORD, B.DWORD):    # unsigned: already its own size
             return self.conv(args[0], t)
         if name == 'abs' and t is B.INT:                    # a sign test, and a checked negate
             a = self.conv(args[0], t)
@@ -2843,7 +2859,7 @@ class Gen:
             self.emit(f'ld ({vop.val}),hl')
         else:
             one = self.materialize(Op('imm', d, vt))
-            n = {B.LONG: 'i32', B.QUAD: 'i64'}[vt]
+            n = {B.LONG: 'i32', B.QUAD: 'i64', B.DWORD: 'u32'}[vt]
             self.emit(f'ld hl,{vop.val}')
             self.emit(f'ld de,{one.val}')
             self.emit(f'ld bc,{vop.val}')

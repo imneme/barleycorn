@@ -16,7 +16,7 @@
 ;; bly_fcmp            in: HL=&a DE=&b   out: A = FFh/0/1, flags as after OR A   (exact, in Z80; never fails)
 ;; bly_f_from_u16      in: HL = a byte or word, BC=&r      bly_f_from_i16   in: HL = an int, BC=&r
 ;; bly_f_from_i64      in: HL=&q (a quad: the generator widens a long), BC=&r   (rounded to 32 bits, half away from 0)
-;; bly_f_to_int        in: HL=&x A=the type code (0 byte .. 4 quad) DE=&dest   truncates toward zero
+;; bly_f_to_int        in: HL=&x A=the type code (0 byte .. 4 quad, 5 dword) DE=&dest   truncates toward zero
 ;;        fails: {x} doesn't fit in {a type}
 ;; bly_pr_f            in: HL=&x   prints x as the ROM's PRINT-FP does, through bly_out (so print's column is kept);
 ;;                     leaves stream 2 (the upper screen) open, as bly_start does
@@ -874,14 +874,15 @@ bly_f_to_int:
         jp bly_fail
 .type:  db 0
 .dest:  dw 0
-.width: db 1, 2, 2, 4, 8
-.signed: db 0, 0, 1, 1, 1
-.names: dw .n0, .n1, .n2, .n3, .n4
+.width: db 1, 2, 2, 4, 8, 4
+.signed: db 0, 0, 1, 1, 1, 0
+.names: dw .n0, .n1, .n2, .n3, .n4, .n5
 .n0:    db "a byte",0
 .n1:    db "a word",0
 .n2:    db "an int",0
 .n3:    db "a long",0
 .n4:    db "a quad",0
+.n5:    db "a dword",0
 .m1:    db " doesn't fit in ",0
 
 ; -- printing: the ROM's PRINT-FP, caught in a buffer and sent on through bly_out ------------------------------------

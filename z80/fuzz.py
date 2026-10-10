@@ -16,13 +16,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', 'interp', 'tests'))
 OUT = os.path.join(HERE, '..', 'build', 'fuzz-failures')
 
-INTS = ['byte', 'word', 'int', 'long', 'quad']
-UP = {'byte': ['byte', 'word', 'int', 'long', 'quad'], 'word': ['word', 'long', 'quad'], 'int': ['int', 'long', 'quad'],
-      'long': ['long', 'quad'], 'quad': ['quad']}
+INTS = ['byte', 'word', 'int', 'long', 'quad', 'dword']
+UP = {'byte': ['byte', 'word', 'int', 'long', 'quad', 'dword'], 'word': ['word', 'long', 'quad', 'dword'],
+      'int': ['int', 'long', 'quad'], 'long': ['long', 'quad'], 'quad': ['quad'], 'dword': ['dword', 'quad']}
 SIGNED = {'int', 'long', 'quad'}
 EDGE = {'byte': [0, 1, 127, 128, 255], 'word': [0, 1, 255, 256, 32767, 32768, 65535],
         'int': [0, 1, -1, 127, -128, 255, 32767, -32768], 'long': [0, 1, -1, 65535, 65536, 2147483647, -2147483648],
-        'quad': [0, 1, -1, 4294967296, -4294967296]}
+        'quad': [0, 1, -1, 4294967296, -4294967296],
+        'dword': [0, 1, 65535, 65536, 2147483647, 2147483648, 4294967295]}
 
 
 class Gen:
@@ -45,13 +46,13 @@ class Gen:
         """a variable of type t, or a byte where a byte meets anything t's siblings could be (word and int never
         meet: Barley types bottom-up, so word + int is an error whatever the context wants)"""
         ok = {'byte': {'byte'}, 'word': {'byte', 'word'}, 'int': {'byte', 'int'}, 'long': {'byte', 'long'},
-              'quad': {'byte', 'quad'}}[t]
+              'quad': {'byte', 'quad'}, 'dword': {'byte', 'word', 'dword'}}[t]
         c = [n for n, vt in scope if vt in ok]
         return self.pick(c) if c else None
 
     def expr(self, t, scope, d, fname=None):
         e = self.expr1(t, scope, d, fname)
-        if t in ('byte', 'word') and not re.search(r'\b(g_|p\d|v_|i_|w_|arr|d\b|f\d)', e) and not e.isdigit():
+        if t in ('byte', 'word', 'dword') and not re.search(r'\b(g_|p\d|v_|i_|w_|arr|d\b|f\d)', e) and not e.isdigit():
             e = f'{t}({e})'                    # a constant that folds negative is an error where a byte is wanted
         return e
 
@@ -69,7 +70,7 @@ class Gen:
             return f'({self.expr(t, scope, d - 1, fname)} {op} ({self.expr(t, scope, d - 1, fname)} | 1))'
         if r < 0.50:                                     # by a constant: powers of two, small, and the edges
             op = self.pick(['*', '/', '%'])
-            hi = {'byte': 255, 'word': 65535, 'int': 32767, 'long': 65535, 'quad': 65535}[t]
+            hi = {'byte': 255, 'word': 65535, 'int': 32767, 'long': 65535, 'quad': 65535, 'dword': 65535}[t]
             k = self.pick([x for x in (1, 2, 4, 8, 16, 32, 64, 128, 256, 1024, 32768, 3, 5, 7, 10, 25, 255, 65535)
                            if x <= hi])
             return f'({self.expr(t, scope, d - 1, fname)} {op} {k})'
@@ -200,7 +201,7 @@ class Gen:
         src = ['var arr: int[8]'] + [f'var {n}: {t} = {self.lit(t) if t != "bool" else "true"}' for n, t in gl]
         for t in INTS:                                   # a table of each width: edges, and anywhere in range
             lo, hi = {'byte': (0, 255), 'word': (0, 65535), 'int': (-32768, 32767), 'long': (-2 ** 31, 2 ** 31 - 1),
-                      'quad': (-2 ** 63, 2 ** 63 - 1)}[t]
+                      'quad': (-2 ** 63, 2 ** 63 - 1), 'dword': (0, 2 ** 32 - 1)}[t]
             vals = [self.pick(EDGE[t]) if self.r.random() < 0.4 else self.r.randint(lo, hi) for _ in range(8)]
             src.append(f'const T_{t} = {t}[{", ".join(map(str, vals))}]')
         for k in range(self.r.randint(1, 3)):

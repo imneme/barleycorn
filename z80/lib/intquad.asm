@@ -5,8 +5,8 @@
 ;; bly_lcm_i64   in: HL=&a DE=&b BC=&r   out: (BC) = lcm(|a|, |b|), 0 when either is 0   fails: quad overflow   clobbers: AF BC DE HL IX
 ;; bly_mod_i64   in: HL=&a DE=&m BC=&r   out: (BC) = a mod m, with m's sign (Python's %)   fails: mod by zero   clobbers: AF BC DE HL IX
 ;; bly_abs_i64   in: HL=&a BC=&r         out: (BC) = |a|                                 fails: quad overflow (MIN)    clobbers: AF BC DE HL
-;; bly_fit_i64   in: HL=&v A=the type (0 byte, 1 word, 2 int, 3 long, 4 quad) DE=&dest
-;;               out: (DE) = v in that type's 1, 2, 2, 4 or 8 bytes: byte and word wrap   fails: int or long overflow   clobbers: AF BC DE HL
+;; bly_fit_i64   in: HL=&v A=the type (0 byte, 1 word, 2 int, 3 long, 4 quad, 5 dword) DE=&dest
+;;               out: (DE) = v in that type's 1, 2, 2, 4, 8 or 4 bytes: byte, word and dword wrap   fails: int or long overflow   clobbers: AF BC DE HL
 ;; bly_i_ugcd    (internal) in: bly_i_gx, bly_i_gy = unsigned 8-byte   out: bly_i_gx = their gcd   clobbers: AF BC DE HL IX, gy
 ;; bly_i_gcd16   (internal) in: HL DE   out: HL = gcd(HL, DE), unsigned (0 and 0 give 0)       clobbers: AF B DE HL
 ;; bly_i_gx, bly_i_gy  (internal) 8 bytes each
@@ -171,7 +171,12 @@ bly_fit_i64:
         jr z,.int
         dec a
         jr z,.long
-        ld bc,8
+        dec a
+        jr nz,.dword
+        ld bc,8                     ; a quad
+        ldir
+        ret
+.dword: ld bc,4                     ; a dword wraps, as byte and word do
         ldir
         ret
 .byte:  ld a,(hl)

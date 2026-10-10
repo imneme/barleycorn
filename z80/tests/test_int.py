@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.join(HERE, '..'))
 sys.path.insert(0, os.path.join(HERE, '..', '..', 'interp'))
 from harness import Runner                                     # noqa: E402
 import barley                                                   # noqa: E402
-from barley import BarleyError, arith, fit, wrap, BYTE, WORD, INT, LONG, QUAD   # noqa: E402
+from barley import BarleyError, arith, fit, wrap, BYTE, WORD, INT, LONG, QUAD, DWORD   # noqa: E402
 
 ap = argparse.ArgumentParser(prog='test_int.py', description=__doc__,
                              formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -329,7 +329,7 @@ def binop(r, name, t, meaning, alias=True, cases=None):
                R: bytes([GUARD] * 16)}
         res = run(r, name, {'hl': A, 'de': B, 'bc': rr}, mem, [(rr, n)], L)
         want = outcome(lambda: meaning(a, b, L))
-        compare(tl, res, want, lambda res: dec(res.mem[rr:rr + n]),
+        compare(tl, res, want, lambda res: dec(res.mem[rr:rr + n], t.signed),
                 (a, b, hex(rr)))
     return tl
 
@@ -343,7 +343,7 @@ def unop(r, name, t, meaning, alias=True, values=None, regs=None):
         mem = {A: enc(a, n) + bytes([GUARD] * (16 - n)), R: bytes([GUARD] * 16)}
         res = run(r, name, dict({'hl': A, 'bc': rr}, **(regs or {})), mem, [(rr, n)], L)
         want = outcome(lambda: meaning(a, L))
-        compare(tl, res, want, lambda res: dec(res.mem[rr:rr + n]),
+        compare(tl, res, want, lambda res: dec(res.mem[rr:rr + n], t.signed),
                 (a, hex(rr)))
     return tl
 
@@ -522,6 +522,46 @@ def test_widened(r):
         tl.ts = []                                     # two calls each: their costs are in the other tallies
 
 
+def test_u32(r):
+    """the dword's own routines (intu32.asm): unsigned 32 bits, wrapping, never trapping"""
+    t, n = DWORD, 4
+    binop(r, 'bly_add_u32', t, lambda a, b, L: arith('+', a, b, t, L))
+    binop(r, 'bly_sub_u32', t, lambda a, b, L: arith('-', a, b, t, L))
+    unop(r, 'bly_neg_u32', t, lambda a, L: wrap(-a, t))
+    cmpop(r, 'bly_cmp_u32', t)
+    wide = [(random.randint(1 << 16, t.hi), random.randint(1, t.hi)) for _ in range(COUNT // 2)]   # every cross term
+    binop(r, 'bly_mul_u32', t, lambda a, b, L: arith('*', a, b, t, L), cases=pairs(t) + wide + [(b, a) for a, b in wide])
+    cases = pairs(t) + [(rnd(t), random.getrandbits(8 * random.randint(1, 4)) | 1) for _ in range(COUNT)]
+    tl = Tally('bly_divmod_u32')
+    for a, b in cases:
+        L = line()
+        q, rr = random.choice([(Q, R), (Q, R), (A, B), (B, A), (A, R), (Q, B), (0, R), (Q, 0)])
+        mem = {A: enc(a, n) + bytes([GUARD] * (16 - n)), B: enc(b, n) + bytes([GUARD] * (16 - n)),
+               Q: bytes([GUARD] * 16), R: bytes([GUARD] * 16)}
+        results = [(x, n) for x in (q, rr) if x]
+        res = run(r, 'bly_divmod_u32', {'hl': A, 'de': B, 'bc': q, 'ix': rr}, mem, results, L)
+        want = outcome(lambda: tuple(v for v, x in ((arith('/', a, b, t, L), q), (arith('%', a, b, t, L), rr)) if x))
+        compare(tl, res, want, lambda res: tuple(dec(res.mem[x:x + n], False) for x in (q, rr) if x),
+                (a, b, hex(q), hex(rr)))
+    vals = edges(t) + [rnd(t) for _ in range(COUNT // 8)]
+    shifts = [(a, c) for a in random.sample(vals, min(len(vals), 60)) for c in counts()]
+    tl = Tally('bly_shr_u32')
+    for a, c in shifts:
+        c = max(-32768, min(32767, c))
+        L, rr = line(), random.choice([R, A])
+        mem = {A: enc(a, n) + bytes([GUARD] * (16 - n)), R: bytes([GUARD] * 16)}
+        res = run(r, 'bly_shr_u32', {'hl': A, 'de': c & 0xFFFF, 'bc': rr}, mem, [(rr, n)], L)
+        want = outcome(lambda: arith('>>', a, c, t, L))
+        compare(tl, res, want, lambda res: dec(res.mem[rr:rr + n], False), (a, c, hex(rr)))
+    tl = Tally('bly_pr_u32p')
+    for a in vals:
+        res = run(r, 'bly_pr_u32p', {'hl': A}, {A: enc(a, n)}, [], line())
+        ok = not res.failed and res.out.decode('latin-1') == str(a) and not res.stray and not res.lost
+        tl.check(ok, (a,), 'wanted', str(a), 'got', res.out)
+        if ok:
+            tl.ts.append(res.t)
+
+
 SECTIONS = [('16-bit', ['bly_mul_u16', 'bly_mul_i16', 'bly_divmod_u16', 'bly_divmod_i16', 'bly_rem_i16'], test16),
             ('add, sub, neg, cmp', [f'bly_{o}_{w}' for o in ('add', 'sub', 'neg', 'cmp') for w in ('i32', 'i64')],
              test_arith),
@@ -529,6 +569,8 @@ SECTIONS = [('16-bit', ['bly_mul_u16', 'bly_mul_i16', 'bly_divmod_u16', 'bly_div
              test_bits),
             ('multiply', ['bly_mul_i32', 'bly_mul_i64'], test_mul),
             ('divide', ['bly_divmod_i32', 'bly_divmod_i64', 'bly_rem_i32', 'bly_rem_i64'], test_div),
+            ('dword', ['bly_add_u32', 'bly_sub_u32', 'bly_neg_u32', 'bly_cmp_u32', 'bly_mul_u32', 'bly_divmod_u32',
+                       'bly_shr_u32', 'bly_pr_u32p'], test_u32),
             ('quad functions', ['bly_gcd_i64', 'bly_lcm_i64', 'bly_mod_i64', 'bly_abs_i64', 'bly_fit_i64'], test_quad),
             ('widened', ['bly_gcd_i64', 'bly_lcm_i64', 'bly_mod_i64', 'bly_abs_i64', 'bly_fit_i64'], test_widened)]
 

@@ -1,7 +1,7 @@
 ;; provides: bly_num bly_str_int bly_str_intk bly_ints_init bly_ints_next bly_ints_val
 ;; needs: bly_out bly_pr_cstr bly_pr_str bly_fail bly_fail_end bly_pr_i64
 ;; targets: cpm zx48 test
-;; bly_num        in: HL=&digits BC=count A=type (0 byte 1 word 2 int 3 long 4 quad, +80h if negative) DE=&dest
+;; bly_num        in: HL=&digits BC=count A=type (0 byte 1 word 2 int 3 long 4 quad 5 dword, +80h if negative) DE=&dest
 ;;                out: (DE) = the number, in the type's width   fails: {digits} doesn't fit in {a type}
 ;;                clobbers: AF BC DE HL IX
 ;; bly_str_int    in: HL=&str A=type DE=&dest   fails: "{s}" doesn't start with an integer, and as bly_num
@@ -225,8 +225,18 @@ bly_num:
         inc hl
         ld (hl),0
         ret
-.wide:  bit 7,c                     ; a long or a quad, DE:HL < 10^9
+.wide:  bit 7,c                     ; a long, a quad or a dword, DE:HL < 10^9
         jr z,.wpos
+        ld a,c
+        and 7
+        cp 5
+        jr nz,.wneg                 ; a dword: nothing negative fits, but -0 is 0
+        ld a,d
+        or e
+        or h
+        or l
+        jp nz,.toobig
+.wneg:
         xor a                       ; DE:HL = -DE:HL
         sub l
         ld l,a
@@ -381,12 +391,20 @@ bly_num:
         adc a,d
         ld (.acc+6),hl
         djnz .l64                   ; (nothing spills from the top: 19 digits are below 2^64)
-        ld a,(.code)                ; a long (ten digits) or a quad (10..19)
+        ld a,(.code)                ; a long or a dword (ten digits) or a quad (10..19)
         ld c,a
         and 7
         cp 4
         jr z,.q64
-        ld a,(.acc+4)               ; a long: the magnitude fits 31 bits, or is exactly 2^31 and negative
+        cp 5
+        jr nz,.lchk
+        ld a,(.acc+4)               ; a dword: the magnitude fits 32 bits, and ten digits aren't 0, so not negative
+        or a
+        jp nz,.toobig
+        bit 7,c
+        jp nz,.toobig
+        jr .l64ok
+.lchk:  ld a,(.acc+4)               ; a long: the magnitude fits 31 bits, or is exactly 2^31 and negative
         or a                        ; (ten digits are below 2^34, so bytes 5-7 are zero)
         jp nz,.toobig
         ld a,(.acc+3)
@@ -438,13 +456,14 @@ bly_num:
         djnz .sn
         ret
 
-.maxd:  db 3, 5, 5, 10, 19
-.names: dw .nbyte, .nword, .nint, .nlong, .nquad
+.maxd:  db 3, 5, 5, 10, 19, 10
+.names: dw .nbyte, .nword, .nint, .nlong, .nquad, .ndword
 .nbyte: db "a byte",0
 .nword: db "a word",0
 .nint:  db "an int",0
 .nlong: db "a long",0
 .nquad: db "a quad",0
+.ndword: db "a dword",0
 .fit:   db " doesn't fit in ",0
 .code:  db 0
 .dest:  dw 0

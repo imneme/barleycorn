@@ -29,6 +29,14 @@ import test_int                                    # noqa: E402
 
 # (file, the text to change, what it becomes, the test section that should notice, what the change breaks)
 MUTANTS = [
+    # dword (intu32.asm)
+    ('intu32.asm', 'call bly_i_mul16            ; HL = the low word of ahi * blo\n        ld de,(.hi)\n        add hl,de', 'call bly_i_mul16            ; HL = the low word of ahi * blo\n        ld de,(.hi)\n        ex de,hl', 'dword', 'mul_u32: drop ahi * blo'),
+    ('intu32.asm', '.ne:    sbc a,a', '.ne:    ccf\n        sbc a,a', 'dword', 'cmp_u32 backwards'),
+    ('intu32.asm', '.l:     srl h                       ; a bit at a time', '.l:     sra h                       ; a bit at a time', 'dword', 'shr_u32 keeps the sign'),
+    ('intu32.asm', 'ld a,d\n        or a\n        jr nz,.zero', 'ld a,d\n        and 0\n        jr nz,.zero', 'dword', 'shr_u32 by 256 is by 0'),
+    ('intu32.asm', 'ld hl,bly_i_ur              ; the remainder', 'ld hl,bly_i_ua              ; the remainder', 'dword', 'divmod_u32: the quotient for the remainder'),
+    ('intu32.asm', 'jp z,bly_div0', 'nop\n        nop\n        nop', 'dword', 'divmod_u32 by zero goes on'),
+    ('intu32.asm', 'ld a,0\n        sbc a,(hl)', 'ld a,1\n        sbc a,(hl)', 'dword', 'neg_u32 off by a carry'),
     # 16-bit
     ('int16.asm', 'adc a,0                     ; never reaches', 'nop                         ; never reaches', '16-bit', '16x8: drop the carry into the third byte'),
     ('int16.asm', 'cp 80h\n        jr c,.ok', 'cp 81h\n        jr c,.ok', '16-bit', 'mul_i16: let -32769 through'),

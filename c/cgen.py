@@ -25,11 +25,11 @@ sys.path.insert(0, os.path.join(HERE, '..', 'z80'))
 import barley as B                                                     # noqa: E402
 import zxgfx                                                           # noqa: E402  the screen's meaning, and the font
 
-INT_C = {B.BYTE: 'u8', B.WORD: 'u16', B.INT: 'i16', B.LONG: 'i32', B.QUAD: 'i64'}
+INT_C = {B.BYTE: 'u8', B.WORD: 'u16', B.INT: 'i16', B.LONG: 'i32', B.QUAD: 'i64', B.DWORD: 'u32'}
 CMP_OPS = ('==', '!=', '<', '>', '<=', '>=')
 ARITH = {'+': 'add', '-': 'sub', '*': 'mul', '/': 'div', '%': 'rem'}
 BITS = {'&': 'and', '|': 'or', '^': 'xor'}
-LIMITS = {B.BYTE: ('0', '255'), B.WORD: ('0', '65535'), B.INT: ('INT16_MIN', 'INT16_MAX'),
+LIMITS = {B.BYTE: ('0', '255'), B.WORD: ('0', '65535'), B.DWORD: ('0', 'UINT32_MAX'), B.INT: ('INT16_MIN', 'INT16_MAX'),
           B.LONG: ('INT32_MIN', 'INT32_MAX'), B.QUAD: ('INT64_MIN', 'INT64_MAX')}
 
 

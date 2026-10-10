@@ -34,6 +34,7 @@ behaviour, they win, and this gets fixed.*
 | a `bit` array of n | (n + 7) / 8 | element i is bit i % 8 of byte i / 8 (a fixed array, or a view's address); a `grid[bit]` or a container of bits still uses a byte for each |
 | `word` (unsigned), `int` (signed) | 2 | little-endian |
 | `long` | 4 | two's complement, little-endian |
+| `dword` | 4 | unsigned, little-endian |
 | `quad` | 8 | two's complement, little-endian |
 | `str` | 4 | +0 `p` (word, address of the first byte), +2 `n` (word, length). A zero `str` may have p = 0: never dereference p when n = 0 |
 | `pos` | 4 | +0 `r` (int), +2 `c` (int) |
@@ -303,6 +304,14 @@ or `SBC HL,DE`.
     `_i64` (HL = &a, DE = &b, BC = &r), for `%`. These are separate
     because `MIN % -1` is 0 while `MIN / -1` overflows, so a trapping
     divmod can't serve `%`.
+- **`dword`**, unsigned 32-bit, in its own fragment `intu32.asm`, by
+  address as `long`'s are: `bly_{add,sub,mul}_u32` and `bly_neg_u32`
+  (wrapping, never failing), `bly_cmp_u32`, `bly_divmod_u32` (BC =
+  &quotient, IX = &remainder, either 0 for "not wanted": so `%` is
+  divmod with BC = 0), `bly_shr_u32` (zeros in at the top), and
+  `bly_pr_u32p` (HL = &v). `& | ^ ~` and `<<` are `long`'s, the same
+  bits. Type code 5 (after `quad`'s 4) is a `dword` for `bly_num`,
+  `bly_f_to_int` and `bly_fit_i64`.
   - `bly_neg_*` (HL = &a, BC = &r)
   - `bly_{and,or,xor}_*`, and `bly_not_*` (HL = &a, BC = &r)
   - `bly_shl_*` and `bly_shr_*`: HL = &a, DE = the count as a signed

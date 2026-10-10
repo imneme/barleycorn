@@ -722,6 +722,129 @@ end
 start
 index 5 is outside 0..3 at line 5
 
+=== dword: unsigned 32 bits, which wrap (+ - * / % >> << - ~, min, max, a hash), and its widenings and casts
+func hash(s: str): dword
+  var h: dword = 2166136261
+  for ch in s do
+    h = (h ^ ch) * 16777619
+  end
+  return h
+end
+
+func main()
+  var a: dword = 4294967295
+  var b: dword = 1
+  print a + b; " "; b - 2; " "; a * a; " "; a / 7; " "; a % 7; " "; a >> 4; " "; a << 4; " "; -b
+  print hash("hello"); " "; hash("")
+  var w: word = 65535
+  var d: dword = w
+  var q: quad = a
+  print d; " "; q + 1; " "; dword(-1); " "; long(a); " "; a > b; " "; dword(70000) < 70001
+  var big: dword = "4000000000 and more".int()
+  print big; " "; big & 0xFFFF; " "; big | 1; " "; ~big; " "; min(a, b); " "; max(a, b)
+end
+--- expect
+0 4294967295 1 613566756 3 268435455 4294967280 4294967295
+1335831723 2166136261
+65535 4294967296 4294967295 -1 true true
+4000000000 10240 4000000001 294967295 1 4294967295
+
+=== dword: read from text, in a table, a list, a map and a heap, gcd and lcm and mod, shifts all the way
+const PRIMES = dword[2166136261, 16777619, 4294967291]
+
+func fnv(s: str): dword
+  var h = PRIMES[0]
+  for ch in s do h = (h ^ ch) * PRIMES[1] end
+  return h
+end
+
+func main()
+  var a: dword = "4294967295".int()
+  var z: dword = "0".int()
+  var k: dword = "x 123 y 4000000000".int(1)
+  print a; " "; z; " "; k; " "; fnv("hello"); " "; fnv("Barleycorn")
+  var total: dword = 0
+  for v: dword in "1 2 3000000000 4000000000".ints() do total += v end
+  print total
+  var l = list[dword](8)
+  for x in PRIMES do l.push(x) end
+  l.push(7)
+  l.sort()
+  for x in l do print x; " "; end
+  print
+  var m = map[dword, int](8)
+  m[a] = 1
+  m[3000000000] = 2
+  print m[4294967295]; " "; m.get(3000000000, 0); " "; m.get(5, -1)
+  var h = heap[dword](4)
+  h.push(4000000000)
+  h.push(5)
+  h.push(2147483648)
+  print h.pop(); " "; h.pop(); " "; h.pop()
+  print gcd(a, 65535); " "; lcm(dword(65536), dword(1048576)); " "; mod(a, 1000)
+  var w: word = 65535
+  var d: dword = w * 2
+  print d; " "; d > a; " "; a - 1 >= a; " "; dword(-1) == a; " "; quad(a) + quad(a)
+  for i in 0..33 do
+    if i % 8 == 0 then print (a >> i); " "; (a << i); " "; end
+  end
+  print
+end
+--- expect
+4294967295 0 4000000000 1335831723 1737084302
+2705032707
+7 16777619 2166136261 4294967291 
+1 2 -1
+5 2147483648 4000000000
+65535 1048576 295
+65534 false false true 8589934590
+4294967295 4294967295 16777215 4294967040 65535 4294901760 255 4278190080 0 0 
+
+=== a dword read from text: a minus fits only as -0, and nothing past 4294967295 (nine digits)
+func main()
+  var d: dword = "-0".int()
+  print d
+  d = "-1".int()
+end
+--- expect
+0
+-1 doesn't fit in a dword at line 4
+
+=== a dword read from text: nothing past 4294967295 (ten digits)
+func main()
+  var d: dword = "4294967295".int()
+  print d
+  d = "4294967296".int()
+end
+--- expect
+4294967295
+4294967296 doesn't fit in a dword at line 4
+
+=== a float to a dword truncates, and must fit (on the Spectrum: the ROM's floats)
+func main()
+  print dword(-0.5); " "; dword(4294967295.0); " "; dword(3.99)
+  print dword(-1.5)
+end
+--- expect
+0 4294967295 3
+-1.5 doesn't fit in a dword at line 3
+
+=== a dword and a long meet only through a cast, as a word and an int do
+func main()
+  var l: long = 5
+  var d: dword = 6
+  print l + d
+end
+--- expect
+mixing long and dword needs a cast: long(x) or dword(x) at line 4
+
+=== a negative number can't be a dword
+func main()
+  var d: dword = -1
+end
+--- expect
+-1 doesn't fit in a dword at line 2
+
 === a trailing comma in print keeps the line open, and ends the statement
 func main()
   print "a",

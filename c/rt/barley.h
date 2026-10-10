@@ -118,6 +118,7 @@ _Noreturn static void bly_divzero(int line) { bly_fail("division by zero", line)
 /* wrapping a 64-bit pattern into each type, by arithmetic */
 static inline u8 bly_wrap_u8(u64 x) { return (u8)x; }
 static inline u16 bly_wrap_u16(u64 x) { return (u16)x; }
+static inline u32 bly_wrap_u32(u64 x) { return (u32)x; }
 static inline i16 bly_wrap_i16(u64 x) { u16 v = (u16)x; return v >= 0x8000u ? (i16)((i32)v - 65536) : (i16)v; }
 static inline i32 bly_wrap_i32(u64 x) { u32 v = (u32)x; return v >= 0x80000000u ? (i32)((i64)v - 4294967296LL) : (i32)v; }
 static inline i64 bly_wrap_i64(u64 x) {
@@ -134,6 +135,7 @@ static inline i64 bly_wrap_i64(u64 x) {
     static inline T neg_##N(T a, int l) { (void)l; return (T)((W)0 - (W)a); }
 BLY_UOPS(u8, u8, u32)
 BLY_UOPS(u16, u16, u32)
+BLY_UOPS(u32, u32, u64)
 
 /* signed: computed wider, and trapped if it doesn't fit; C's / and % truncate, as Barley's do */
 #define BLY_SOPS(N, T, W, LO, HI, TN)                                                                             \
@@ -165,6 +167,7 @@ BLY_SOPS(i64, i64, i128, INT64_MIN, INT64_MAX, "quad")
     }
 BLY_BITOPS(u8, u8, 8)
 BLY_BITOPS(u16, u16, 16)
+BLY_BITOPS(u32, u32, 32)
 BLY_BITOPS(i16, i16, 16)
 BLY_BITOPS(i32, i32, 32)
 BLY_BITOPS(i64, i64, 64)
@@ -177,6 +180,7 @@ BLY_BITOPS(i64, i64, 64)
     static inline void bly_pr_##N(T a) { bly_pr_int((i64)a); }
 BLY_INTKIND(u8, u8)
 BLY_INTKIND(u16, u16)
+BLY_INTKIND(u32, u32)
 BLY_INTKIND(i16, i16)
 BLY_INTKIND(i32, i32)
 BLY_INTKIND(i64, i64)

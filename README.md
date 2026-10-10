@@ -84,8 +84,9 @@ The whole language fits on one page: [DESIGN.md](DESIGN.md), section 4.
 In short:
 - `func`, `var`, `if`/`while`/`for ... in` ... `end`, `case`/`when`, and
   records that compare field by field
-- integers of 8, 16, 32 and 64 bits; the machine's floats; strings as
-  slices of the input, with `ints()`, `split` and `intern`
+- integers of 8, 16, 32 and 64 bits (`byte`, `word`, `dword` unsigned;
+  `int`, `long`, `quad` signed); the machine's floats; strings as slices
+  of the input, with `ints()`, `split` and `intern`
 - lists, queues, heaps, maps, sets and grids, made with a fixed capacity
 - BASIC's `print`, and the Spectrum's screen and sound in BASIC's own
   words: `plot`, `line`, `circle`, `ink`, `paper`, `print at`, `beep`

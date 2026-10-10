@@ -685,6 +685,36 @@ register path could take its place at about 4 times the cost.
 - **The quad multiply's per-digit bookkeeping**, about 300 T of every 600.
   Rows of 16x16 digits through `bly_i_mul16` would halve the count.
 
+## dword: unsigned 32 bits
+
+*File: `intu32.asm` (10 October). Tests: `../tests/test_int.py`
+(`ONLY=dword`), `../tests/test_int_mutants.py` (seven of them).*
+
+**What's here.** `dword`'s own arithmetic, wrapping and never trapping,
+for the hash or packed key a `long` would trap on: add, sub, neg and
+cmp; mul, the low 32 bits of three of `bly_i_mul16`'s 16 x 16 products
+(alo x blo, and the low words of alo x bhi and ahi x blo added to its
+high word); divmod, `intdiv.asm`'s unsigned core (`bly_i_udiv`, N = 4)
+with a copy in and out (either result's address may be 0, so `%` is
+divmod without the quotient); shr, a bit at a time with zeros coming in;
+and a printer that loads DE:HL for `num.asm`'s `bly_pr_u32`. `& | ^ ~`
+and `<<` are `long`'s routines: the bits are the same.
+
+**A fragment of its own**, so programs without a dword carry none of it,
+and `long`'s routines didn't grow a branch.
+
+**Measured** (`test_int.py`, T-states, median over its cases): add 187,
+sub 191, neg 229, cmp 199, mul 3,090 (worst 3,687), divmod 1,685 (worst
+6,533), shr 234 (worst 1,693, for the counts near 31), print 1,653.
+
+**Caught on the way:** the fuzzer missed a multiply that dropped ahi x
+blo (its dwords are mostly small, and the term needs both a high word
+and a low one), so `test_int` got cases with every cross term; the
+mutant that does it is in the list now. A mutant that moved shr's
+shortcut from 32 to 33 survived, rightly: 32 single shifts give 0 too.
+The one that matters is the count's high byte (a shift by 256 isn't a
+shift by 0).
+
 ## The screen and sound in C
 
 *Files: `../../c/rt/bly_zx.h` (new), `../../c/rt/barley.h`,

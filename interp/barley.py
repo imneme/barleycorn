@@ -50,8 +50,10 @@ class IntT(Type):
 
 BYTE, WORD, INT = IntT('byte', 8, False), IntT('word', 16, False), IntT('int', 16, True)
 LONG, QUAD = IntT('long', 32, True), IntT('quad', 64, True)
-INTS = {t.name: t for t in (BYTE, WORD, INT, LONG, QUAD)}
-WIDENS = {BYTE: (WORD, INT, LONG, QUAD), WORD: (LONG, QUAD), INT: (LONG, QUAD), LONG: (QUAD,)}
+DWORD = IntT('dword', 32, False)          # unsigned, as byte and word are: it wraps, for hashes and the like
+INTS = {t.name: t for t in (BYTE, WORD, INT, LONG, QUAD, DWORD)}
+WIDENS = {BYTE: (WORD, INT, LONG, DWORD, QUAD), WORD: (LONG, DWORD, QUAD), INT: (LONG, QUAD), LONG: (QUAD,),
+          DWORD: (QUAD,)}
 
 
 class Simple(Type):

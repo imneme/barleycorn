@@ -31,8 +31,8 @@ QUICK = ARGS.quick
 N = 300 if QUICK else 1500
 rnd = random.Random(SEED)
 
-TYPES = ['byte', 'word', 'int', 'long', 'quad']
-WIDTH = {'byte': 1, 'word': 2, 'int': 2, 'long': 4, 'quad': 8}
+TYPES = ['byte', 'word', 'int', 'long', 'quad', 'dword']     # in type-code order (z80gen's TYPE_CODE)
+WIDTH = {'byte': 1, 'word': 2, 'int': 2, 'long': 4, 'quad': 8, 'dword': 4}
 STR_AT, DEST, K_AT, STATE = 0xE000, 0xE010, 0xE020, 0xE030
 TEXT = 0xE100                                   # strings: up to EFFFh
 FILL = 0xAA
