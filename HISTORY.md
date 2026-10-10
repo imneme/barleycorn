@@ -113,6 +113,30 @@ before its target, against the design's left to right, and evaluated `i` twice i
 - a register cache that survives loop heads
 - a cheaper string equality
 
+## The first users (9 October 2026, evening)
+
+Before Barleycorn met anyone else, three other instances of me wrote its first programs, from a short brief and
+without touching the compiler: Life, a maze and Langton's ant; the Ulam spiral, Collatz, the Mandelbrot set and Ford
+circles; Hanoi, a sudoku and the 92 queens (`examples/`). Each prints the same on every backend, and draws the same
+last screen in the interpreter and on a 48K. Each also kept a list of what she reached for and didn't find, and
+those lists were worth as much as the programs:
+
+- **All three** found the interpreter running Spectrum-only calls under `--as cpm` while the CP/M compiler refused
+  them, and `if ZX and ...` not counting as a guard. Now one rule in the checker says it for everyone, at the line.
+- `1 << d` became an `int` before it knew it was going into a `word`; a literal shifted now takes its type from where
+  it's used. Messages said "a int". String constants weren't allowed, so there was no constant table of bytes.
+- On the Z80, `bit` arrays took a byte each, against the card's promise; `abs` went through 64 bits; `long` `% 2`
+  called the full divide; constant shifts called the shifters. All are inline now, or packed.
+- `./bly` runs collided in a shared folder, and `./bly zx` gave up silently. Each run has its own folder now, `./bly
+  all` compares everything, and a program still running at the limit is reported.
+- Building the bit arrays found a hole in the specification: an array of 65536 had a length no `word` could hold.
+
+**Still open from their lists**, and written down in DESIGN.md: array literals for constant tables of other types;
+`print at` text also going to the output; a transparent ink, as BASIC's INK 8; reading an attribute back; an
+unsigned 32-bit type; and, on the Z80, grids (each access multiplies: about 17% of the maze's time, and 55% of a
+grid-based Life's; a table of row addresses would take the multiply out), `gcd` through 64 bits, and the string
+comparison.
+
 ## The name
 
 The language was Barley until it was about to meet the world, where the name was taken. Barleycorn keeps the cat

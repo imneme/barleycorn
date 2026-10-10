@@ -717,5 +717,13 @@ The name is Barleycorn (HISTORY.md says why).
    the return to BASIC needs HL' restored, and nothing may be kept there across a ROM routine that uses them. Leaf
    routines could use EXX freely.
 3. **How fast can the Z80 backend get?** HISTORY.md has the measured steps so far, and the next ones.
+4. **Constant tables of any type.** A string constant is a table of bytes; a table of words or records still has
+   to be a `case` or assignments. Array literals (`const SCALE = int[0, 2, 4, 7, 9]`) are the obvious shape.
+5. **Should `print at` text go to the output?** Everything printed goes there today, so the output can be compared
+   between backends, but a counter shown live with `print at` floods it. Text printed at a place could be the
+   screen's alone, if the 48K's transcript could leave it out too.
+6. **The Spectrum's own words that are missing:** a transparent ink and paper (BASIC's INK 8 and PAPER 8, so `plot`
+   and `line` can leave a square's colours alone), and reading a square's attribute back (BASIC's `ATTR`).
+7. **An unsigned 32-bit type**, for hashes that should wrap (a `long` traps on overflow, by design).
 
 And the one that matters most, every time: **what would you reach for, and not find?**
