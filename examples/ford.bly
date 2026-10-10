@@ -1,0 +1,50 @@
+-- Ford circles: each fraction p/q from 0 to 1 gets a circle 1/q² across, standing on a line at p/q. Lester Ford
+-- showed in 1938 that no two of them ever overlap. Two circles either keep apart or just touch, and they touch
+-- exactly when their fractions are neighbours in a Farey sequence: all the fractions whose denominators are at most
+-- N, in order. This walks that sequence with its tidy integer recurrence, drawing each circle and sounding it (the
+-- smaller the circle, the higher and shorter its note), and checks that every pair of neighbours touches.
+
+const N = 40
+const U = 255                                    -- a unit, in pixels: 0/1 is at the left edge and 1/1 at the right
+const GROUND = 17                                -- the circles stand on y = 16, the lowest row above the text
+
+func circle_for(p: int, q: int)
+  var r = (U + q * q) / (2 * q * q)              -- U / 2q², to the nearest pixel: from q = 16 on, a point
+  if ZX then
+    circle((p * U + q / 2) / q, GROUND + r, r)
+    beep(12 + r / 2, q - 12)
+  end
+end
+
+func main()
+  if ZX then
+    paper(0); ink(6); bright(true); border(0); cls()
+    line(0, GROUND - 1, U, GROUND - 1)
+  end
+  var a = 0                                      -- a/b and c/d are neighbours: 0/1, and then 1/N
+  var b = 1
+  var c = 1
+  var d = N
+  var count = 1
+  circle_for(a, b)
+  while c <= N do
+    assert b * c - a * d == 1                    -- the condition for a/b's and c/d's circles to touch
+    var k = (N + b) / d                          -- the next fraction after c/d is (k * c - a) / (k * d - b)
+    var e = k * c - a
+    var f = k * d - b
+    a = c; b = d; c = e; d = f
+    count += 1
+    circle_for(a, b)
+  end
+  var coprime = 1                                -- count them again another way: 0/1, and every p/q in lowest terms
+  for q in 1..N + 1 do
+    for p in 1..q + 1 do
+      if gcd(p, q) == 1 then coprime += 1 end
+    end
+  end
+  assert count == coprime
+  if ZX then print at 20, 3; end
+  print count; " fractions, up to "; N; "ths,"
+  if ZX then print at 21, 3; end
+  print "each touching its neighbours"
+end

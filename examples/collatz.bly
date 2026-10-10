@@ -1,0 +1,95 @@
+-- Collatz: halve an even number, or triple an odd one and add 1, and keep going. Every number anyone has tried
+-- gets to 1 in the end, and nobody can prove that they all do. This draws how many steps each n below N takes
+-- (n across, steps up), with a click at each new record. Then it plays the record-holder's whole journey, a note
+-- a step, pitched by how big the number is, while a ring hops through the picture to wherever that number sits.
+
+const N = 10240                                  -- 40 numbers to a column of pixels
+var steps: word[N]                               -- steps[n]: how many steps n takes to reach 1
+
+func next(v: long): long
+  if v & 1 == 0 then return v >> 1 end          -- not % 2 and / 2: on a Z80 those are a 32-bit division
+  return 3 * v + 1
+end
+
+func climb(n: word): word                        -- go until we're below n, then the rest is already known
+  var v: long = n
+  var k: word = 0
+  while v >= n do
+    v = next(v)
+    k += 1
+  end
+  return k + steps[v]
+end
+
+func x(n: word): int                             -- where n sits in the picture
+  return int(n / 40)
+end
+
+func y(n: word): int
+  return int(16 + steps[n] * 3 / 5)              -- 261 steps is the most below N: the top of the picture
+end
+
+func colour(y: int): byte                        -- bands four text rows deep, warmer the longer the journey
+  case (175 - y) / 32
+    when 0 then return 2                         -- red
+    when 1 then return 6                         -- yellow
+    when 2 then return 4                         -- green
+    when 3 then return 5                         -- cyan
+  end
+  return 1                                       -- blue
+end
+
+func note(v: long): int                          -- one step of a pentatonic scale (0 2 4 7 9) for each doubling
+  var bits: int = 0
+  while v > 1 do
+    v >>= 1
+    bits += 1
+  end
+  var deg = bits % 5
+  var semi = 12 * (bits / 5) + 2 * deg - 12
+  if deg >= 3 then semi += 1 end
+  return semi
+end
+
+func main()
+  if ZX then
+    paper(0); bright(true); border(0); cls()
+  end
+  var best: word = 1
+  for n in word(2)..N do
+    steps[n] = climb(n)
+    if ZX then
+      ink(colour(y(n)))                          -- a plot colours its whole 8 x 8 cell, so the bands follow rows
+      plot(x(n), y(n))
+    end
+    if steps[n] > steps[best] then
+      best = n
+      if ZX then beep(8, int(steps[n] / 8)) end
+    end
+  end
+  var v: long = best                             -- now the record-holder's journey, as a tune
+  var peak = v
+  while v != 1 do
+    if ZX then
+      if v < N then                              -- on the picture: ring it while its note plays
+        ink(7)                                   -- white: the cells it passes keep it, as footprints
+        over(true)
+        circle(x(word(v)), y(word(v)), 3)
+        beep(30, note(v))
+        circle(x(word(v)), y(word(v)), 3)        -- drawn twice with over, the ring is gone again
+        over(false)
+      else
+        beep(30, note(v))                        -- too big for the picture, so just its note
+      end
+    end
+    v = next(v)
+    peak = max(peak, v)
+  end
+  if ZX then
+    circle(x(best), y(best), 3)
+    print at 20, 2;
+  end
+  print "Longest below "; N; ": "; best; ","
+  if ZX then print at 21, 2; end
+  print steps[best]; " steps, as high as "; peak
+end

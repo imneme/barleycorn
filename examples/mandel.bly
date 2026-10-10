@@ -1,0 +1,112 @@
+-- The Mandelbrot set, with no multiplying in its loop, and its area found by counting pixels.
+-- A point c is in the set if z -> z * z + c, from z = 0, never gets further than 2 from 0. The Z80 has no multiply,
+-- so this keeps a table of squares instead: x * x is sq[|x|], and 2 * x * y is (x + y) squared, less x and y
+-- squared. Numbers are fixed point, 1.0 being 1024. The set is the same above and below the real axis, so each row
+-- is drawn twice, and the picture closes in from the top and the bottom at once. On CP/M it's drawn in letters.
+
+const ONE = 1024
+const MAXIT = 128                                -- a point still within 2 after this many steps counts as in
+const STEP = 14                                  -- a pixel is 14 / 1024 across: 3.5 units wide, 2.4 high
+const LEFT = -2575                               -- the real part at the left edge, which centres the set
+var sq: int[4 * ONE + 1]                         -- sq[i] = i * i, in fixed point too: 8K of table
+var inks = "\x01\x05\x04\x06\x07"                -- a str is a fine table: blue, cyan, green, yellow, white
+var letters = " .:+#"
+
+func mag(v: int): int                            -- abs() works too, but this is quicker on a Z80 today
+  if v < 0 then return -v end
+  return v
+end
+
+func re(x: int): int return LEFT + x * STEP end
+func im(row: int): int return (87 - row) * STEP + STEP / 2 end    -- rows 87 and 88 sit either side of the axis
+
+func known(cr: int, ci: int): bool               -- in the main cardioid or the bulb left of it, where most of the
+  var y2 = sq[mag(ci)]                           -- set is: points there would take all MAXIT steps to say so
+  var p = cr - ONE / 4
+  var q = sq[mag(p)] + y2
+  if long(q) * (q + p) <= long(y2) * (ONE / 4) then return true end
+  return sq[mag(cr + ONE)] + y2 <= ONE / 16
+end
+
+func escape(cr: int, ci: int): byte              -- how many steps before z gets away, or MAXIT if it never does
+  if known(cr, ci) then return MAXIT end
+  var zr = cr
+  var zi = ci
+  for k in byte(0)..MAXIT do
+    var ar = zr                                  -- mag(zr), mag(zi) and mag(s), written out: this loop is
+    if ar < 0 then ar = -ar end                  -- where all the time goes
+    var ai = zi
+    if ai < 0 then ai = -ai end
+    if ar > 2 * ONE or ai > 2 * ONE then return k end
+    var rr = sq[ar]
+    var ii = sq[ai]
+    if rr + ii > 4 * ONE then return k end
+    var s = zr + zi
+    if s < 0 then s = -s end
+    zi = sq[s] - rr - ii + ci
+    zr = rr - ii + cr
+  end
+  return MAXIT
+end
+
+func band(k: byte): byte                         -- how near the set: 4 is in it
+  if k == MAXIT then return 4 end
+  if k >= 10 then return 3 end
+  if k >= 6 then return 2 end
+  if k >= 4 then return 1 end
+  return 0
+end
+
+func main()
+  for i in word(0)..sq.len do sq[i] = int(long(i) * i / ONE) end
+  if ZX then
+    paper(0); ink(7); bright(true); border(0); cls()
+  end
+  var above: byte[256]                           -- the row before this one, to see where the band changes
+  var near: byte[32]                             -- for each text cell along this row, the nearest the set came
+  var inside: long = 0
+  for r in 0..88 do                              -- the top half; row 175 - r is its mirror
+    var left: byte = 0
+    var width: int = 0                           -- how much of this row is in the set
+    for x in 0..256 do
+      var k = escape(re(x), im(r))
+      if k == MAXIT then
+        inside += 2                              -- it, and its mirror
+        width += 1
+      end
+      var b = band(k)
+      if ZX then                                 -- the set, and a contour wherever the band changes
+        if b == 4 or (x > 0 and b != left) or (r > 0 and b != above[x]) then
+          plot(x, 175 - r)
+          plot(x, r)
+        end
+        near[x / 8] = max(near[x / 8], b)
+      end
+      above[x] = b
+      left = b
+    end
+    if ZX then
+      if width > 0 then beep(20, width / 4) end  -- the rows sing the set's shape: higher where it's wider
+      if r % 8 == 7 then                         -- a row of text cells is done: colour it, and its mirror
+        for c in 0..32 do
+          attr(r / 8, c, 64 + inks[near[c]])     -- 64 is bright
+          attr(21 - r / 8, c, 64 + inks[near[c]])
+          near[c] = 0
+        end
+      end
+    end
+  end
+  if CPM then                                    -- no screen: the same picture in letters, 4 x 8 pixels to one
+    for row in 0..22 do
+      var ci = mag((21 - 2 * row) * 4 * STEP)    -- the middle of the row; mag, because the table of squares
+                                                 -- isn't quite symmetric, though the set is
+      for col in 0..64 do print chr(letters[band(escape(re(col * 4 + 2), ci))]); end
+      print
+    end
+  end
+  -- in thousandths of a unit square. The best estimates are near 1.5066: this counts every pixel on the edge that
+  -- hasn't escaped within MAXIT steps as inside, and a bigger MAXIT brings the count down, slowly.
+  var area = quad(inside) * STEP * STEP * 1000 / (ONE * ONE)
+  if ZX then print at 0, 0; end
+  print "Area about "; area / 1000; "."; area / 100 % 10; area / 10 % 10; area % 10
+end

@@ -1,0 +1,58 @@
+-- The Ulam spiral: count up from 1, winding outwards from the middle of the screen, and put a dot on every prime.
+-- Stanislaw Ulam doodled it in 1963 during a dull talk, and saw the primes gather on diagonals. Each diagonal holds
+-- the values of a quadratic, and some quadratics are far fonder of primes than others (Euler's n * n + n + 41 is
+-- prime for every n from 0 to 39). Why, nobody has proved. The beeper clicks for each pair of twin primes, p and
+-- p + 2, higher as the spiral grows.
+
+const SIDE = 160                                 -- the spiral fills a SIDE x SIDE square: 1 up to SIDE * SIDE
+const N = SIDE * SIDE
+var composite: bit[N + 1]                        -- the sieve of Eratosthenes, a bit for each number
+
+func sieve()
+  composite[0] = true
+  composite[1] = true
+  for p in word(2)..SIDE do                      -- SIDE * SIDE = N, so these primes cross out every composite
+    if not composite[p] then
+      for k in p..N / p + 1 do composite[k * p] = true end
+    end
+  end
+end
+
+func main()
+  if ZX then
+    paper(0); ink(5); bright(true); border(0); cls()
+  end
+  sieve()
+  var at = pos(80, 127)                          -- where 1 goes, so the square sits in the middle of the top 20 rows
+  var d: byte = 1                                -- dirs4 is N E S W, so 1 is east: 2 goes to the right of 1
+  var leg: word = 1                              -- the legs go 1, 1, 2, 2, 3, 3, ... with a left turn after each
+  var steps: word = 1
+  var turns: word = 0
+  var primes: word = 0
+  var twins: word = 0
+  for n in word(1)..N + 1 do
+    if not composite[n] then
+      primes += 1
+      if ZX then plot(at.c, 175 - at.r) end
+      if n >= 5 and not composite[n - 2] then
+        twins += 1
+        if ZX then beep(1, int(leg / 4) + 20) end
+      end
+    end
+    at = at + dirs4[d]
+    steps -= 1
+    if steps == 0 then
+      d = (d + 3) % 4                            -- turning left: E, N, W, S, E ...
+      turns += 1
+      if turns % 2 == 0 then leg += 1 end
+      steps = leg
+    end
+  end
+  if ZX then
+    ink(7)
+    print at 20, 4;
+  end
+  print primes; " primes up to "; N
+  if ZX then print at 21, 4; end
+  print twins; " pairs of twin primes"
+end

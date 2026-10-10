@@ -54,6 +54,58 @@ the sound. The maze and the ant keep their boards in `grid`s indexed by `pos`, a
 every cell every generation, so it keeps its board in plain arrays instead, with a dead border round it so that no
 cell is a special case, and walks along them with a running index: fixed arrays are as fast as memory gets.
 
+## Numbers made visible
+
+- `ulam.bly`: the Ulam spiral. It sieves the numbers up to 25,600 (a `bit` for each), then counts up from 1 in a
+  square spiral out from the middle of the screen, putting a dot on every prime, and the diagonals Ulam noticed in
+  1963 appear as it grows. The beeper clicks for each pair of twin primes, a little higher with each turn of the
+  spiral. It prints how many primes there are and how many twin pairs. About 15 seconds on a 48K.
+
+      ./bly zx examples/ulam.bly
+      ./bly run --screen ulam.png examples/ulam.bly
+
+  ![The Ulam spiral of the primes up to 25,600, in cyan, with the counts beneath](../docs/ulam.png)
+
+- `collatz.bly`: the Collatz problem (halve an even number, triple an odd one and add 1, until you reach 1). It works
+  out how many steps every number below 10,240 takes, remembering each one so the next can stop as soon as it drops
+  below where it started, and plots them as it goes, n across and steps up, coloured in bands. A click marks each
+  new record. Then it plays the winner's whole journey, a note a step on a pentatonic scale, pitched by how big the
+  number is, while a ring hops around the picture to wherever that number sits; the cells it visits stay white, so
+  the journey leaves footprints. It prints the winner, its steps, and the highest it climbs. About a minute on a 48K,
+  the tune included.
+
+      ./bly zx examples/collatz.bly
+      ./bly run --screen collatz.png examples/collatz.bly
+
+  ![The steps each number below 10,240 takes to reach 1, in bands of colour, with the record holder circled](../docs/collatz.png)
+
+- `mandel.bly`: the Mandelbrot set in fixed-point integers, with no multiplying in the loop: a table of squares does
+  the work, since 2xy is (x + y)² - x² - y². It draws the set in white with three contour lines round it, a row and
+  its mirror at once, so the picture closes in from the top and the bottom together, and each row sings a note as
+  high as the set is wide there. Then it prints the set's area, by counting pixels. On CP/M, with no screen, it
+  draws the set in letters instead. About two minutes on a 48K, which is quick for a Mandelbrot on a Spectrum.
+
+      ./bly zx examples/mandel.bly
+      ./bly run --screen mandel.png examples/mandel.bly
+      ./bly cpm examples/mandel.bly
+
+  ![The Mandelbrot set in white with cyan, green and yellow contours, and its area](../docs/mandel.png)
+
+- `ford.bly`: Ford circles. Every fraction p/q between 0 and 1 gets a circle 1/q² across, standing on a line at p/q,
+  and no two of them ever overlap: neighbours in the Farey sequence just touch. It walks the Farey sequence of
+  denominators up to 40 with its integer recurrence, drawing each circle as it comes and giving it a note, so the
+  tiny circles twitter high and quick and the big ones sound low and long; the tune is a palindrome, because the
+  sequence is. It checks that every pair of neighbours touches (bc - ad = 1), counts the fractions a second way with
+  `gcd`, and prints the count. About ten seconds on a 48K.
+
+      ./bly zx examples/ford.bly
+      ./bly run --screen ford.png examples/ford.bly
+
+  ![Ford circles for the fractions up to 40ths: two great arcs, and circles nested between them down to dust](../docs/ford.png)
+
+All four run on CP/M too, and print the same answers there, without the picture or the sound; the Mandelbrot
+draws its picture in letters instead.
+
 ## The hill
 
 - `sing_d12.bly`: a hill climb (Advent of Code 2022, day 12) that draws the search across the screen as it runs and
