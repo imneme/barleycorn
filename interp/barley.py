@@ -17,6 +17,12 @@ from collections import deque
 import heapq
 
 
+def article(t):
+    """a type, with its article: a word, an int, an Item"""
+    name = t if isinstance(t, str) else repr(t)
+    return ('an ' if name[:1].lower() in 'aeiou' else 'a ') + name
+
+
 class BarleyError(Exception):
     def __init__(self, msg, line=None):
         super().__init__(msg)
@@ -944,7 +950,7 @@ class Checker:
             rty = self.func.rty
             if s.e is None:
                 if rty is not VOID:
-                    raise BarleyError(f'{self.func.name} must return a {rty!r}', s.line)
+                    raise BarleyError(f'{self.func.name} must return {article(rty)}', s.line)
             else:
                 if rty is VOID:
                     raise BarleyError(f'{self.func.name} returns nothing', s.line)
@@ -964,7 +970,7 @@ class Checker:
                     if t is FLEX:
                         self.settle_default(e)
                     elif t is VOID or isinstance(t, Gen):
-                        raise BarleyError(f"print can't show a {t!r}", e.line)
+                        raise BarleyError(f"print can't show {article(t)}", e.line)
         else:
             raise BarleyError(f'unknown statement {k}', s.line)
 
@@ -981,7 +987,7 @@ class Checker:
             op = N('bin', s.line, op=s.op, a=s.target, b=s.e)
             rt = self.binary(op, keep_a=True)
             if not widens(rt, tt):
-                raise BarleyError(f'{s.op}= would make a {rt!r} but this is a {tt!r}', s.line)
+                raise BarleyError(f'{s.op}= would make {article(rt)} but this is {article(tt)}', s.line)
             s.opnode = op
 
     def lvalue(self, e):
@@ -1034,7 +1040,7 @@ class Checker:
         elif t is LINES:
             vts = [STR]
         else:
-            raise BarleyError(f"for can't walk a {t!r}", s.line)
+            raise BarleyError(f"for can't walk {article(t)}", s.line)
         if decl is not None:
             if vts[0] is FLEX:
                 if not is_int(decl):
@@ -1055,18 +1061,26 @@ class Checker:
 
     # -- expressions
     def settle(self, e, t):
-        """give a flexible constant (or s.int()) the type t"""
+        """give a flexible constant (or s.int(), or a literal shifted) the type t"""
+        if e.k == 'bin' and e.op in ('<<', '>>') and e.ty is FLEX:
+            if not is_int(t):
+                raise BarleyError(f'a number where {article(t)} is needed', e.line)
+            self.settle(e.a, t)
+            e.ty = t
+            return t
         if t is FLOAT and e.cval is not None:
             e.ty, e.cval = FLOAT, float(e.cval)
             return FLOAT
         if not is_int(t):
-            raise BarleyError(f'a number where a {t!r} is needed', e.line)
+            raise BarleyError(f'a number where {article(t)} is needed', e.line)
         if e.cval is not None and not (t.lo <= e.cval <= t.hi):
-            raise BarleyError(f"{e.cval} doesn't fit in a {t.name}", e.line)
+            raise BarleyError(f"{e.cval} doesn't fit in {article(t.name)}", e.line)
         e.ty = t
         return t
 
     def settle_default(self, e):
+        if e.k == 'bin' and e.op in ('<<', '>>') and e.ty is FLEX:
+            return self.settle(e, self.settle_default(e.a))     # with nothing to say, as its literal would be
         if e.cval is None:
             return self.settle(e, LONG)
         for t in (INT, LONG, QUAD):
@@ -1083,24 +1097,27 @@ class Checker:
         if isinstance(et, Gen) and isinstance(t, Gen) and et.kind == t.kind == 'array' and et.args == t.args \
                 and (t.n is None or t.n == et.n):
             return t
-        raise BarleyError(f'a {et!r} where a {t!r} is needed', e.line)
+        raise BarleyError(f'{article(et)} where {article(t)} is needed', e.line)
 
     def unify(self, a, b, line):
         if widens(a, b):
             return b
         if widens(b, a):
             return a
-        raise BarleyError(f'mixing {a!r} and {b!r} needs a cast, such as {b!r}(x)', line)
+        raise BarleyError(f'mixing {a!r} and {b!r} needs a cast: {a!r}(x) or {b!r}(x)', line)
 
     def flex_with(self, f, other, line):
         """a flexible operand meets a typed one"""
-        if f.cval is None or other.lo <= f.cval <= other.hi:
+        v = f.cval
+        if v is None and f.k == 'bin' and f.op in ('<<', '>>'):
+            v = f.a.cval                              # a literal shifted fits where its literal does
+        if v is None or other.lo <= v <= other.hi:
             return self.settle(f, other)
         for t in (INT, LONG, QUAD):
-            if widens(other, t) and t.lo <= f.cval <= t.hi:
+            if widens(other, t) and t.lo <= v <= t.hi:
                 self.settle(f, t)
                 return t
-        raise BarleyError(f"{f.cval} doesn't fit with a {other!r}", line)
+        raise BarleyError(f"{v} doesn't fit with {article(other)}", line)
 
     def expr(self, e):
         t = getattr(self, 'x_' + e.k)(e)
@@ -1158,15 +1175,15 @@ class Checker:
             return FLEX
         if ta is FLEX:
             if not is_int(tb):
-                raise BarleyError(f'a number with a {tb!r}', line)
+                raise BarleyError(f'a number with {article(tb)}', line)
             return self.flex_with(a, tb, line)
         if tb is FLEX:
             if not is_int(ta):
-                raise BarleyError(f'a {ta!r} with a number', line)
+                raise BarleyError(f'{article(ta)} with a number', line)
             return self.flex_with(b, ta, line)
         if is_int(ta) and is_int(tb):
             return self.unify(ta, tb, line)
-        raise BarleyError(f"can't do arithmetic with a {ta!r} and a {tb!r}", line)
+        raise BarleyError(f"can't do arithmetic with {article(ta)} and {article(tb)}", line)
 
     def x_bin(self, e):
         return self.binary(e)
@@ -1199,16 +1216,21 @@ class Checker:
                 if e.a.cval is not None and e.b.cval is not None:
                     e.cval = compare(op, e.a.cval, e.b.cval)
             elif ta != tb or not (ta in (BOOL, STR) or isinstance(ta, RecordT)):
-                raise BarleyError(f"can't compare a {ta!r} with a {tb!r}", e.line)
+                raise BarleyError(f"can't compare {article(ta)} with {article(tb)}", e.line)
             elif ta is BOOL and op not in ('==', '!='):
                 raise BarleyError('true and false are equal or not; they have no order', e.line)
             e.ty = BOOL
             return BOOL
         if op in ('<<', '>>'):
-            if ta is FLEX:
-                ta = self.settle_default(e.a)
             if tb is FLEX:
                 self.settle_default(e.b)
+            if ta is FLEX and e.a.cval is not None:   # a literal shifted takes its type from where it's used, as a
+                if not is_int(e.b.ty):                # literal does: w |= 1 << d makes a word
+                    raise BarleyError('shifts are for numbers', e.line)
+                e.ty = FLEX
+                return FLEX
+            if ta is FLEX:
+                ta = self.settle_default(e.a)
             if not (is_int(ta) and is_int(e.b.ty)):
                 raise BarleyError('shifts are for numbers', e.line)
             e.ty = ta
@@ -1237,7 +1259,9 @@ class Checker:
             if e.a.cval is not None:
                 e.cval = not e.a.cval
             return BOOL
-        if t is FLEX:
+        if t is FLEX and e.a.cval is None:            # s.int(), or a literal shifted: not a constant, so it
+            t = self.settle_default(e.a)              # settles as it would with nothing to say
+        elif t is FLEX:
             e.cval = -e.a.cval if e.op == '-' else ~e.a.cval
             return FLEX
         if t is FLOAT and e.op == '-':
@@ -1274,14 +1298,14 @@ class Checker:
             return BYTE
         if isinstance(ot, Gen) and ot.kind in ('array', 'list'):
             return BOOL if ot.args[0] is BIT else ot.args[0]
-        raise BarleyError(f"a {ot!r} can't be indexed", e.line)
+        raise BarleyError(f"{article(ot)} can't be indexed", e.line)
 
     def index_int(self, i):
         t = self.expr(i)
         if t is FLEX:
             t = self.settle_default(i)
         if not is_int(t):
-            raise BarleyError(f'an index is a number, not a {t!r}', i.line)
+            raise BarleyError(f'an index is a number, not {article(t)}', i.line)
 
     def x_dot(self, e):
         ot = self.expr(e.obj)
@@ -1289,16 +1313,16 @@ class Checker:
         if args is None:                                         # a field or a property
             if isinstance(ot, RecordT):
                 if name not in ot.index:
-                    raise BarleyError(f'a {ot!r} has no field {name}', e.line)
+                    raise BarleyError(f'{article(ot)} has no field {name}', e.line)
                 return ot.fields[ot.index[name]][1]
             if name == 'len' and (ot is STR or (isinstance(ot, Gen) and ot.kind in ('array', 'list', 'queue', 'map', 'heap', 'set'))):
                 return WORD
             if name in ('rows', 'cols') and isinstance(ot, Gen) and ot.kind == 'grid':
                 return INT
-            raise BarleyError(f'a {ot!r} has no .{name}', e.line)
+            raise BarleyError(f'{article(ot)} has no .{name}', e.line)
         sig = self.method_sig(ot, name, e)
         if sig is None:
-            raise BarleyError(f'a {ot!r} has no .{name}()', e.line)
+            raise BarleyError(f'{article(ot)} has no .{name}()', e.line)
         params, ret = sig
         if len(args) != len(params) and not (name in ('int', 'split', 'find', 'starts', 'get') and len(args) <= len(params)):
             raise BarleyError(f'.{name}() takes {len(params)} argument{"s" * (len(params) != 1)}', e.line)
@@ -1386,7 +1410,7 @@ class Checker:
             if t is FLEX:
                 self.settle_default(args[0])
             elif not (is_int(t) or t is BOOL or (t is FLOAT and name != 'bool')):
-                raise BarleyError(f"can't make a {name} from a {t!r}", e.line)
+                raise BarleyError(f"can't make {article(name)} from {article(t)}", e.line)
             e.cast = {'bool': BOOL, 'float': FLOAT}.get(name) or INTS[name]
             return e.cast
         if name in SCREEN_FUNCS or name in MACHINE_FUNCS:
@@ -1795,7 +1819,7 @@ class Interp:
         elif isinstance(t, Gen) and t.kind == 'iter' and t.args[0] is FLEX:
             for v in it:
                 if not (s.vtys[0].lo <= v <= s.vtys[0].hi):
-                    raise BarleyError(f"{v} doesn't fit in a {s.vtys[0].name}", s.line)
+                    raise BarleyError(f"{v} doesn't fit in {article(s.vtys[0].name)}", s.line)
                 yield v
         else:
             yield from it
@@ -2000,7 +2024,7 @@ class Interp:
                         raise BarleyError(f'"{obj.decode("latin-1")}" doesn\'t start with an integer', line)
                     v = int(m.group(1))
                 if not (e.ty.lo <= v <= e.ty.hi):
-                    raise BarleyError(f"{v} doesn't fit in a {e.ty.name}", line)
+                    raise BarleyError(f"{v} doesn't fit in {article(e.ty.name)}", line)
                 return v
             if name == 'ints':
                 return ints_in(obj)
@@ -2119,7 +2143,7 @@ class Interp:
                 return float(v)
             if isinstance(v, float):                     # a float to a whole number: truncate, and it must fit
                 if v != v or v in (math.inf, -math.inf) or not (e.cast.lo <= math.trunc(v) <= e.cast.hi):
-                    raise BarleyError(f"{v:.10g} doesn't fit in a {e.cast.name}", e.line)
+                    raise BarleyError(f"{v:.10g} doesn't fit in {article(e.cast.name)}", e.line)
                 return math.trunc(v)
             return wrap(int(v), e.cast)
         name = e.builtin
