@@ -842,3 +842,48 @@ end
 1  |5 .|4 :|6 +|7 #|
 :+ 5 true
 32 46 58 43 35 
+
+=== abs, and int times a constant, at their edges: each overflow traps where the arithmetic would
+func main()
+  var a: int = -32767
+  var b: long = -2147483647
+  var w: word = 65535
+  var y: byte = 255
+  print abs(a); " "; abs(b); " "; abs(w); " "; abs(y); " "; abs(int(0)); " "; abs(long(-1))
+  var x: int = -1092
+  print x * 30; " "; x * 1; " "; x * 7; " "; (-x) * 30; " "; x * 0
+  var big: int = 4096
+  print big * 7
+  print big * 8
+end
+--- expect
+32767 2147483647 65535 255 0 1
+-32760 -1092 -7644 32760 0
+28672
+int overflow at line 11
+
+=== abs of the most negative int traps
+func main()
+  var a: int = -32768
+  print abs(a)
+end
+--- expect
+int overflow at line 3
+
+=== abs of the most negative long traps
+func main()
+  var b: long = -2147483648
+  print abs(b)
+end
+--- expect
+long overflow at line 3
+
+=== int times a constant: an overflow on an add step traps too (12000 * 3: the shift fits, the add doesn't)
+func main()
+  var q: int = 12000
+  print q * 2
+  print q * 3
+end
+--- expect
+24000
+int overflow at line 4

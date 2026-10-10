@@ -21,6 +21,8 @@ PROGRAMS = {n: (os.path.join(HERE, 'bench', n + '.bly'), lambda: b'') for n in
             ('fib', 'tak', 'ack', 'queens', 'sieve', 'bubble', 'qsort', 'tree', 'expr', 'life', 'crc', 'hanoi', 'perm')}
 PROGRAMS['sing'] = (os.path.join(HERE, '..', 'examples', 'sing_d12.bly'),
                     lambda: open(os.path.join(HERE, '..', 'examples', 'hill.txt'), 'rb').read())
+for n in ('mandel', 'collatz', 'life', 'maze'):             # examples that lean on what the generator does inline
+    PROGRAMS['ex-' + n] = (os.path.join(HERE, '..', 'examples', n + '.bly'), lambda: b'')
 
 
 def interp(path, text):

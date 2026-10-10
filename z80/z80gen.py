@@ -1122,7 +1122,7 @@ class Gen:
                     self.emit('ld h,a')
                 self.emit(f'ld ({r.val}),hl' if t is not B.BYTE else f'ld a,l')
                 return r
-            if self.const_arith(op, a, b, t, r):             # unsigned, by a constant: phase one's inline forms
+            if self.const_arith(op, a, b, t, r, line):             # unsigned, by a constant: phase one's inline forms
                 return r
             # * / %: 16-bit routines; a byte is done in 16 bits and keeps the low byte
             self.load_hl(b)
@@ -1167,10 +1167,12 @@ class Gen:
         self.call(f'bly_{name}_{n}')
         return r
 
-    def const_arith(self, op, a, b, t, r):
+    def const_arith(self, op, a, b, t, r, line=0):
         """byte or word * / % by a constant, inline: powers of two as shifts and masks, other multipliers as
         shift-and-add (phase one's codegen). Unsigned only (int traps on overflow), and never / or % by 0 (the
         library says so). Returns False to leave it to the library."""
+        if t is B.INT and op == '*' and (b.kind == 'imm' or a.kind == 'imm'):
+            return self.int_times_const(a, b, r, line)
         if t not in (B.BYTE, B.WORD) or not (b.kind == 'imm' or op == '*' and a.kind == 'imm'):
             return False
         if b.kind != 'imm':
@@ -1230,6 +1232,31 @@ class Gen:
             self.emit('ld a,h')
             self.emit(f'and {(k - 1) >> 8}')
             self.emit('ld h,a')
+        self.emit(f'ld ({r.val}),hl')
+        return True
+
+    def int_times_const(self, a, b, r, line):
+        """int * k for a constant k from 1 to 32767, inline: shift-and-add with ADC, which sets P/V on signed overflow.
+        Each step's value is x times a prefix of k's bits, no larger than x * k, so a step overflows only if the answer
+        would: the trap is exactly the library's. Other k: the library"""
+        if b.kind != 'imm':
+            a, b = b, a
+        k = b.val
+        if not 1 <= k <= 32767:
+            return False
+        self.load_hl(a)
+        if k > 1:
+            if k & (k - 1):
+                self.emit('ld b,h')
+                self.emit('ld c,l')
+            for bit in bin(k)[3:]:
+                self.emit('or a')
+                self.emit('adc hl,hl')
+                self.fail_jp('pe', 'bly_ovf_int', line)
+                if bit == '1':
+                    self.emit('or a')
+                    self.emit('adc hl,bc')
+                    self.fail_jp('pe', 'bly_ovf_int', line)
         self.emit(f'ld ({r.val}),hl')
         return True
 
@@ -1917,6 +1944,37 @@ class Gen:
             for k in range(size(t)):
                 self.emit(f'ld a,{"l" if k == 0 else "h"}')
                 self.emit(f'ld ({r.val}+{k}),a')
+            return r
+        if name == 'abs' and t in (B.BYTE, B.WORD):         # unsigned: already its own size
+            return self.conv(args[0], t)
+        if name == 'abs' and t is B.INT:                    # a sign test, and a checked negate
+            a = self.conv(args[0], t)
+            r, done = self.temp(t), self.label()
+            self.load_hl(a)
+            self.emit('bit 7,h')
+            self.emit(f'jr z,{done}')
+            self.emit('ex de,hl')
+            self.emit('ld hl,0')
+            self.emit('or a')
+            self.emit('sbc hl,de')
+            self.fail_jp('pe', 'bly_ovf_int', line)
+            self.place(done)
+            self.emit(f'ld ({r.val}),hl')
+            return r
+        if name == 'abs' and t is B.LONG:                   # the sign byte decides: a copy, or the checked negate
+            a = self.mem(self.conv(args[0], t))
+            r, neg, done = self.temp(t), self.label(), self.label()
+            self.emit(f'ld a,({self.addr(a)}+3)')
+            self.emit('rla')
+            self.emit(f'jr c,{neg}')
+            self.copy(r.val, self.addr(a), 4)
+            self.emit(f'jr {done}')
+            self.place(neg)
+            self.line(line)
+            self.emit(f'ld hl,{self.addr(a)}')
+            self.emit(f'ld bc,{r.val}')
+            self.call('bly_neg_i32')
+            self.place(done)
             return r
         if name in ('abs', 'gcd', 'lcm', 'mod'):
             qs = [self.conv(a, B.QUAD) if a.kind != 'imm' else self.materialize(Op('imm', a.val, B.QUAD)) for a in args]
