@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Build a Barley program into a Spectrum tape: a BASIC loader, the input, the code. Code lives high.
+"""Build a Barley program into a Spectrum tape: a BASIC loader, the input, the
+code. Code lives high.
 
-usage: zxbuild.py PROGRAM.bly [INPUT.txt] -o prog.tap
-
-The loader is one line: CLEAR 32767: LOAD "" CODE: LOAD "" CODE: RANDOMIZE USR start. The first CODE block is the
-input at 8000h (a length word, then the text, so a missing input is just a zero), the second is the program,
-assembled twice so it sits flush under the UDGs at FF58h, with its slots just beneath it.
+The loader is one line: CLEAR 32767: LOAD "" CODE: LOAD "" CODE: RANDOMIZE USR
+start. The first CODE block is the input at 8000h (a length word, then the
+text, so a missing input is just a zero), the second is the program, assembled
+twice so it sits flush under the UDGs at FF58h, with its slots just beneath
+it.
 """
+import argparse
 import os
 import re
 import subprocess
@@ -99,10 +101,17 @@ def build(src, text=b''):
 
 
 def main(argv):
-    out = argv[argv.index('-o') + 1] if '-o' in argv else None
-    args = [a for i, a in enumerate(argv) if a != '-o' and (i == 0 or argv[i - 1] != '-o')]
-    src = open(args[0]).read()
-    text = open(args[1], 'rb').read() if len(args) > 1 else b''
+    ap = argparse.ArgumentParser(prog='zxbuild.py', description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('program', metavar='PROGRAM.bly', help='the program')
+    ap.add_argument('input', metavar='INPUT', nargs='?', help='its input, as a block on the tape')
+    ap.add_argument('-o', dest='out', metavar='OUT.tap', help='the tape (default: PROGRAM.tap beside the program)')
+    a = ap.parse_args(argv)
+    try:
+        src = open(a.program).read()
+        text = open(a.input, 'rb').read() if a.input else b''
+    except OSError as err:
+        sys.exit(f'zxbuild.py: {err.filename}: {err.strerror}')
     try:
         tap, info = build(src, text)
     except z80gen.B.BarleyError as err:
@@ -111,10 +120,9 @@ def main(argv):
     except (z80gen.GenError, ValueError) as err:
         print(f'Z80: {err}')
         sys.exit(2)
-    open(out or os.path.splitext(args[0])[0] + '.tap', 'wb').write(tap)
+    open(a.out or os.path.splitext(a.program)[0] + '.tap', 'wb').write(tap)
     print(f"code {info['code']} bytes at {info['org']:04X}h, slots {info['slots']}, input at {info['input_at']:04X}h, "
           f"arena {info['arena']} bytes free")
-
 
 if __name__ == '__main__':
     main(sys.argv[1:])

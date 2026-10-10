@@ -1,23 +1,29 @@
 #!/usr/bin/env python3
-"""Barley's Z80 backend. It began deliberately dumb, then took back, one measured step at a time, the answers Barley's
-first compiler had measured (HISTORY.md): where values live, and what a call costs.
+"""Barley's Z80 backend. It began deliberately dumb, then took back, one
+measured step at a time, the answers Barley's first compiler had measured
+(HISTORY.md): where values live, and what a call costs.
 
-usage: z80gen.py [--target cpm] PROGRAM.bly > prog.asm      (then sjasmplus --raw=prog.com prog.asm)
-
-The front end is the reference interpreter's own parser and checker. Every variable, parameter and temporary lives at a
-fixed address (a slot): a function's slots are one block, its frame.
-- A variable is read in place, except where something later could change it: a global in a statement that calls a
-  user function, and whatever a `for` holds across its body or a self-call writes over (snapshots).
+The front end is the reference interpreter's own parser and checker. Every
+variable, parameter and temporary lives at a fixed address (a slot): a
+function's slots are one block, its frame.
+- A variable is read in place, except where something later could change it: a
+  global in a statement that calls a user function, and whatever a `for` holds
+  across its body or a self-call writes over (snapshots).
 - Conditions are branches, with phase one's inline compares for 8 and 16 bits.
-- Failure paths (index checks, int overflow, a slice's general check) are cold code after the function's ret.
+- Failure paths (index checks, int overflow, a slice's general check) are cold
+  code after the function's ret.
 - Unsigned arithmetic by constants is inline (shifts, masks, shift-and-add).
-- A call into the caller's own cycle saves only what's live after it (the save rule: live_after ∩ clobber(callee),
-  with liveness from the AST), as pushes of byte runs.
-- peephole.py runs phase one's register cache (HL, DE, A) over each function and drops stores to temps nobody reads.
-8- and 16-bit arithmetic is inline (int's overflow is the V flag of ADC or SBC); anything wider is a call into the
-library (ABI.md), by address.
+- A call into the caller's own cycle saves only what's live after it (the save
+  rule: live_after ∩ clobber(callee), with liveness from the AST), as pushes
+  of byte runs.
+- peephole.py runs phase one's register cache (HL, DE, A) over each function
+  and drops stores to temps nobody reads.
+
+8- and 16-bit arithmetic is inline (int's overflow is the V flag of ADC or
+SBC); anything wider is a call into the library (ABI.md), by address.
 """
 
+import argparse
 import os
 import sys
 
@@ -2823,13 +2829,18 @@ def compile_program(src, target='cpm', org=None, bss_at=None):
 
 
 def main(argv):
-    target = 'cpm'
-    if argv[:1] == ['--target']:
-        target, argv = argv[1], argv[2:]
-    if not argv:
-        sys.exit(__doc__)
+    ap = argparse.ArgumentParser(prog='z80gen.py', description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter,
+                                 epilog='then, for CP/M: sjasmplus --raw=prog.com prog.asm (zxbuild.py makes tapes)')
+    ap.add_argument('program', metavar='PROGRAM.bly', help='the program; its assembly goes to standard output')
+    ap.add_argument('--target', choices=['cpm', 'zx48'], default='cpm', help='the machine (default cpm)')
+    a = ap.parse_args(argv)
     try:
-        sys.stdout.write(compile_program(open(argv[0]).read(), target))
+        src = open(a.program).read()
+    except OSError as err:
+        sys.exit(f'z80gen.py: {a.program}: {err.strerror}')
+    try:
+        sys.stdout.write(compile_program(src, a.target))
     except B.BarleyError as err:
         print(err)
         sys.exit(1)
@@ -2839,7 +2850,6 @@ def main(argv):
     except ValueError as err:                          # the gatherer: a library part nobody has written yet
         print(f'Z80: {err}')
         sys.exit(2)
-
 
 if __name__ == '__main__':
     main(sys.argv[1:])

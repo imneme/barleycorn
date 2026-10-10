@@ -6,6 +6,9 @@ of a program in interp/tests or examples is a quotation of that program,
 and must be the whole of it, exactly. (DESIGN.md quotes several; when a
 program changes, copy it back in.)
 
+Every command's -h works and fits in 80 columns, and an option it doesn't
+have is refused, with exit status 2, rather than quietly ignored.
+
 With --wrap MDWRAP, also checks that every Markdown file is wrapped as
 mdwrap would wrap it: prose at 72 columns, for readers in a terminal.
 """
@@ -46,6 +49,44 @@ def quotations():
     return seen, bad
 
 
+# every command a person types, with enough arguments that an extra option is the only thing wrong
+# (argparse checks them all before a file is opened); the second group needs omse-ai's Python
+COMMANDS = {'bly': ['run', 'x.bly'], 'check': [], 'interp/barley.py': ['x.bly'], 'interp/tests/run.py': [],
+            'c/cgen.py': ['x.bly'], 'c/tests/test_screen.py': [], 'z80/z80gen.py': ['x.bly'],
+            'z80/zxbuild.py': ['x.bly'], 'z80/fuzz.py': [], 'examples/make_sudoku.py': [],
+            'tools/check_docs.py': []}
+OMSE_COMMANDS = {'z80/zxrun.py': ['x.tap'], 'z80/zxbench.py': [], 'z80/zxsize.py': ['x.bly'],
+                 'z80/zxprof.py': ['x.bly'], 'z80/tests/test_containers.py': [], 'z80/tests/test_fp.py': [],
+                 'z80/tests/test_num.py': [], 'z80/tests/test_text.py': [], 'z80/tests/test_zxgfx.py': [],
+                 'z80/tests/test_int.py': [], 'z80/tests/test_int_mutants.py': [],
+                 'z80/tests/rom_text_check.py': []}
+
+
+def commands():
+    """failures: a command whose -h doesn't work or is too wide, or that takes an option it hasn't got"""
+    sys.path.insert(0, ROOT)
+    import paths
+    omse = os.path.isdir(paths.OMSE_AI)
+    bad, seen = [], 0
+    env = dict(os.environ, NO_COLOR='1', COLUMNS='80')
+    for cmd, fine in list(COMMANDS.items()) + (list(OMSE_COMMANDS.items()) if omse else []):
+        py = paths.OMSE_AI_PYTHON if cmd in OMSE_COMMANDS else sys.executable
+        seen += 1
+        h = subprocess.run([py, os.path.join(ROOT, cmd), '-h'], capture_output=True, text=True, env=env, cwd=ROOT,
+                           timeout=120)
+        if h.returncode != 0 or not h.stdout.startswith('usage:'):
+            bad.append(f'{cmd} -h: exit {h.returncode}: {(h.stdout + h.stderr).strip()[-200:]}')
+        wide = [line for line in h.stdout.split('\n') if len(line) > 80]
+        if wide:
+            bad.append(f'{cmd} -h: {len(wide)} lines over 80 columns, such as: {wide[0]}')
+        x = subprocess.run([py, os.path.join(ROOT, cmd)] + fine + ['--no-such-option'], capture_output=True,
+                           text=True, env=env, cwd=ROOT, timeout=120)
+        if x.returncode != 2 or 'unrecognized arguments: --no-such-option' not in x.stderr:
+            bad.append(f'{cmd} {" ".join(fine)} --no-such-option: exit {x.returncode}, not refused as unknown: '
+                       f'{(x.stdout + x.stderr).strip()[-160:]}')
+    return seen, omse, bad
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--wrap', metavar='MDWRAP', help='check the wrapping too, with this mdwrap')
@@ -54,6 +95,13 @@ def main(argv=None):
     for b in bad:
         print('FAIL: ' + b)
     print(f'{seen} quoted programs, {len(bad)} out of date')
+    if not a.wrap:
+        n, omse, cbad = commands()
+        for b in cbad:
+            print('FAIL: ' + b)
+        print(f'{n} commands\' -h' + ('' if omse else ' (not the omse-ai ones: no omse-ai here)') +
+              f', {len(cbad)} wrong')
+        bad += cbad
     if a.wrap:
         files = markdown_files()
         r = subprocess.run([a.wrap, '--check'] + files, cwd=ROOT, capture_output=True, text=True)

@@ -129,8 +129,10 @@ decide where arithmetic wraps (unsigned) or traps (signed).
   ROM.
 - **The docs** (`tools/check_docs.py`): a code block that starts like a
   program in `interp/tests` or `examples` quotes it, and must be all of
-  it, exactly; DESIGN.md quotes five. The `wrap` stage checks every
-  Markdown file is wrapped as `mdwrap` wraps it.
+  it, exactly; DESIGN.md quotes five. Every command's `-h` must work and
+  fit in 80 columns, and an option a command hasn't got must be refused,
+  not ignored (every command line is argparse's). The `wrap` stage
+  checks every Markdown file is wrapped as `mdwrap` wraps it.
 
 **A test that has never failed hasn't shown it can.** When you add a
 check, break the thing it checks (a mutant) and watch the test fail.

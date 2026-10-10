@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Run every test Barley has, in order, and say what passed. A stage whose tools aren't here is skipped, with a note
-saying what it needs (paths.py says where each tool is looked for).
+"""Run every test Barley has, in order, and say what passed.
 
-    ./check            everything
-    ./check --quick    the suite on every backend, and the fragments' quick tests
-    ./check interp c   only those stages: interp, c, cpm, zx, fragments, screen, docs, wrap, fuzz
+A stage whose tools aren't here is skipped, with a note saying what it needs
+(paths.py says where each tool is looked for).
 """
+import argparse
 import os
 import shutil
 import subprocess
@@ -18,8 +17,6 @@ import paths                                                    # noqa: E402
 
 PY = sys.executable
 OPY = paths.OMSE_AI_PYTHON
-quick = '--quick' in sys.argv
-only = [a for a in sys.argv[1:] if not a.startswith('--')]
 
 
 def have(tool):
@@ -32,34 +29,50 @@ def omse_ready():
 
 SUITE = os.path.join(ROOT, 'interp', 'tests', 'run.py')
 FRAG = ['test_core', 'test_gen', 'test_int', 'test_num', 'test_text', 'test_containers', 'test_zxgfx', 'test_fp']
-STAGES = [
-    ('interp', 'the suite in the interpreter (the spec)', lambda: None, [[PY, SUITE]]),
-    ('c', 'the suite as C, with the sanitizers', lambda: None if have(paths.CC) else f'needs a C compiler ({paths.CC})',
-     [[PY, SUITE, '--c']]),
-    ('cpm', 'the suite as CP/M programs under tnylpo',
-     lambda: None if have(paths.SJASMPLUS) and have(paths.TNYLPO) else 'needs sjasmplus and tnylpo',
-     [[PY, SUITE, '--z80']]),
-    ('zx', 'the suite on the 48K Spectrum (omse-ai)',
-     lambda: None if have(paths.SJASMPLUS) and omse_ready() else 'needs sjasmplus, omse-ai and the 48K ROM',
-     [[PY, SUITE, '--zx']]),
-    ('fragments', "each library fragment against its Python model, on a bare Z80",
-     lambda: None if have(paths.SJASMPLUS) and omse_ready() else 'needs sjasmplus, omse-ai and the 48K ROM',
-     [[OPY, os.path.join(ROOT, 'z80', 'tests', t + '.py')] + (['--quick'] if quick and t not in ('test_core', 'test_gen', 'test_int') else [])
-      for t in FRAG] + ([] if quick else [[OPY, os.path.join(ROOT, 'z80', 'tests', 'test_int_mutants.py')],
-                                           [OPY, os.path.join(ROOT, 'z80', 'tests', 'test_fp_mutants.py')],
-                                           [OPY, os.path.join(ROOT, 'z80', 'tests', 'rom_text_check.py')]])),
-    ('screen', 'the C screen against the reference', lambda: None if have(paths.CC) and omse_ready() else
-     'needs a C compiler and the 48K ROM', [[PY, os.path.join(ROOT, 'c', 'tests', 'test_screen.py')]]),
-    ('docs', 'the programs the docs quote are the programs as they are', lambda: None,
-     [[PY, os.path.join(ROOT, 'tools', 'check_docs.py')]]),
-    ('wrap', 'the Markdown wrapped at 72 columns, as mdwrap does it',
-     lambda: None if have(paths.MDWRAP) else 'needs mdwrap (MDWRAP in paths.py)',
-     [[PY, os.path.join(ROOT, 'tools', 'check_docs.py'), '--wrap', paths.MDWRAP]]),
-    ('fuzz', 'random programs: the interpreter against C and CP/M',
-     lambda: None if have(paths.CC) and have(paths.SJASMPLUS) and have(paths.TNYLPO) else 'needs a C compiler, sjasmplus and tnylpo',
-     [[PY, os.path.join(ROOT, 'z80', 'fuzz.py'), '100' if quick else '400']]),
-]
-if quick:
+
+
+def stages(quick):
+    return [
+        ('interp', 'the suite in the interpreter (the spec)', lambda: None, [[PY, SUITE]]),
+        ('c', 'the suite as C, with the sanitizers', lambda: None if have(paths.CC) else f'needs a C compiler ({paths.CC})',
+         [[PY, SUITE, '--c']]),
+        ('cpm', 'the suite as CP/M programs under tnylpo',
+         lambda: None if have(paths.SJASMPLUS) and have(paths.TNYLPO) else 'needs sjasmplus and tnylpo',
+         [[PY, SUITE, '--z80']]),
+        ('zx', 'the suite on the 48K Spectrum (omse-ai)',
+         lambda: None if have(paths.SJASMPLUS) and omse_ready() else 'needs sjasmplus, omse-ai and the 48K ROM',
+         [[PY, SUITE, '--zx']]),
+        ('fragments', "each library fragment against its Python model, on a bare Z80",
+         lambda: None if have(paths.SJASMPLUS) and omse_ready() else 'needs sjasmplus, omse-ai and the 48K ROM',
+         [[OPY, os.path.join(ROOT, 'z80', 'tests', t + '.py')] + (['--quick'] if quick and t not in ('test_core', 'test_gen', 'test_int') else [])
+          for t in FRAG] + ([] if quick else [[OPY, os.path.join(ROOT, 'z80', 'tests', 'test_int_mutants.py')],
+                                               [OPY, os.path.join(ROOT, 'z80', 'tests', 'test_fp_mutants.py')],
+                                               [OPY, os.path.join(ROOT, 'z80', 'tests', 'rom_text_check.py')]])),
+        ('screen', 'the C screen against the reference', lambda: None if have(paths.CC) and omse_ready() else
+         'needs a C compiler and the 48K ROM', [[PY, os.path.join(ROOT, 'c', 'tests', 'test_screen.py')]]),
+        ('docs', 'the programs the docs quote are the programs as they are', lambda: None,
+         [[PY, os.path.join(ROOT, 'tools', 'check_docs.py')]]),
+        ('wrap', 'the Markdown wrapped at 72 columns, as mdwrap does it',
+         lambda: None if have(paths.MDWRAP) else 'needs mdwrap (MDWRAP in paths.py)',
+         [[PY, os.path.join(ROOT, 'tools', 'check_docs.py'), '--wrap', paths.MDWRAP]]),
+        ('fuzz', 'random programs: the interpreter against C and CP/M',
+         lambda: None if have(paths.CC) and have(paths.SJASMPLUS) and have(paths.TNYLPO) else 'needs a C compiler, sjasmplus and tnylpo',
+         [[PY, os.path.join(ROOT, 'z80', 'fuzz.py'), '100' if quick else '400']]),
+    ]
+
+
+ap = argparse.ArgumentParser(prog='check', description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
+                             epilog='stages:\n' + '\n'.join(f'  {name:10} {what}' for name, what, _, _ in stages(False)))
+ap.add_argument('stages', nargs='*', metavar='STAGE', help='only these stages (default: every one)')
+ap.add_argument('--quick', action='store_true',
+                help="skip the slow parts: the fuzzer, and most of the fragments' random cases")
+args = ap.parse_args()
+STAGES = stages(args.quick)
+unknown = [a for a in args.stages if a not in [st[0] for st in STAGES]]
+if unknown:
+    ap.error(f'no stage called {", ".join(unknown)} (see check -h)')
+only = args.stages
+if args.quick:
     STAGES = [s for s in STAGES if s[0] not in ('fuzz',)]
 
 failed = []

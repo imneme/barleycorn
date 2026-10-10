@@ -1,14 +1,18 @@
-"""Text and input, against the interpreter: text.asm, text_chr.asm, intern.asm, input.asm,
-input_grid.asm and elem_byte.asm.
+"""Text and input, against the interpreter: text.asm, text_chr.asm, intern.asm,
+input.asm, input_grid.asm and elem_byte.asm.
 
-The model is the interpreter's own code, reached through small hand-made nodes: e_dot for the str methods
-(split, find, starts, trim, lines' next), e_index for slices, e_call for intern, name, chr, grid and input, and
-Interp.__init__ for splitting the input into lines. Every failure is compared byte for byte, " at line 7"
-included: the drivers below set bly_line to 7 first.
+The model is the interpreter's own code, reached through small hand-made
+nodes: e_dot for the str methods (split, find, starts, trim, lines' next),
+e_index for slices, e_call for intern, name, chr, grid and input, and
+Interp.__init__ for splitting the input into lines. Every failure is compared
+byte for byte, " at line 7" included: the drivers below set bly_line to 7
+first.
 
-    $OMSE_AI_PYTHON z80/tests/test_text.py [--quick] [--cost]
-BLY_LIB=<dir> runs it against another copy of lib/ (to watch it catch a broken routine).
+Run it with omse-ai's Python ($OMSE_AI_PYTHON). In the environment,
+BLY_LIB=DIR runs it against another copy of lib/ (to watch it catch a broken
+routine).
 """
+import argparse
 import functools
 import os
 import random
@@ -24,7 +28,12 @@ import barley as B                            # noqa: E402
 if os.environ.get('BLY_LIB'):
     harness.gather = functools.partial(link.gather, lib=os.environ['BLY_LIB'])
 
-QUICK = '--quick' in sys.argv
+ap = argparse.ArgumentParser(prog='test_text.py', description=__doc__,
+                             formatter_class=argparse.RawDescriptionHelpFormatter)
+ap.add_argument('--quick', action='store_true', help='fewer random cases')
+ap.add_argument('--cost', action='store_true', help='print what each routine costs, instead of testing')
+ARGS = ap.parse_args()
+QUICK = ARGS.quick
 N = 300 if QUICK else 2000                    # random cases per routine
 LINE = 7
 rng = random.Random(int(os.environ.get('SEED', '4')))
@@ -1048,7 +1057,7 @@ if __name__ == '__main__':
     print('text:', 'all right' if not bad else f'{bad} wrong', '| cases:',
           ', '.join(f'{k} {v}' for k, v in counts.items()))
     print(f'intern filled the 16K test arena at name {stuck} (3-letter names)')
-    if '--cost' in sys.argv:
+    if ARGS.cost:
         for r in costs():
             print('cost', r)
         for k, v in sizes().items():

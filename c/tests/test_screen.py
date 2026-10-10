@@ -1,26 +1,35 @@
 #!/usr/bin/env python3
-"""The C backend's screen and sound, against the reference: the interpreter, which draws with z80/zxgfx.py.
+"""The C backend's screen and sound, against the reference: the interpreter,
+which draws with z80/zxgfx.py.
 
-usage: python3 test_screen.py [--seed N] [--random N] [--quick] [--c-dir DIR] [--build DIR]
-
-Every case is a Barley program, run through the interpreter (--screen, --sound) and through its C (BARLEY_SCREEN,
-BARLEY_SOUND; built with the sanitizers on, as tests/run.py builds it). The two must agree on everything:
-  - all 6,912 bytes of the screen, saved at the end, or at the failure (the interpreter saves in a finally);
+Every case is a Barley program, run through the interpreter (--screen,
+--sound) and through its C (BARLEY_SCREEN, BARLEY_SOUND; built with the
+sanitizers on, as tests/run.py builds it). The two must agree on everything:
+  - all 6,912 bytes of the screen, saved at the end, or at the failure (the
+    interpreter saves in a finally);
   - the beep log;
-  - the text printed, byte for byte, a failure's message included, and the exit status.
-The interpreter's stdout is made latin-1 here, so a byte 80h-FFh prints as one byte, as the C prints it.
+  - the text printed, byte for byte, a failure's message included, and the
+    exit status.
+
+The interpreter's stdout is made latin-1 here, so a byte 80h-FFh prints as
+one byte, as the C prints it.
 
 Three kinds of case:
-  EDGES    hand-picked: the screen's corners and edges, zero-length lines, radius 0 and huge radii, circles centred
-           off the screen, OVER and INVERSE on and off, every attribute cell, wrapping and lazy scrolling, every
-           byte's glyph, UDGs through a variable and a parameter, sound and time
-  FAILS    every failure the screen and sound can report, each also checked against its exact words
-  RANDOM   seeded random drawing programs, a few hundred calls each, some ending in a failure
+  EDGES   hand-picked: the screen's corners and edges, zero-length lines,
+          radius 0 and huge radii, circles centred off the screen, OVER and
+          INVERSE on and off, every attribute cell, wrapping and lazy
+          scrolling, every byte's glyph, UDGs through a variable and a
+          parameter, sound and time
+  FAILS   every failure the screen and sound can report, each also checked
+          against its exact words
+  RANDOM  seeded random drawing programs, a few hundred calls each, some
+          ending in a failure
 
---c-dir points at another copy of the C backend (cgen.py and rt/), which is how it's broken on purpose to watch these
-tests catch it.
+--c-dir points at another copy of the C backend (cgen.py and rt/), which is
+how it's broken on purpose to watch these tests catch it.
 """
 
+import argparse
 import os
 import random
 import subprocess
@@ -36,12 +45,18 @@ RUN_INTERP = ("import sys; sys.stdout.reconfigure(encoding='latin-1'); sys.path.
               "import barley; barley.main(sys.argv[2:])")
 
 
-def arg(flag, default):
-    return sys.argv[sys.argv.index(flag) + 1] if flag in sys.argv else default
-
-
-C_DIR = os.path.abspath(arg('--c-dir', os.path.join(HERE, '..')))
-BUILD = os.path.abspath(arg('--build', os.path.join(paths.BUILD, 'cbuild', 'screen')))
+ap = argparse.ArgumentParser(prog='test_screen.py', description=__doc__,
+                             formatter_class=argparse.RawDescriptionHelpFormatter)
+ap.add_argument('--seed', type=int, default=9102026, help='the random cases\' seed (default 9102026)')
+ap.add_argument('--random', type=int, default=60, metavar='N', help='how many random cases (default 60)')
+ap.add_argument('--quick', action='store_true', help='only 6 random cases')
+ap.add_argument('--c-dir', default=os.path.join(HERE, '..'), metavar='DIR',
+                help='another copy of the C backend to test (cgen.py and rt/)')
+ap.add_argument('--build', default=os.path.join(paths.BUILD, 'cbuild', 'screen'), metavar='DIR',
+                help='where to build (default build/cbuild/screen)')
+ARGS = ap.parse_args()                         # at the start: the paths below depend on it
+C_DIR = os.path.abspath(ARGS.c_dir)
+BUILD = os.path.abspath(ARGS.build)
 CC = [paths.CC, '-std=c11', '-g', '-O1', '-Wall', '-Wno-unused-function', '-Wno-unused-variable',
       '-fsanitize=undefined,address', '-fno-sanitize-recover=all', '-I', os.path.join(C_DIR, 'rt')]
 
@@ -386,8 +401,8 @@ def random_program(rng, n):
 
 
 def main():
-    seed = int(arg('--seed', 9102026))
-    nrand = 6 if '--quick' in sys.argv else int(arg('--random', 60))
+    seed = ARGS.seed
+    nrand = 6 if ARGS.quick else ARGS.random
     rng = random.Random(seed)
     cases = [(n, s, None) for n, s in EDGES] + fails()
     cases += [(f'random{i:03d}', random_program(rng, rng.choice([50, 150, 300])), None) for i in range(nrand)]

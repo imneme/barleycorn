@@ -1,13 +1,17 @@
-"""The integer library against its meaning: interp/barley.py's own arith, fit, wrap and the builtins.
+"""The integer library against its meaning: interp/barley.py's own arith, fit,
+wrap and the builtins.
 
-Every routine gets hand-picked edges and random inputs; every failure is compared byte for byte, " at line N" and
-all, with bly_line set to a random line (through a test-only wrapper, since bly_test_init clears it after set16).
-Results are written over guard bytes, and often onto an operand; nothing else from A000h to EC3Fh may change, and
-every register a header's clobbers: leaves out must come back as it went in.
+Every routine gets hand-picked edges and random inputs; every failure is
+compared byte for byte, " at line N" and all, with bly_line set to a random
+line (through a test-only wrapper, since bly_test_init clears it after set16).
+Results are written over guard bytes, and often onto an operand; nothing else
+from A000h to EC3Fh may change, and every register a header's clobbers: leaves
+out must come back as it went in.
 
-    $OMSE_AI_PYTHON z80/tests/test_int.py [count]     # count: random cases per routine (default 1500)
-    ONLY=divide SEED=7 $OMSE_AI_PYTHON z80/tests/test_int.py    # one section, another seed
+Run it with omse-ai's Python ($OMSE_AI_PYTHON). In the environment,
+ONLY=divide runs one section, and SEED=7 another seed.
 """
+import argparse
 import os
 import random
 import re
@@ -20,7 +24,10 @@ from harness import Runner                                     # noqa: E402
 import barley                                                   # noqa: E402
 from barley import BarleyError, arith, fit, wrap, BYTE, WORD, INT, LONG, QUAD   # noqa: E402
 
-COUNT = int(sys.argv[1]) if len(sys.argv) > 1 else 1500
+ap = argparse.ArgumentParser(prog='test_int.py', description=__doc__,
+                             formatter_class=argparse.RawDescriptionHelpFormatter)
+ap.add_argument('count', type=int, nargs='?', default=1500, help='random cases per routine (default 1500)')
+COUNT = ap.parse_args().count                  # read here: test_int_mutants imports this with its own count
 SEED = int(os.environ.get('SEED', '1009'))
 random.seed(SEED)
 

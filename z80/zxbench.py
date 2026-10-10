@@ -1,10 +1,13 @@
-"""Exact T-states on omse-ai's 48K for a fixed set of Barley programs, from the program's first instruction to
-bly_exit (interrupts on, as they always are: the ROM's IM 1 handler costs about 3%), and code bytes. Each program's
-output is checked against the interpreter's. --save keeps bench/baseline.json; every run flags anything more than
-0.5% slower or bigger than the baseline (phase one's lesson: one regression was caught only because a number was
-remembered).
-usage: zxbench.py [--save] [NAME...]          (with a Python that can import omse-ai: paths.py's OMSE_AI_PYTHON)"""
-import json, os, re, subprocess, sys
+"""Exact T-states on omse-ai's 48K for a fixed set of Barley programs, from the
+program's first instruction to bly_exit (interrupts on, as they always are:
+the ROM's IM 1 handler costs about 3%), and code bytes. Each program's output
+is checked against the interpreter's. --save keeps bench/baseline.json; every
+run flags anything more than 0.5% slower or bigger than the baseline (phase
+one's lesson: one regression was caught only because a number was remembered).
+
+Run it with a Python that can import omse-ai: paths.py's OMSE_AI_PYTHON.
+"""
+import argparse, json, os, re, subprocess, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, '..'))
@@ -63,8 +66,17 @@ def bench(name):
 
 
 def main(argv):
-    save = '--save' in argv
-    names = [a for a in argv if not a.startswith('--')] or list(PROGRAMS)
+    ap = argparse.ArgumentParser(prog='zxbench.py', description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('names', nargs='*', metavar='NAME',
+                    help=f'only these programs (default: all of them: {", ".join(PROGRAMS)})')
+    ap.add_argument('--save', action='store_true', help='keep these numbers as the new baseline')
+    a = ap.parse_args(argv)
+    unknown = [n for n in a.names if n not in PROGRAMS]
+    if unknown:
+        ap.error(f'no program called {", ".join(unknown)} (there are: {", ".join(PROGRAMS)})')
+    save = a.save
+    names = a.names or list(PROGRAMS)
     base = json.load(open(BASE)) if os.path.exists(BASE) else {}
     res = dict(base) if save else {}
     for n in names:

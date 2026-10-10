@@ -1,20 +1,12 @@
 #!/usr/bin/env python3
-"""Barleycorn's front door: run a program in the interpreter, or compile it and run it.
+"""Barleycorn's front door: run a program in the interpreter, or compile it
+and run it.
 
-    ./bly run PROGRAM.bly [INPUT]               the interpreter, which is the language's specification
-              [--as zx48|cpm] [--screen out.png] [--sound out.txt]
-    ./bly c   PROGRAM.bly [INPUT]               compile to C, build it with the C compiler, run it
-    ./bly cpm PROGRAM.bly [INPUT]               compile for CP/M, assemble, and run it under tnylpo
-    ./bly tap PROGRAM.bly [INPUT] [-o OUT.tap]  a tape for a 48K Spectrum (a real one, or any emulator)
-    ./bly zx  PROGRAM.bly [INPUT]               that tape, run on omse-ai's 48K; prints what the program printed
-              [--scr OUT.scr] [--minutes N]     (the 48K's screen at the end; give up after N minutes, 10 by default)
-    ./bly all PROGRAM.bly [INPUT]               all four, compared: the text each prints (CP/M's against the
-                                                interpreter's --as cpm), and the interpreter's final screen against
-                                                the 48K's (the upper 22 rows)
-
-The tools it uses (a C compiler, sjasmplus, tnylpo, omse-ai) are found as paths.py says. Each run builds in a folder of
-its own under build/bly, so runs at the same time don't collide; a tape's default home is build/bly/NAME.tap.
+The tools it uses (a C compiler, sjasmplus, tnylpo, omse-ai) are found as
+paths.py says. Each run builds in a folder of its own under build/bly, so
+runs at the same time don't collide.
 """
+import argparse
 import os
 import shutil
 import subprocess
@@ -24,15 +16,6 @@ import tempfile
 ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
 import paths                                                # noqa: E402
-
-
-def take(argv, flag, default=None):
-    if flag in argv:
-        i = argv.index(flag)
-        v = argv[i + 1]
-        del argv[i:i + 2]
-        return v
-    return default
 
 
 def run_c(prog, inp, work, capture=False):
@@ -135,35 +118,78 @@ def run_all(prog, inp, work, minutes):
     return 0 if ok else 1
 
 
+EXAMPLES = """examples:
+  ./bly run examples/maze.bly                    in the interpreter
+  ./bly all interp/tests/aoc2022d01.bly interp/tests/aoc2022d01.in
+  ./bly tap examples/life.bly -o life.tap        a tape for a real Spectrum
+  ./bly COMMAND -h                               more about one command
+"""
+
+
+def parser():
+    ap = argparse.ArgumentParser(prog='bly', description=__doc__, epilog=EXAMPLES,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest='cmd', metavar='COMMAND', required=True)
+
+    def command(name, help, description=None):
+        p = sub.add_parser(name, help=help, description=description or help[0].upper() + help[1:] + '.')
+        p.add_argument('program', metavar='PROGRAM.bly', help='the program')
+        p.add_argument('input', metavar='INPUT', nargs='?', help='its input: what lines(), grid() and input() read')
+        return p
+
+    p = command('run', "run it in the interpreter, which is the language's specification")
+    p.add_argument('--as', dest='target', choices=['zx48', 'cpm'], default='zx48',
+                   help='the machine it is, as far as the program can tell (default zx48)')
+    p.add_argument('--screen', metavar='OUT.png',
+                   help="save the Spectrum's screen at the end as a picture (and OUT.scr beside it)")
+    p.add_argument('--sound', metavar='OUT.txt', help='save a log of the notes it played')
+    command('c', 'compile it to C, build that with the C compiler, and run it')
+    command('cpm', 'compile it for CP/M, assemble it, and run it under tnylpo')
+    p = command('tap', 'make a tape for a 48K Spectrum (a real one, or any emulator)')
+    p.add_argument('-o', dest='out', metavar='OUT.tap', help='where to put it (default build/bly/PROGRAM.tap)')
+    p = command('zx', "make the tape and run it on omse-ai's 48K, printing what the program printed")
+    p.add_argument('--scr', metavar='OUT.scr', help="save the 48K's screen at the end")
+    p.add_argument('--minutes', type=float, default=10, metavar='N',
+                   help='give up after N minutes of Spectrum time (default 10)')
+    p = command('all', 'run it all four ways and compare what each printed, and the final screens',
+                "Run it in the interpreter, as C, under CP/M and on the 48K, and compare: the text each prints "
+                "(CP/M's against the interpreter's --as cpm), and the interpreter's final screen against the "
+                "48K's (the upper 22 rows).")
+    p.add_argument('--minutes', type=float, default=10, metavar='N',
+                   help='give up on the 48K after N minutes of Spectrum time (default 10)')
+    return ap
+
+
 def main(argv):
-    if not argv or argv[0] in ('-h', '--help', 'help') or argv[0] not in ('run', 'c', 'cpm', 'tap', 'zx', 'all') \
-            or len(argv) < 2 or argv[1] in ('-h', '--help'):
-        print(__doc__)
-        sys.exit(0 if argv and argv[0] in ('-h', '--help', 'help') or len(argv) > 1 else 1)
-    cmd, rest = argv[0], argv[1:]
-    if cmd == 'run':
-        sys.exit(subprocess.run([sys.executable, os.path.join(ROOT, 'interp', 'barley.py')] + rest).returncode)
-    out, scr, minutes = take(rest, '-o'), take(rest, '--scr'), take(rest, '--minutes', '10')
-    prog = rest[0]
-    inp = [os.path.abspath(rest[1])] if len(rest) > 1 else []
+    a = parser().parse_args(argv)
+    prog = a.program
+    inp = [os.path.abspath(a.input)] if a.input else []
+    for path in [prog] + inp:
+        if not os.path.exists(path):
+            sys.exit(f'bly: {path}: no such file')
+    if a.cmd == 'run':
+        opts = ['--as', a.target] + (['--screen', a.screen] if a.screen else []) + \
+            (['--sound', a.sound] if a.sound else [])
+        sys.exit(subprocess.run([sys.executable, os.path.join(ROOT, 'interp', 'barley.py')] + opts + [prog] + inp)
+                 .returncode)
     stem = os.path.splitext(os.path.basename(prog))[0]
     work = tempfile.mkdtemp(prefix=stem + '-', dir=paths.build_dir('bly'))    # this run's own folder
     try:
-        if cmd == 'c':
+        if a.cmd == 'c':
             code, msg = run_c(prog, inp, work)
             sys.exit(msg.rstrip() if code and msg else code)
-        if cmd == 'cpm':
+        if a.cmd == 'cpm':
             code, msg = run_cpm(prog, inp, work)
             sys.exit(msg.rstrip() if code and msg else code)
-        if cmd == 'all':
-            sys.exit(run_all(prog, inp, work, minutes))
-        tap = out or os.path.join(paths.build_dir('bly'), stem + '.tap')
+        if a.cmd == 'all':
+            sys.exit(run_all(prog, inp, work, a.minutes))
+        tap = (a.out if a.cmd == 'tap' else None) or os.path.join(paths.build_dir('bly'), stem + '.tap')
         if make_tap(prog, inp, tap):
             sys.exit(1)
-        if cmd == 'tap':
+        if a.cmd == 'tap':
             print(tap)
             return
-        code, _ = run_zx(tap, scr, minutes)
+        code, _ = run_zx(tap, a.scr, a.minutes)
         sys.exit(code)
     finally:
         shutil.rmtree(work, ignore_errors=True)

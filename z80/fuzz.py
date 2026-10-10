@@ -1,11 +1,15 @@
-"""Random Barley programs over the integer core, with the interpreter as the oracle (phase one's fuzzer, grown up).
-Each program runs in the interpreter, as C (clang, sanitizers on) and as a CP/M .COM under tnylpo; any disagreement
-is kept in fuzz/ as fail-SEED.bly with what each said. What it aims at is what the generator's next steps change:
+"""Random Barley programs over the integer core, with the interpreter as the
+oracle (phase one's fuzzer, grown up). Each program runs in the interpreter,
+as C (clang, sanitizers on) and as a CP/M .COM under tnylpo; any disagreement
+is kept in fuzz/ as fail-SEED.bly with what each said. What it aims at is what
+the generator's next steps change:
 - every integer width, with compares, and/or/not, casts, shifts, min/max
-- locals and globals, and functions that change globals inside expressions (reads in place)
+- locals and globals, and functions that change globals inside expressions
+  (reads in place)
 - self-calls that permute their own arguments (the parallel-move hazard)
 - loops whose bounds the body changes, break and continue
-usage: fuzz.py [N] [--seed S] [--jobs J] [--zx]       (--zx: the 48K too, slower)"""
+"""
+import argparse
 import os, random, re, subprocess, sys, multiprocessing as mp
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', 'interp', 'tests'))
@@ -252,10 +256,15 @@ def run_one(seed, zx=False):
 
 
 def main(argv):
-    n = int(argv[0]) if argv and argv[0].isdigit() else 100
-    seed = int(argv[argv.index('--seed') + 1]) if '--seed' in argv else random.randrange(10 ** 6)
-    jobs = int(argv[argv.index('--jobs') + 1]) if '--jobs' in argv else 6
-    zx = '--zx' in argv
+    ap = argparse.ArgumentParser(prog='fuzz.py', description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('n', metavar='N', type=int, nargs='?', default=100, help='how many programs (default 100)')
+    ap.add_argument('--seed', type=int, help='the first seed (default: a random one, printed at the end)')
+    ap.add_argument('--jobs', type=int, default=6, help='how many at once (default 6)')
+    ap.add_argument('--zx', action='store_true', help="the 48K too (slower)")
+    a = ap.parse_args(argv)
+    n, zx, jobs = a.n, a.zx, a.jobs
+    seed = a.seed if a.seed is not None else random.randrange(10 ** 6)
     os.makedirs(OUT, exist_ok=True)
     counts = {}
     with mp.Pool(jobs) as pool:
@@ -270,7 +279,6 @@ def main(argv):
                         f.write(f'--- {k}\n{v}\n')
                 print(f'{verdict}: seed {s} ({", ".join(k for k in outs if k != "interp")})', flush=True)
     print(f'{n} programs from seed {seed}: ' + ', '.join(f'{v} {k}' for k, v in sorted(counts.items())))
-
 
 def lambda_run(a):
     return run_one(*a)

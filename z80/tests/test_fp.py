@@ -1,15 +1,17 @@
-"""fp.asm on a real ROM: floats through the Spectrum's calculator, against Python and the interpreter's words.
+"""fp.asm on a real ROM: floats through the Spectrum's calculator, against Python
+and the interpreter's words.
 
-Every routine is called on omse-ai's 48K through fprig.Rig, which also checks after every call that BASIC's state
-survived (IY, HL', ERR_SP, ERR_NR, X_PTR, an empty calculator stack, MEM). The model is Python: exact Fractions
-where the routine is exact (compare, trunc, floor, round, conversions, negate, abs), floats with a tolerance where
-the ROM computes (arithmetic, the functions). Each tolerance is printed with the worst error seen, so the notes can
-say what held. Failure messages are compared word for word with the interpreter's (barley.py's farith, its function
-and cast messages), with the value printed as the ROM prints it.
-
-usage: $OMSE_AI_PYTHON test_fp.py [--lib DIR] [--seed N] [--quick] [--costs]
-  --lib DIR   gather the library from DIR instead of z80/lib (for breaking a copy on purpose)
+Every routine is called on omse-ai's 48K through fprig.Rig, which also checks
+after every call that BASIC's state survived (IY, HL', ERR_SP, ERR_NR, X_PTR,
+an empty calculator stack, MEM). The model is Python: exact Fractions where
+the routine is exact (compare, trunc, floor, round, conversions, negate, abs),
+floats with a tolerance where the ROM computes (arithmetic, the functions).
+Each tolerance is printed with the worst error seen, so the notes can say what
+held. Failure messages are compared word for word with the interpreter's
+(barley.py's farith, its function and cast messages), with the value printed
+as the ROM prints it. Run it with omse-ai's Python ($OMSE_AI_PYTHON).
 """
+import argparse
 import math
 import os
 import random
@@ -22,10 +24,14 @@ sys.path.insert(0, os.path.join(HERE, '..'))
 import z80gen as G                                    # noqa: E402
 from fprig import Rig                                 # noqa: E402
 
-args = sys.argv[1:]
-LIB = args[args.index('--lib') + 1] if '--lib' in args else None
-SEED = int(args[args.index('--seed') + 1]) if '--seed' in args else 1
-QUICK = '--quick' in args
+ap = argparse.ArgumentParser(prog='test_fp.py', description=__doc__,
+                             formatter_class=argparse.RawDescriptionHelpFormatter)
+ap.add_argument('--seed', type=int, default=1, help='the random cases\' seed (default 1)')
+ap.add_argument('--quick', action='store_true', help='fewer random cases')
+ap.add_argument('--lib', metavar='DIR', help='a mutated copy of the library to test instead (how the mutant tests break it on purpose)')
+ap.add_argument('--costs', action='store_true', help='also print what each routine costs')
+ARGS = ap.parse_args()
+LIB, SEED, QUICK = ARGS.lib, ARGS.seed, ARGS.quick
 N = 150 if QUICK else 800
 rnd = random.Random(SEED)
 MAXF = float(G.rom_value(bytes([255, 0x7F, 255, 255, 255])))     # the ROM's biggest: about 1.7e38
@@ -410,7 +416,7 @@ def main():
     print(f"fp.asm: {s['bly_pr_f.buf'] + 16 - s['bly_fadd']} bytes (code and its scratch)")
     for t in (test_literals, test_cmp, test_whole, test_conv, test_arith, test_funcs, test_print):
         t(rig)
-    if '--costs' in args:
+    if ARGS.costs:
         costs(rig)
     print('\nworst errors (tolerance in brackets):')
     for k, (e, tol, case) in worst.items():

@@ -1,14 +1,22 @@
-"""A sudoku for sudoku.bly, and its solution, worked out here in Python so the Barleycorn can be checked against it.
+"""A sudoku for sudoku.bly, and its solution, worked out here in Python so the
+Barleycorn can be checked against it.
 
-It fills a grid at random (a small LCG, so the same puzzle comes out everywhere), then takes clues away in a random
-order for as long as the answer stays unique. The seed was chosen by trying a few dozen: plain backtracking (cells in
-reading order, digits 1 to 9, which is what sudoku.bly does) needs anything from a few hundred placements to two
-million, depending on the puzzle. This one needs a couple of thousand: enough to watch the search back up, and few
-enough for a 48K to finish while you're still watching.  usage: make_sudoku.py [SEED]"""
+It fills a grid at random (a small LCG, so the same puzzle comes out
+everywhere), then takes clues away in a random order for as long as the answer
+stays unique. The seed was chosen by trying a few dozen: plain backtracking
+(cells in reading order, digits 1 to 9, which is what sudoku.bly does) needs
+anything from a few hundred placements to two million, depending on the
+puzzle. This one needs a couple of thousand: enough to watch the search back
+up, and few enough for a 48K to finish while you're still watching.
+"""
+import argparse
 import os
 import sys
 
-SEED = int(sys.argv[1]) if len(sys.argv) > 1 else 3
+ap = argparse.ArgumentParser(prog='make_sudoku.py', description=__doc__,
+                             formatter_class=argparse.RawDescriptionHelpFormatter)
+ap.add_argument('seed', type=int, nargs='?', default=3, help='the puzzle (default 3, the one sudoku.txt holds)')
+SEED = ap.parse_args().seed
 
 
 class LCG:

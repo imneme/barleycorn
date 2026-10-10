@@ -1,17 +1,23 @@
-"""The Spectrum's drawing (lib/zxgfx.asm, zxline.asm, zxcircle.asm) against its meaning, z80/zxgfx.py.
+"""The Spectrum's drawing (lib/zxgfx.asm, zxline.asm, zxcircle.asm) against its
+meaning, z80/zxgfx.py.
 
-A test is a script of calls (plot, point, line, circle, attr, udg, and changes to ATTR_P and P_FLAG), walked on the
-bare Z80 by a small driver, and the same calls made on zxgfx.Screen. After the run, these must all agree:
-  - the screen, all 6,912 bytes, and the 21 UDGs (at FF58h, where the real machine keeps them);
+A test is a script of calls (plot, point, line, circle, attr, udg, and changes
+to ATTR_P and P_FLAG), walked on the bare Z80 by a small driver, and the same
+calls made on zxgfx.Screen. After the run, these must all agree:
+  - the screen, all 6,912 bytes, and the 21 UDGs (at FF58h, where the real
+    machine keeps them);
   - every point() result;
-  - a failure, if the script ends in one: its words, " at line N", and the screen as it was;
-  - everything else in memory: untouched, apart from the code's own scratch and the stack;
+  - a failure, if the script ends in one: its words, " at line N", and the
+    screen as it was;
+  - everything else in memory: untouched, apart from the code's own scratch
+    and the stack;
   - IY and the alternate registers: as the driver set them.
-The screen and UDGs start random, so every bit a call shouldn't touch is watched, and P_FLAG's other bits are random
-too, so only the permanent OVER and INVERSE bits may count.
 
-    $OMSE_AI_PYTHON z80/tests/test_zxgfx.py [--quick] [--seed N] [--cost] [--mutants [name]]
+The screen and UDGs start random, so every bit a call shouldn't touch is
+watched, and P_FLAG's other bits are random too, so only the permanent OVER
+and INVERSE bits may count. Run it with omse-ai's Python ($OMSE_AI_PYTHON).
 """
+import argparse
 import os, random, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -22,8 +28,18 @@ import zxgfx                                  # noqa: E402
 from harness import Runner                     # noqa: E402
 
 LIB = os.path.join(HERE, '..', 'lib')
-if '--lib' in sys.argv:                        # a mutated copy of the library (see --mutants)
-    LIB = sys.argv[sys.argv.index('--lib') + 1]
+ap = argparse.ArgumentParser(prog='test_zxgfx.py', description=__doc__,
+                             formatter_class=argparse.RawDescriptionHelpFormatter)
+ap.add_argument('--seed', type=int, help='the random scripts\' seed (default: a random one, printed first)')
+ap.add_argument('--quick', action='store_true', help='fewer random scripts')
+ap.add_argument('--lib', metavar='DIR', help='a mutated copy of the library to test instead (how the mutant tests break it on purpose)')
+ap.add_argument('--mutants', nargs='?', const='', metavar='NAME',
+                help='break the library on purpose and check these tests notice (only the mutants whose names '
+                     'contain NAME, if given)')
+ap.add_argument('--cost', action='store_true', help='print what each routine costs, instead of testing')
+ARGS = ap.parse_args()                         # here: --lib decides which library is gathered
+if ARGS.lib:
+    LIB = ARGS.lib
     harness.gather = lambda symbols, target: link.gather(symbols, target, lib=LIB)
 
 SCREEN, ATTR_P, P_FLAG, UDG = 0x4000, 0x5C8D, 0x5C91, 0x5C7B
@@ -672,15 +688,14 @@ def cost(rng):
     print('code:', ', '.join(f'{f} {n} bytes' for f, n in sizes.items()), f'({sum(sizes.values())} in all)')
 
 
-def main(args):
-    if '--cost' in args:
+def main():
+    if ARGS.cost:
         cost(random.Random(1))
         return 0
-    if '--mutants' in args:                   # --mutants [part of a name]: only those
-        i = args.index('--mutants') + 1
-        return 1 if mutants(args[i] if i < len(args) and not args[i].startswith('--') else '') else 0
-    quick = '--quick' in args
-    seed = int(args[args.index('--seed') + 1]) if '--seed' in args else random.randrange(10 ** 6)
+    if ARGS.mutants is not None:
+        return 1 if mutants(ARGS.mutants) else 0
+    quick = ARGS.quick
+    seed = ARGS.seed if ARGS.seed is not None else random.randrange(10 ** 6)
     rng = random.Random(seed)
     print(f'seed {seed}')
     bad = []
@@ -703,4 +718,4 @@ def main(args):
 
 
 if __name__ == '__main__':
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(main())

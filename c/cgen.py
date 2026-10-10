@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """Barley's C backend: the checked program, lowered to deliberately dumb C.
 
-usage: cgen.py [--as zx48|cpm] PROGRAM.bly > program.c
-       cc -std=c11 -I rt program.c -lm -o program && ./program INPUT.txt
-
-The front end is the reference interpreter's own (its parser and checker), so the two can't disagree about what a
-program means. The C is as dumb as possible on purpose:
-  - every subexpression goes into its own temporary, in the interpreter's left-to-right order, so nothing depends
-    on C's unspecified order of evaluation (not even which of two errors is reported first);
-  - every operation is a call into rt/barley.h, which checks it and has no undefined behaviour;
-  - control flow stays structured: Barley's if, while and for become C's, so break and continue mean the same;
-  - generics are the preprocessor's: each container type is a template included once per element type.
+The front end is the reference interpreter's own (its parser and checker), so
+the two can't disagree about what a program means. The C is as dumb as
+possible on purpose:
+  - every subexpression goes into its own temporary, in the interpreter's
+    left-to-right order, so nothing depends on C's unspecified order of
+    evaluation (not even which of two errors is reported first);
+  - every operation is a call into rt/barley.h, which checks it and has no
+    undefined behaviour;
+  - control flow stays structured: Barley's if, while and for become C's, so
+    break and continue mean the same;
+  - generics are the preprocessor's: each container type is a template
+    included once per element type.
 """
 
+import argparse
 import os
 import sys
 
@@ -941,17 +944,22 @@ def compile_program(src, target='zx48'):
 
 
 def main(argv):
-    target = 'zx48'
-    if argv[:1] == ['--as']:
-        target, argv = argv[1], argv[2:]
-    if not argv:
-        sys.exit(__doc__)
+    ap = argparse.ArgumentParser(prog='cgen.py', description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter,
+                                 epilog='then: cc -std=c11 -I rt program.c -lm -o program && ./program INPUT')
+    ap.add_argument('program', metavar='PROGRAM.bly', help='the program; its C goes to standard output')
+    ap.add_argument('--as', dest='target', choices=['zx48', 'cpm'], default='zx48',
+                    help='the machine it is, as far as the program can tell (default zx48)')
+    a = ap.parse_args(argv)
     try:
-        sys.stdout.write(compile_program(open(argv[0]).read(), target))
+        src = open(a.program).read()
+    except OSError as err:
+        sys.exit(f'cgen.py: {a.program}: {err.strerror}')
+    try:
+        sys.stdout.write(compile_program(src, a.target))
     except B.BarleyError as err:
         print(err)                                   # the same words the interpreter says, on stdout
         sys.exit(1)
-
 
 if __name__ == '__main__':
     main(sys.argv[1:])

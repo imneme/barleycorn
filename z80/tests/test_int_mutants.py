@@ -1,10 +1,12 @@
-"""Watching test_int.py fail: break the integer library on purpose, one way at a time, and see the tests notice.
+"""Watching test_int.py fail: break the integer library on purpose, one way at a
+time, and see the tests notice.
 
-Each mutant is a copy of lib/ with one change; the linker is pointed at the copy, so lib/ itself is never touched.
-A mutant counts as caught when its test section reports anything WRONG (or the run blows up).
-
-    $OMSE_AI_PYTHON z80/tests/test_int_mutants.py [count]    # count: random cases per routine (300)
+Each mutant is a copy of lib/ with one change; the linker is pointed at the
+copy, so lib/ itself is never touched. A mutant counts as caught when its test
+section reports anything WRONG (or the run blows up). Run it with omse-ai's
+Python ($OMSE_AI_PYTHON).
 """
+import argparse
 import contextlib
 import io
 import os
@@ -13,8 +15,12 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-COUNT = sys.argv[1] if len(sys.argv) > 1 else '300'
-sys.argv = [sys.argv[0], COUNT]
+ap = argparse.ArgumentParser(prog='test_int_mutants.py', description=__doc__,
+                             formatter_class=argparse.RawDescriptionHelpFormatter)
+ap.add_argument('count', type=int, nargs='?', default=300,
+                help='random cases per routine, for test_int (default 300)')
+COUNT = str(ap.parse_args().count)
+sys.argv = [sys.argv[0], COUNT]                    # test_int reads its count when it's imported
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, '..'))
 import harness                                     # noqa: E402

@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-"""Barley, grown up: the reference interpreter, which is the language's specification (see ../DESIGN.md).
+"""Barley, grown up: the reference interpreter, which is the language's
+specification (see ../DESIGN.md).
 
-usage: barley.py [--as zx48|cpm] [--screen out.png] [--sound out.txt] PROGRAM.bly [INPUT.txt]
+It parses the whole program, types every expression (integer widths decide
+where arithmetic wraps or traps), then walks the tree. Every check the
+design promises for a checked build happens here, always: indices,
+capacities, signed overflow, division by zero, missing keys. A failure
+prints "what happened at line N", as a Spectrum would, and exits with
+status 1.
 
-It parses the whole program, types every expression (integer widths decide where arithmetic wraps or traps), then
-walks the tree. Every check the design promises for a checked build happens here, always: indices, capacities,
-signed overflow, division by zero, missing keys. A failure prints "what happened at line N", as a Spectrum would,
-and exits with status 1.
-
-The screen and sound draw with ../z80/zxgfx.py into a 64K memory that peek and poke share (the ROM at 0000h, the
-screen at 4000h, the UDGs at FF58h). Not here yet: mark/release.
+The screen and sound draw with ../z80/zxgfx.py into a 64K memory that peek
+and poke share (the ROM at 0000h, the screen at 4000h, the UDGs at FF58h).
+Not here yet: mark/release.
 """
 
 import os, sys, re, math
@@ -2268,22 +2270,25 @@ def run(src, text=b'', target='zx48', out=sys.stdout, screen=None, sound=None):
 
 
 def main(argv):
-    target, screen, sound = 'zx48', None, None
-    while argv[:1] and argv[0] in ('--as', '--screen', '--sound'):
-        if argv[0] == '--as':
-            target = argv[1]
-        elif argv[0] == '--screen':
-            screen = argv[1]
-        else:
-            sound = argv[1]
-        argv = argv[2:]
-    if not argv:
-        sys.exit(__doc__)
-    src = open(argv[0]).read()
-    text = open(argv[1], 'rb').read() if len(argv) > 1 else b''
+    import argparse
+    ap = argparse.ArgumentParser(prog='barley.py', description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('program', metavar='PROGRAM.bly', help='the program')
+    ap.add_argument('input', metavar='INPUT', nargs='?', help='its input: what lines(), grid() and input() read')
+    ap.add_argument('--as', dest='target', choices=['zx48', 'cpm'], default='zx48',
+                    help='the machine it is, as far as the program can tell (default zx48)')
+    ap.add_argument('--screen', metavar='OUT.png',
+                    help="save the Spectrum's screen at the end as a picture (and OUT.scr beside it)")
+    ap.add_argument('--sound', metavar='OUT.txt', help='save a log of the notes it played')
+    a = ap.parse_args(argv)
+    try:
+        src = open(a.program).read()
+        text = open(a.input, 'rb').read() if a.input else b''
+    except OSError as err:
+        sys.exit(f'barley.py: {err.filename}: {err.strerror}')
     sys.setrecursionlimit(20000)
     try:
-        run(src, text, target, screen=screen, sound=sound)
+        run(src, text, a.target, screen=a.screen, sound=a.sound)
     except BarleyError as err:
         sys.stdout.flush()
         sys.stdout.buffer.flush()

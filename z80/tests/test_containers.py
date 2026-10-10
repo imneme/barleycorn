@@ -1,11 +1,14 @@
-"""The containers against their meaning: the interpreter's own BList, BQueue, BHeap, BMap, BSet and BGrid,
-driven through its own e_new, e_dot, e_index, store and walk, so every failure message is the interpreter's, compared
-byte for byte. Long random sequences of operations are run on one container at a time, with the arena carried from
-call to call, and after every step the Z80's container is read back through ABI.md's layouts and compared: the items
-in walking order, the length, ver going up or not, and every failure.
+"""The containers against their meaning: the interpreter's own BList, BQueue,
+BHeap, BMap, BSet and BGrid, driven through its own e_new, e_dot, e_index,
+store and walk, so every failure message is the interpreter's, compared byte
+for byte. Long random sequences of operations are run on one container at a
+time, with the arena carried from call to call, and after every step the Z80's
+container is read back through ABI.md's layouts and compared: the items in
+walking order, the length, ver going up or not, and every failure.
 
-    $OMSE_AI_PYTHON z80/tests/test_containers.py [--quick] [--seed N] [--cost]
+Run it with omse-ai's Python ($OMSE_AI_PYTHON).
 """
+import argparse
 import os, random, struct, sys
 from types import SimpleNamespace as NS
 
@@ -19,8 +22,16 @@ import link                                   # noqa: E402
 from harness import Runner                     # noqa: E402
 import barley as B                             # noqa: E402
 
-if '--lib' in sys.argv:                        # a mutated copy of the library (see --mutants)
-    _lib = sys.argv[sys.argv.index('--lib') + 1]
+ap = argparse.ArgumentParser(prog='test_containers.py', description=__doc__,
+                             formatter_class=argparse.RawDescriptionHelpFormatter)
+ap.add_argument('--seed', type=int, default=1, help='the random cases\' seed (default 1)')
+ap.add_argument('--quick', action='store_true', help='fewer random cases')
+ap.add_argument('--lib', metavar='DIR', help='a mutated copy of the library to test instead (how the mutant tests break it on purpose)')
+ap.add_argument('--mutants', action='store_true', help='break the library on purpose, and check these tests notice')
+ap.add_argument('--cost', action='store_true', help='print what each routine costs, instead of testing')
+ARGS = ap.parse_args()                         # here: --lib decides which library is gathered
+if ARGS.lib:
+    _lib = ARGS.lib
     harness.gather = lambda symbols, target: link.gather(symbols, target, lib=_lib)
 
 ARENA, OPS = 0xA000, 0xE000
@@ -992,13 +1003,11 @@ def test_mul(rng):
 
 
 def main():
-    args = sys.argv[1:]
-    if '--mutants' in args:
+    if ARGS.mutants:
         return mutants()
-    if '--cost' in args:
+    if ARGS.cost:
         return cost()
-    seed = int(args[args.index('--seed') + 1]) if '--seed' in args else 1
-    quick = '--quick' in args
+    seed, quick = ARGS.seed, ARGS.quick
     rng = random.Random(seed)
     test_constructors(rng)
     test_mul(rng)

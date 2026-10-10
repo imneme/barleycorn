@@ -1,12 +1,13 @@
-"""num.asm, num_read.asm and num_chk.asm against their meaning: numbers to and from text, and the 64-bit checks.
+"""num.asm, num_read.asm and num_chk.asm against their meaning: numbers to and
+from text, and the 64-bit checks.
 
-The model is the interpreter itself wherever it has the code: Interp.e_dot for s.int() and s.int(k), Interp.walk
-for the message of `for v in s.ints()`, Interp.e_index for indices and slices, BGrid.check, ints_in, and str() for
-printing (Interp.show prints an integer with str). Every failure message is compared byte for byte.
-
-usage: test_num.py [--lib DIR] [--seed N] [--quick]
-  --lib DIR   gather the library from DIR instead of z80/lib (for breaking a copy on purpose)
+The model is the interpreter itself wherever it has the code: Interp.e_dot for
+s.int() and s.int(k), Interp.walk for the message of `for v in s.ints()`,
+Interp.e_index for indices and slices, BGrid.check, ints_in, and str() for
+printing (Interp.show prints an integer with str). Every failure message is
+compared byte for byte. Run it with omse-ai's Python ($OMSE_AI_PYTHON).
 """
+import argparse
 import os, random, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..'))
@@ -16,12 +17,17 @@ from harness import Runner                    # noqa: E402
 import barley                                 # noqa: E402
 from barley import BarleyError, INTS, STR, FLEX, Gen, Range, BGrid, ints_in   # noqa: E402
 
-args = sys.argv[1:]
-if '--lib' in args:
-    LIB = args[args.index('--lib') + 1]
+ap = argparse.ArgumentParser(prog='test_num.py', description=__doc__,
+                             formatter_class=argparse.RawDescriptionHelpFormatter)
+ap.add_argument('--seed', type=int, default=1, help='the random cases\' seed (default 1)')
+ap.add_argument('--quick', action='store_true', help='fewer random cases')
+ap.add_argument('--lib', metavar='DIR', help='a mutated copy of the library to test instead (how the mutant tests break it on purpose)')
+ARGS = ap.parse_args()
+if ARGS.lib:
+    LIB = ARGS.lib
     harness.gather = lambda syms, target: link.gather(syms, target, lib=LIB)
-SEED = int(args[args.index('--seed') + 1]) if '--seed' in args else 1
-QUICK = '--quick' in args
+SEED = ARGS.seed
+QUICK = ARGS.quick
 N = 300 if QUICK else 1500
 rnd = random.Random(SEED)
 

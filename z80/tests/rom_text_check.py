@@ -1,6 +1,7 @@
 """Check the reference's text against the real ROM: random programs of prints (wrapping, scrolling, print at,
 block graphics, UDGs, characters that print as ?) and colour changes, run in the interpreter and on omse-ai's 48K;
-the upper 22 rows of the screen must be identical.  usage: rom_text_check.py [N] [SEED]   (omse-ai's Python)"""
+the upper 22 rows of the screen must be identical. Run it with omse-ai's Python."""
+import argparse
 import os, random, subprocess, sys, tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
 import paths
@@ -60,8 +61,12 @@ def upper(i):
 
 
 def main():
-    n = int(sys.argv[1]) if len(sys.argv) > 1 else 20
-    rng = random.Random(int(sys.argv[2]) if len(sys.argv) > 2 else 1)
+    ap = argparse.ArgumentParser(prog='rom_text_check.py', description=__doc__)
+    ap.add_argument('n', metavar='N', type=int, nargs='?', default=20, help='how many programs (default 20)')
+    ap.add_argument('seed', metavar='SEED', type=int, nargs='?', default=1, help='their seed (default 1)')
+    a = ap.parse_args()
+    n = a.n
+    rng = random.Random(a.seed)
     bad = 0
     with tempfile.TemporaryDirectory() as d:
         for k in range(n):

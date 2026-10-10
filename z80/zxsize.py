@@ -1,10 +1,18 @@
-"""Where a Barley program's bytes go on the 48K: the generated code against each library fragment gathered in.
-usage: zxsize.py PROGRAM.bly INPUT.txt"""
-import os, re, subprocess, sys, tempfile
+"""Where a Barley program's bytes go on the 48K: the generated code against
+each library fragment gathered in.
+"""
+import argparse, os, re, subprocess, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import z80gen, zxbuild
 
-src, text = open(sys.argv[1]).read(), open(sys.argv[2], 'rb').read()
+ap = argparse.ArgumentParser(prog='zxsize.py', description=__doc__)
+ap.add_argument('program', metavar='PROGRAM.bly', help='the program')
+ap.add_argument('input', metavar='INPUT', nargs='?', help='its input (it decides where the arena starts)')
+a = ap.parse_args()
+try:
+    src, text = open(a.program).read(), open(a.input, 'rb').read() if a.input else b''
+except OSError as err:
+    sys.exit(f'zxsize.py: {err.filename}: {err.strerror}')
 tap, info = zxbuild.build(src, text)
 org = info['org']
 asm = z80gen.compile_program(src, 'zx48', org=org, bss_at=org - info['slots']) + \
@@ -26,6 +34,6 @@ for row in lst:
     if m:
         sizes[part] = sizes.get(part, 0) + len(m.group(1).split())
 total = sum(sizes.values())
-print(f'{sys.argv[1]}: {total} bytes of code ({info["code"]} by the builder), slots {info["slots"]}')
+print(f'{a.program}: {total} bytes of code ({info["code"]} by the builder), slots {info["slots"]}')
 for k, v in sorted(sizes.items(), key=lambda kv: -kv[1]):
     print(f'{v:6}  {100 * v / total:5.1f}%  {k}')

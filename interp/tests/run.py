@@ -1,5 +1,6 @@
-"""Run every test: each program on its input, against the output it must print exactly.
-usage: python3 run.py   (from anywhere)"""
+"""Run every test: each program on its input, against the output it must print
+exactly.
+"""
 import os, re, subprocess, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', '..'))
@@ -17,7 +18,7 @@ CASES = [  # program, input, expected output: our own inputs, answers from make_
 EXTRA = os.path.join(HERE, 'semantics.txt')
 
 
-BACKEND = 'c' if '--c' in sys.argv else ('z80' if '--z80' in sys.argv else ('zx' if '--zx' in sys.argv else 'interp'))
+BACKEND = 'interp'                            # main() sets it; the fuzzer imports this file and calls run_z80 etc.
 ZXBUILD = os.path.join(HERE, '..', '..', 'z80', 'zxbuild.py')
 ZXRUN = os.path.join(HERE, '..', '..', 'z80', 'zxrun.py')
 OMSEPY = paths.OMSE_AI_PYTHON
@@ -202,7 +203,18 @@ def floats_agree(got, want, rel=1e-7):
     return True
 
 
-def main():
+def main(argv=None):
+    global BACKEND
+    import argparse
+    ap = argparse.ArgumentParser(prog='run.py', description=__doc__)
+    on = ap.add_mutually_exclusive_group()
+    on.add_argument('--c', dest='backend', action='store_const', const='c',
+                    help='as C, built with the sanitizers on')
+    on.add_argument('--z80', dest='backend', action='store_const', const='z80',
+                    help='as CP/M programs, under tnylpo')
+    on.add_argument('--zx', dest='backend', action='store_const', const='zx',
+                    help="on omse-ai's 48K Spectrum")
+    BACKEND = ap.parse_args(argv).backend or 'interp'
     fails = 0
     results = [(p, run(p, i), want) for p, i, want in CASES] + semantics()
     pending = 0

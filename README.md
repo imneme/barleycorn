@@ -128,6 +128,9 @@ screen, sound or memory need the ROM, even in the interpreter.
 ./bly all PROG.bly [INPUT]    # all four, compared: their text and final screens
 ```
 
+`./bly -h` lists the commands, and `./bly COMMAND -h` gives one's
+options (every script here answers `-h`).
+
 A program reads its input with `lines()`, `grid()` or `input()`. On a
 Spectrum the input travels on the tape and loads like any other block.
 
