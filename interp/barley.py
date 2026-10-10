@@ -727,6 +727,8 @@ class Checker:
             n = self.const_int(size)
             if n <= 0:
                 raise BarleyError('an array needs at least one element', line)
+            if n > 65535:                             # its .len is a word, as a container's is
+                raise BarleyError('an array holds at most 65535', line)
             return Gen('array', et, n=n)
         _, gkind, args, line = tx
         targs = [self.ty(a) for a in args]

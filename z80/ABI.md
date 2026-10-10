@@ -22,7 +22,8 @@ for meaning. When this document and either of those disagree about behaviour, th
 
 | Barley type | bytes | layout |
 |---|---|---|
-| `byte`, `bool` (and `bit` elements, for now) | 1 | `bool` is 0 or 1 |
+| `byte`, `bool` | 1 | `bool` is 0 or 1 |
+| a `bit` array of n | (n + 7) / 8 | element i is bit i % 8 of byte i / 8 (a fixed array, or a view's address); a `grid[bit]` or a container of bits still uses a byte for each |
 | `word` (unsigned), `int` (signed) | 2 | little-endian |
 | `long` | 4 | two's complement, little-endian |
 | `quad` | 8 | two's complement, little-endian |

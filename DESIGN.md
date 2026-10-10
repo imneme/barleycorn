@@ -705,6 +705,7 @@ The name is Barleycorn (HISTORY.md says why).
 **Not built yet:**
 - `mark`, `release` and `free`, and `--fast` (every build is checked)
 - `peek` and `poke` on the Z80 (the interpreter and C have them); `inp`, `outp` and `call` anywhere
+- on the Z80, `grid[bit]` and containers of bits are a byte a bit (bit arrays pack), and a bit array can't be sorted
 - floats on CP/M
 - the 128K mode (input in the banks; the AY sound chip)
 - the Z80 running an `asm` clause's fragment in place of its body

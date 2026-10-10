@@ -107,6 +107,8 @@ def size(t):
     if t is B.LINES or (isinstance(t, B.Gen) and t.kind in ('list', 'queue', 'heap', 'map', 'set', 'grid')):
         return 2
     if isinstance(t, B.Gen) and t.kind == 'array':
+        if t.n is not None and t.args[0] is B.BIT:
+            return (t.n + 7) // 8                                    # bits pack eight to a byte
         return size(t.args[0]) * t.n if t.n is not None else 4      # a parameter is a view: pointer, length
     if t is B.FLOAT:
         if FLOATS['on']:
@@ -1591,6 +1593,65 @@ class Gen:
         self.load_base(base)
         self.elem_addr(None, size(e.obj.ty.args[0]))
 
+    def bit_ptr(self, arr, i, line):
+        """HL = the byte holding bit i of a bit array, A = its mask; i checked against the length"""
+        base, n = self.array_base(arr)
+        self.load_bc(n)
+        self.check_index(i, True, line)                     # DE = i
+        self.bit_addr(base)
+
+    def bit_addr(self, base):
+        """with DE = i: HL = base + i / 8, A = 1 << (i % 8), from a table of the eight masks"""
+        self.helpers.setdefault('bly_bitmask', ['bly_bitmask: db 1, 2, 4, 8, 16, 32, 64, 128'])
+        self.emit('ld a,e')
+        self.emit('and 7')
+        self.emit('ld c,a')
+        for _ in range(3):
+            self.emit('srl d')
+            self.emit('rr e')
+        self.load_base(base)
+        self.emit('add hl,de')
+        self.emit('ld b,0')
+        self.emit('ex de,hl')
+        self.emit('ld hl,bly_bitmask')
+        self.emit('add hl,bc')
+        self.emit('ld a,(hl)')
+        self.emit('ex de,hl')
+
+    def bit_read(self):
+        """the bit at (HL) under mask A, as a bool (0 or 1) in a temp"""
+        r = self.temp(B.BOOL)
+        self.emit('and (hl)')
+        self.emit('add a,255')                              # carry if it was set
+        self.emit('sbc a,a')
+        self.emit('and 1')
+        self.emit(f'ld ({r.val}),a')
+        return r
+
+    def bit_write(self, v):
+        """set or clear the bit at (HL) under mask A, as the bool v says"""
+        if v.kind == 'imm':
+            if v.val:
+                self.emit('or (hl)')
+            else:
+                self.emit('cpl')
+                self.emit('and (hl)')
+            self.emit('ld (hl),a')
+            return
+        clear, done = self.label(), self.label()
+        self.emit('ld c,a')
+        self.emit(f'ld a,({v.val})')
+        self.emit('or a')
+        self.emit('ld a,c')
+        self.emit(f'jr z,{clear}')
+        self.emit('or (hl)')
+        self.emit(f'jr {done}')
+        self.place(clear)
+        self.emit('cpl')
+        self.emit('and (hl)')
+        self.place(done)
+        self.emit('ld (hl),a')
+
     def load_bc(self, op):
         if op.kind == 'imm':
             self.emit(f'ld bc,{op.val}')
@@ -1670,6 +1731,10 @@ class Gen:
             self.emit(f'ld ({r.val}),a')
             return r
         et = B.BOOL if ot.args[-1] is B.BIT else ot.args[-1]
+        if ot.kind == 'array' and ot.args[0] is B.BIT:
+            i = self.ex(e.idx[0])
+            self.bit_ptr(e.obj, i, line)
+            return self.bit_read()
         if ot.kind == 'array':
             i = self.ex(e.idx[0])
             self.array_elem_ptr(e, i, line)
@@ -1761,6 +1826,8 @@ class Gen:
             self.emit(f'ld ({r.val}),hl')
             return r
         if isinstance(ot, B.Gen) and ot.kind == 'array':
+            if ot.args[0] is B.BIT:
+                raise GenError("sorting a bit array isn't on the Z80 yet")
             base, n = self.array_base(e.obj)
             self.load_base(base)
             self.emit('push hl')
@@ -2309,6 +2376,10 @@ class Gen:
             return ((lambda: (ptr(), self.add_hl(off), self.get_ptr(ft))[-1]),
                     (lambda v: (ptr(), self.add_hl(off), self.put_ptr(None, v, ft))))
         ptr = self.locate_ptr(e)
+        if e.k == 'index' and e.obj.ty.kind == 'array' and e.obj.ty.args[0] is B.BIT:
+            i = self.ex(e.idx[0])
+            return ((lambda: (self.bit_ptr(e.obj, i, line), self.bit_read())[-1]),
+                    (lambda v: (self.bit_ptr(e.obj, i, line), self.bit_write(v))))
         if e.k == 'index' and e.obj.ty.kind == 'map':
             obj, key = self._last_map
             et = e.obj.ty.args[1]
@@ -2485,6 +2556,7 @@ class Gen:
             else:
                 base, n = self.array_base(it)
                 es = size(t.args[0])
+            bits = t is not B.STR and t.args[0] is B.BIT
             i = self.slot(B.WORD)
             self.store_imm(i, 0, 2)
             self.place(top)
@@ -2495,11 +2567,16 @@ class Gen:
             self.emit('sbc hl,de')                           # n - i - 1 < 0: done
             self.emit(f'jp c,{end}')
             self.emit(f'ld de,({i})')
-            self.load_base(base)
-            self.elem_addr(None, es)
-            self.emit(f'ld de,{v0}')
-            self.emit(f'ld bc,{es}')
-            self.emit('ldir')
+            if bits:                                          # the i-th bit, as a bool
+                self.bit_addr(base)
+                r = self.bit_read()
+                self.copy(v0, r.val, 1)
+            else:
+                self.load_base(base)
+                self.elem_addr(None, es)
+                self.emit(f'ld de,{v0}')
+                self.emit(f'ld bc,{es}')
+                self.emit('ldir')
             self.loop_enter((cont, end), s, m0)
             self.block(s.body)
             self.loop_exit()

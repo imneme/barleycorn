@@ -946,3 +946,43 @@ end
 129 2 128 0 0 129 64 1 0 0
 7 14 128 0 0 7 3 0 0 0
 53 -1234567889099 1234567890122 2382691125
+
+=== bit arrays pack eight to a byte: read, written, walked, passed, local, and 65535 of them in 8K
+var seen: bit[70]
+func count(b: bit[]): int
+  var n = 0
+  for x in b do
+    if x then n += 1 end
+  end
+  return n
+end
+func main()
+  for i in 0..70 do seen[i] = i % 3 == 0 end
+  seen[69] = true
+  seen[0] = false
+  var flip = seen[7]
+  seen[7] = not flip
+  print count(seen); " "; seen[69]; " "; seen[68]; " "; seen[7]; " "; seen.len
+  var local: bit[13]
+  local[12] = true
+  local[3] = seen[3]
+  print count(local); " "; local[12]; " "; local[11]; " "; local[3]
+  var big: bit[65535]
+  big[65534] = true
+  big[8] = true
+  print big[65534]; " "; big[65533]; " "; big[8]; " "; big[7]; " "; big.len
+  seen[70] = true
+end
+--- expect
+24 true false true 70
+2 true false true
+true false true false 65535
+index 70 is outside 0..70 at line 24
+
+=== an array holds at most 65535, as its length is a word
+var b: bit[65536]
+func main()
+  print b.len
+end
+--- expect
+an array holds at most 65535 at line 1
