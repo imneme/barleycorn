@@ -986,3 +986,14 @@ func main()
 end
 --- expect
 an array holds at most 65535 at line 1
+
+=== a number from text that doesn't fit its type says so, in the same words everywhere
+func main()
+  var w: word = "65535".int()
+  print w
+  var i: int = "40000".int()
+  print i
+end
+--- expect
+65535
+40000 doesn't fit in an int at line 4

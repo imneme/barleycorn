@@ -28,6 +28,11 @@ of copies, two library calls for one comparison, a save of something already dea
 the same suspicion: a peephole pass's first draft treated `(hl)` as a fixed address, and a nested `if` overwrote the
 state its outer `if` still needed. Both were caught by reading before anything ran.
 
+**Run `./check`, not just the suite, before you commit.** A message lives in more than one place: the interpreter
+says it, and so do the C runtime and the Z80 library, each with its own copy of the words. A change to "an int" in
+the interpreter passed every suite test and was committed, while the library and the C runtime still said "a int";
+only the library's own tests (`./check`'s fragments stage) compare those messages word for word.
+
 **Check when, not just whether.** A tape, a baseline or a fuzz failure file from an earlier run looks just like a
 fresh one. When a number matters, make it again.
 

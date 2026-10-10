@@ -98,7 +98,7 @@ Every fragment file starts with its header:
 | indices | `index {i} is outside 0..{n}`; `slice {a}..{b} is outside 0..{n}` |
 | containers | `a {kind} needs a capacity of at least 1`; `a {kind} holds at most 65535`; `{kind} full ({cap})`; `list empty`; `queue empty`; `heap empty`; `no key {k} in the map`; `the {kind} changed while for was walking it` |
 | grids | `a grid has no negative sides`; `a grid side is at most 32767`; `({r}, {c}) is off the grid ({rows} x {cols})`; `{v} is not on the grid` |
-| text | `"{s}" doesn't start with an integer`; `there is no integer {k} in "{s}"`; `{digits} doesn't fit in a {type}`; `split needs a separator`; `no name has the number {n}`; `too many names: intern holds 65536` |
+| text | `"{s}" doesn't start with an integer`; `there is no integer {k} in "{s}"`; `{digits} doesn't fit in {a type}` ("an int", "a word"); `split needs a separator`; `no name has the number {n}`; `too many names: intern holds 65536` |
 | input | `no more input lines`; `the input is not a grid: line {r} is {len} long, not {cols}`; `input line {n} is longer than 65535`; `the input is longer than 65535, too long for one str` |
 | memory | `arena full` |
 | other | `assertion failed` |
@@ -251,7 +251,7 @@ is the V flag of `ADC HL,DE` or `SBC HL,DE`.
 - **Printing:** `bly_pr_u8`, `bly_pr_u16`, `bly_pr_i16`, `bly_pr_i32`, `bly_pr_i64`, division-free (as z88dk's library does it). Core has simple first versions of the 16-bit ones; this replaces them with faster ones under the same names.
 - **Reading:**
   - `bly_num` turns a run of digits into a number: HL = &digits, BC = their count, A = the type code (+80h if the
-    number is negative), DE = &dest. It fails with `{digits} doesn't fit in a {type}`, with the leading zeros
+    number is negative), DE = &dest. It fails with `{digits} doesn't fit in {a type}` ("an int", "a word"), with the leading zeros
     stripped and a minus sign unless the value is zero.
   - `bly_str_int`: HL = &str, A = the type code, DE = &dest. It skips white space (space, tab, LF, CR, FF, VT),
     takes an optional sign and the digits, and fails with `"{s}" doesn't start with an integer`.
@@ -399,7 +399,7 @@ short form when the value is whole and fits. A literal too big for the ROM is an
 | `bly_f_from_u16` | HL = a byte or word, BC=&r | |
 | `bly_f_from_i16` | HL = an int, BC=&r | |
 | `bly_f_from_i64` | HL=&q (a quad: the generator widens a long), BC=&r | rounded to 32 bits, half away from zero |
-| `bly_f_to_int` | HL=&x, A = the type code (0 byte … 4 quad, as `bly_num`), DE=&dest | truncates; `{x} doesn't fit in a {type}` |
+| `bly_f_to_int` | HL=&x, A = the type code (0 byte … 4 quad, as `bly_num`), DE=&dest | truncates; `{x} doesn't fit in {a type}` |
 | `bly_pr_f` | HL=&x | prints x as BASIC's PRINT would; also a header `pr` |
 
 - **Who does the work.** `+ - * / **` and the nine functions are the ROM's calculator (RST 28h, one operation a

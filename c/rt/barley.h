@@ -186,7 +186,7 @@ static inline i64 bly_trunc_fits(f64 v, f64 lo, f64 hi_excl, const char *tname, 
         char buf[64];
         snprintf(buf, sizeof buf, "%.10g", v);
         bly_pr_cstr(buf);
-        bly_pr_cstr(" doesn't fit in a ");
+        bly_pr_cstr(tname[0] == 'i' ? " doesn't fit in an " : " doesn't fit in a ");
         bly_pr_cstr(tname);
         bly_fail_end(l);
     }
@@ -352,7 +352,7 @@ static i64 bly_num(const u8 *d, u32 n, int neg, i64 lo, i64 hi, const char *tnam
     if (big || v < lo || v > hi) {
         if (neg && !(n == 1 && d[0] == '0')) bly_pr_cstr("-");
         bly_out(d, n);
-        bly_pr_cstr(" doesn't fit in a ");
+        bly_pr_cstr(tname[0] == 'i' ? " doesn't fit in an " : " doesn't fit in a ");
         bly_pr_cstr(tname);
         bly_fail_end(l);
     }

@@ -2,7 +2,7 @@
 ;; needs: bly_out bly_pr_cstr bly_pr_str bly_fail bly_fail_end bly_pr_i64
 ;; targets: cpm zx48 test
 ;; bly_num        in: HL=&digits BC=count A=type (0 byte 1 word 2 int 3 long 4 quad, +80h if negative) DE=&dest
-;;                out: (DE) = the number, in the type's width   fails: {digits} doesn't fit in a {type}
+;;                out: (DE) = the number, in the type's width   fails: {digits} doesn't fit in {a type}
 ;;                clobbers: AF BC DE HL IX
 ;; bly_str_int    in: HL=&str A=type DE=&dest   fails: "{s}" doesn't start with an integer, and as bly_num
 ;;                clobbers: AF BC DE HL IX
@@ -440,12 +440,12 @@ bly_num:
 
 .maxd:  db 3, 5, 5, 10, 19
 .names: dw .nbyte, .nword, .nint, .nlong, .nquad
-.nbyte: db "byte",0
-.nword: db "word",0
-.nint:  db "int",0
-.nlong: db "long",0
-.nquad: db "quad",0
-.fit:   db " doesn't fit in a ",0
+.nbyte: db "a byte",0
+.nword: db "a word",0
+.nint:  db "an int",0
+.nlong: db "a long",0
+.nquad: db "a quad",0
+.fit:   db " doesn't fit in ",0
 .code:  db 0
 .dest:  dw 0
 .dig:   dw 0                        ; .dig and .n together are a str

@@ -262,7 +262,7 @@ def test_conv(rig):
                       and got[n:] == b'\xAA' * (9 - n), r.out, got.hex())
             else:
                 shown = rom_print(rig, xb)
-                check(f'{t}({float(v)!r}) fails', r.failed and r.out == f"{shown} doesn't fit in a {t}\n", repr(r.out))
+                check(f'{t}({float(v)!r}) fails', r.failed and r.out == f"{shown} doesn't fit in {'an' if t[0] in 'aeiou' else 'a'} {t}\n", repr(r.out))
 
 
 # -- the functions -------------------------------------------------------------------------------------------------
