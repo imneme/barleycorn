@@ -796,11 +796,15 @@ class Checker:
                     self.globals[d.name] = Var(d.name, STR, 'const', const=True)
                     self.globals[d.name].sval = d.e.v
                     continue
-                if d.e.cval is None:
-                    raise BarleyError(f'const {d.name} has to be a constant', d.line)
                 if d.tyx:
                     t = self.ty(d.tyx)
                     self.coerce(d.e, t)
+                    self.fold_shift(d.e)
+                if d.e.cval is None:
+                    if t is FLEX:                     # a literal shifted, with no type to settle in
+                        raise BarleyError(f'const {d.name} needs a type to shift in: const {d.name}: long = ...',
+                                          d.line)
+                    raise BarleyError(f'const {d.name} has to be a constant', d.line)
                 self.globals[d.name] = Var(d.name, t, 'const', const=True, cval=d.e.cval)
             elif d.k == 'var':
                 self.scopes = [{}]
@@ -861,9 +865,18 @@ class Checker:
             raise BarleyError(f"a table's elements are numbers, bools, floats, text or records, not {article(t)}",
                               el.line)
         self.coerce(el, t)
+        self.fold_shift(el)
         if el.cval is None:
             raise BarleyError(f"{name}: a table's elements have to be constants", el.line)
         return float(el.cval) if t is FLOAT else el.cval
+
+    def fold_shift(self, e):
+        """a literal shifted, its type now settled, is a constant where one is needed (a const, a table's element):
+        1 << 40 in a quad. (Elsewhere it's worked out where it runs, so a shift a run never reaches can't fail.)"""
+        if e.cval is None and e.k == 'bin' and e.op in ('<<', '>>') and is_int(e.ty) \
+                and e.a.cval is not None and e.b.cval is not None:
+            self.fold_shift(e.a)
+            e.cval = arith(e.op, e.a.cval, e.b.cval, e.ty, e.line)
 
     def tables_unchanged(self):
         """a constant array (a table, dirs4, dirs8) passed to a function that may change that parameter is an error.
@@ -1838,7 +1851,7 @@ class Interp:
         if t is STR:
             return v.decode('latin-1')
         if t is FLOAT:
-            return f'{v:.10g}'
+            return f'{v if v != 0 else 0.0:.10g}'    # the ROM has no negative zero, so -0.0 prints as 0
         if isinstance(t, RecordT):
             inner = ', '.join(self.show(x, ft) for x, (_, ft) in zip(v, t.fields))
             return f'({inner})' if t is POS else f'{t.name}({inner})'

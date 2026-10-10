@@ -219,7 +219,11 @@ static inline i128 bly_fit(i128 v, i128 lo, i128 hi, const char *tname, int l) {
 
 /* -- floats: what the machine gives (here, the C library's doubles, as Python's are) ---------------------------- */
 
-static inline void bly_pr_f64(f64 v) { char buf[64]; snprintf(buf, sizeof buf, "%.10g", v); bly_pr_cstr(buf); }
+static inline void bly_pr_f64(f64 v) {
+    char buf[64];
+    snprintf(buf, sizeof buf, "%.10g", v == 0 ? 0.0 : v);       /* the ROM has no negative zero: -0.0 prints as 0 */
+    bly_pr_cstr(buf);
+}
 static inline int bly_cmp_f64(f64 a, f64 b) { return (a > b) - (a < b); }
 static inline int bly_eq_f64(f64 a, f64 b) { return a == b; }
 static inline f64 bly_fdiv(f64 a, f64 b, int l) { if (b == 0) bly_divzero(l); return a / b; }

@@ -665,6 +665,33 @@ end
 --- expect
 int[...] is a table, and a table is a const: const NAME = int[...] at line 2
 
+=== a negative zero prints as 0, as the ROM prints it (it has no negative zero)
+func main()
+  var z = 0.0
+  print -z; " "; -0.0; " "; 0.0 * -1.0; " "; -z + 1.5
+end
+--- expect
+0 0 0 1.5
+
+=== a literal shifted is a constant in a typed const or a table, and wraps there as a shift does anywhere
+const A: quad = 1 << 40
+const B: byte = 1 << 9
+const C: int = 1 << 15
+const T = long[1 << 20, 3 << 29, 255 >> 4]
+func main()
+  var c: int = 1 << 15
+  print A; " "; B; " "; C; " "; c; " "; T[1]; " "; T[2]
+end
+--- expect
+1099511627776 0 -32768 -32768 1610612736 15
+
+=== an untyped const can't be a literal shifted: its width decides the value
+const X = 1 << 40
+func main()
+end
+--- expect
+const X needs a type to shift in: const X: long = ... at line 1
+
 === a trailing comma in print keeps the line open, and ends the statement
 func main()
   print "a",
