@@ -355,19 +355,21 @@ class Gen:
         elif k == 'assert':
             c = self.ex(s.e)
             self.emit(f'if (!{c}) bly_fail("assertion failed", {line});')
-        elif k == 'print':                    # what print itself writes also lands on the screen: BLY_SHOW
+        elif k == 'print':                    # what print itself writes also lands on the screen: BLY_SHOW, or
+            show = 'BLY_SHOW'                 # from the first at on, the screen's alone: BLY_ATTEXT
             for kind, e in s.items:
                 if kind == 'zone':
-                    self.emit('BLY_SHOW(bly_zone());')
+                    self.emit(f'{show}(bly_zone());')
                 elif kind == 'at':
                     r, c = (self.conv(self.ex(x), x.ty, B.INT) for x in e)
                     self.emit(f'bly_zx_at({r}, {c}, {line});')
                     self.emit(f'bly_col = {c};')
+                    show = 'BLY_ATTEXT'
                 else:
                     v = self.ex(e)
-                    self.emit('BLY_SHOW(' + self.pr(v, e.ty) + ');')
+                    self.emit(f'{show}(' + self.pr(v, e.ty) + ');')
             if s.newline:
-                self.emit('BLY_SHOW(bly_nl());')
+                self.emit(f'{show}(bly_nl());')
         else:
             raise CGenError(f'no C for statement {k}')
 

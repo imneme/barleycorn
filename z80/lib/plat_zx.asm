@@ -14,6 +14,7 @@
 ;; border, bright, flash, inverse, over) are zxcolour.asm, a fragment of their own, as beep is zxbeep.asm.
 ;; bly_zx_cls                          the ROM's CLS, then print starts at the top left    clobbers: all but IY
 ;; bly_zx_at    in: HL=r DE=c          fails: print at ({r}, {c}) is off the screen        clobbers: AF BC DE HL
+;; bly_zx_scr_on, _off are zxattext.asm, linked only by a program that prints at a place
 ;; bly_zx_beep is zxbeep.asm, its own fragment: its tables and 32-bit arithmetic are 2K a program doesn't need
 ;;            unless it beeps
 ;; bly_zx_key   out: A = the last key pressed since the last call, or 0                    clobbers: AF HL

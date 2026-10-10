@@ -38,9 +38,12 @@ static size_t bly_on;
 static long bly_col;
 
 /* the virtual screen (bly_zx.h, at the end): print's own output lands on it too, and only print's, so the generated
- * code sets bly_showing around each item, zone and newline it prints (BLY_SHOW), never around a failure's message */
+ * code sets bly_showing around each item, zone and newline it prints (BLY_SHOW), never around a failure's message.
+ * Text printed at a place (a print, from its first at on) is the screen's alone: BLY_ATTEXT, showing 2, keeps it
+ * out of the output */
 static int bly_showing;
 #define BLY_SHOW(x) do { bly_showing = 1; x; bly_showing = 0; } while (0)
+#define BLY_ATTEXT(x) do { bly_showing = 2; x; bly_showing = 0; } while (0)
 static void bly_zx_out(u8 ch);
 static void bly_zx_init(void);
 static void bly_zx_save(void);
@@ -54,8 +57,10 @@ static void bly_flush(void) {
 static void bly_out(const void *p, size_t n) {
     const unsigned char *s = (const unsigned char *)p;
     for (size_t i = 0; i < n; i++) {
-        if (bly_on == sizeof bly_obuf) bly_flush();
-        bly_obuf[bly_on++] = s[i];
+        if (bly_showing != 2) {
+            if (bly_on == sizeof bly_obuf) bly_flush();
+            bly_obuf[bly_on++] = s[i];
+        }
         bly_col = s[i] == '\n' ? 0 : bly_col + 1;
         if (bly_showing) bly_zx_out(s[i]);
     }

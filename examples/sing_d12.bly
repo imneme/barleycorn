@@ -49,5 +49,6 @@ func main()
   ink(5)
   circle(start.c + 47, 159 - start.r * 3, 4)
   ink(6)
-  print at 20, 1; "Part 1: "; dist[start]; "   Part 2: "; part2
+  print at 20, 1;                      -- the place; the answers, an ordinary print, are the output too
+  print "Part 1: "; dist[start]; "   Part 2: "; part2
 end

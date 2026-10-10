@@ -10,12 +10,12 @@ is reported, with what it had printed so far, and the exit status is 2.
 """
 import argparse
 import os
-import re
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 import paths                                            # noqa: E402
 paths.omse_ai()
 from speccy import Speccy                               # noqa: E402
+import transcript                                       # noqa: E402
 
 
 ap = argparse.ArgumentParser(prog='zxrun.py', description=__doc__,
@@ -38,12 +38,9 @@ while zx.lib.zx_tstates(zx.z) - t0 < limit:
     if zx.wait_ready(max_frames=250) is not None:       # back at BASIC's editor: the program has finished
         done = True
         break
-out = zx.printed()
 if a.scr:                                               # the screen memory too, for comparing pictures
     open(a.scr, 'wb').write(bytes(zx.read(0x4000, 6912)))
-out = re.sub(r'\{AT \d+,\d+\}', '', out)               # omse-ai shows print at's control codes; they aren't text
-mark = 'Bytes: program   \n'
-sys.stdout.write(out[out.index(mark) + len(mark):] if mark in out else 'LOADER: ' + out)
+sys.stdout.write(transcript.answer(zx.printed()))        # without the text printed at a place: that's the screen's
 if not done:
     sys.stderr.write(f'\nzxrun: still running after {minutes:g} minutes of Spectrum time (--minutes N for longer)\n')
     sys.exit(2)

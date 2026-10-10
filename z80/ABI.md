@@ -482,12 +482,15 @@ twice: line and circle patch each of their colour stores to
 `ld (hl),ATTR_T` or to a jump to `.paint` once per call.
 
 The platform (`plat_zx.asm`) owns `cls`, `print at`, `key`, `ticks` and
-`pause`; text goes through the ROM. The colours (`ink`, `paper`,
-`bright`, `flash`, `inverse`, `over`, `border`) are `zxcolour.asm`, and
-`beep` is `zxbeep.asm`, each a fragment of its own, so a program that
-never sets a colour, or never beeps, doesn't carry them (the beep's
-tables and 32-bit multiply and divide are about 2K). The fragment
-`zxgfx.asm` owns the drawing:
+`pause`; text goes through the ROM. `bly_zx_scr_on` and `bly_zx_scr_off`
+(no arguments, in `zxattext.asm`) bracket each piece of text a `print`
+prints at a place, so the transcript can tell the screen's text from the
+output (HACKING.md, "Where printing happens"). The colours (`ink`,
+`paper`, `bright`, `flash`, `inverse`, `over`, `border`) are
+`zxcolour.asm`, and `beep` is `zxbeep.asm`, each a fragment of its own,
+so a program that never sets a colour, or never beeps, doesn't carry
+them (the beep's tables and 32-bit multiply and divide are about 2K).
+The fragment `zxgfx.asm` owns the drawing:
 
 | routine | in | out, and failures |
 |---|---|---|

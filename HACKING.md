@@ -102,6 +102,18 @@ Spectrum that is the ROM's own `RST 10h`.
   opened stream 2, the upper screen, with the ROM's CHAN-OPEN (1601h).
   `print at` is `bly_zx_at`: AT and its row and column, straight to
   `RST 10h`.
+- **Text printed at a place is the screen's alone** (DESIGN.md, "the
+  answer and the display"). On the Spectrum the generated code brackets
+  each piece of it (an item, a comma's padding, the newline) with
+  `bly_zx_scr_on` and `bly_zx_scr_off`, which send INVERSE and OVER,
+  each at the value it already has, straight to `RST 10h`: nothing
+  changes on the screen, but omse-ai's transcript shows `{INVERSE n}`
+  and `{OVER n}`, and `z80/transcript.py` drops what lies between (user
+  code can't send them: `bly_putc` prints a control byte as `?`). An
+  item is worked out before its bracket opens, so a failure's message is
+  never inside one. In C it's `BLY_ATTEXT`, a second setting of the flag
+  that puts print's text on the virtual screen; in the interpreter,
+  `write(text, screen_only)`.
 - **On CP/M**, `bly_putc` is in `z80/lib/plat_cpm.asm`: BDOS function 2,
   a newline as CR LF.
 

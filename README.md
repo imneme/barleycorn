@@ -89,6 +89,9 @@ In short:
 - lists, queues, heaps, maps, sets and grids, made with a fixed capacity
 - BASIC's `print`, and the Spectrum's screen and sound in BASIC's own
   words: `plot`, `line`, `circle`, `ink`, `paper`, `print at`, `beep`
+  (what a program prints is its answer; what it prints at a place is the
+  screen's alone)
+- constant tables: `const SCALE = int[0, 2, 4, 7, 9]`, of any type
 
 Every index, capacity and signed overflow is checked on every backend,
 and a failure says what happened and on which line, the same words

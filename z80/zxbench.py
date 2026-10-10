@@ -13,6 +13,7 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, '..'))
 import paths
 paths.omse_ai()
+import transcript
 import zxbuild
 from speccy import Speccy
 
@@ -56,9 +57,7 @@ def bench(name):
         return {'error': 'no exit within an hour'}
     t = zx.lib.zx_tstates(zx.z) - t0
     zx.wait_ready(max_frames=500)
-    out = re.sub(r'\{AT \d+,\d+\}', '', zx.printed())
-    mark = 'Bytes: program   \n'
-    out = out[out.index(mark) + len(mark):] if mark in out else out
+    out = transcript.answer(zx.printed())
     want = interp(path, text)
     text_only = lambda s: re.sub(r'[^\x20-\x7e\n]', '', s).rstrip('\n')   # omse-ai shows block graphics as Unicode
     ok = text_only(out) == text_only(want)

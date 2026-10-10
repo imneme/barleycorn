@@ -488,13 +488,19 @@ Spectrum. On a 128 it would be the AY too: raw registers with
 `ay(reg, v)`, and `tone(voice, hz, vol)` and `quiet()` for everyone
 else.
 
-**Printing somewhere on the screen, and the same text everywhere**:
-`if ZX then print at 20, 4; end` and then an ordinary `print`. On the
-Spectrum it lands at row 20; elsewhere it's the next line; the text is
-the same. (Text printed with `at` goes to the program's output too, as
-everything printed does, so a counter shown live with `print at` puts
-every value it passes through into the output: show those with `attr` or
-drawing instead.)
+**The answer and the display.** A program's output, what `./bly` shows
+and what the backends are held to, is what its ordinary `print`s print,
+and those land on the screen too. **Text printed at a place is the
+screen's alone:** in a `print` with an `at`, everything from the `at` on
+(its newline included) is drawn and not output. So a counter shown live
+with `print at 5, 3; "count "; n` never floods the output, and the
+answer is an ordinary `print`. To put the answer somewhere in
+particular, place it first: `if ZX then print at 20, 4; end` and then
+`print "Part 1: "; n`. On the Spectrum it lands at row 20, elsewhere on
+the next line, and the output is the same everywhere. (The 48K's runtime
+marks each piece of placed text with two control codes that change
+nothing on the screen, so the transcript the tests read can leave it
+out; HACKING.md says how.)
 
 **Off the Spectrum, they still run.** The interpreter and the C backend
 give `peek` and `poke` a 64K memory, and the screen library's twins draw
@@ -851,7 +857,8 @@ same program ends by saving the picture and the log of the notes.
     end
     ...
   end
-  print at 21, 0; "Part 1: "; dist[start]; "  Part 2: "; part2
+  print at 21, 0;                    -- the place: the answers below are an
+  print "Part 1: "; dist[start]; "  Part 2: "; part2   -- ordinary print
 ```
 
 ## 9. Deliberately out
@@ -951,11 +958,9 @@ Barleycorn (HISTORY.md says why).
 4. *Answered (10 October):* constant tables, `const SCALE = int[...]`,
    of any element type (section 5, "Arrays"). An array literal anywhere
    else (a `var`'s first value, an argument) is a later question.
-5. **Should `print at` text go to the output?** Everything printed goes
-   there today, so the output can be compared between backends, but a
-   counter shown live with `print at` floods it. Text printed at a place
-   could be the screen's alone, if the 48K's transcript could leave it
-   out too.
+5. *Answered (10 October):* text printed at a place is the screen's
+   alone, and the answer is an ordinary `print` (section 5, "Screen and
+   sound").
 6. *Answered (10 October):* BASIC's INK and PAPER 8 and 9, BRIGHT and
    FLASH 8, and `attr(r, c)` reading a square back, all as the ROM does
    them (section 5, "Screen and sound").

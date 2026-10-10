@@ -705,9 +705,14 @@ class Gen:
             self.jp('bly_assert')
             self.place(ok)
         elif k == 'print':
+            placed = False                                   # from the first at on: the screen's alone (bracketed)
+            on = lambda: placed and self.call('bly_zx_scr_on')
+            off = lambda: placed and self.call('bly_zx_scr_off')
             for kind, e in s.items:
                 if kind == 'zone':
+                    on()
                     self.call('bly_zone')
+                    off()
                 elif kind == 'at':
                     if self.target != 'zx48':
                         raise GenError('print at is Spectrum-only: put it inside if ZX then ... end')
@@ -717,10 +722,16 @@ class Gen:
                     self.emit('ex de,hl')
                     self.load_hl(r)
                     self.call('bly_zx_at')
+                    placed = True
                 else:
-                    self.pr(self.ex(e), e.ty)
+                    v = self.ex(e)                           # worked out first: a failure here isn't at-text
+                    on()
+                    self.pr(v, e.ty)
+                    off()
             if s.newline:
+                on()
                 self.call('bly_nl')
+                off()
         else:
             raise GenError(f'no Z80 for statement {k}')
 

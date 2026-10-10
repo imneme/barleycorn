@@ -412,11 +412,6 @@ func main()
 end
 --- screen
 --- expect
-Barley on a 48K
-red and bright
-inverse
-OVER
-!
 
 === the screen: drawing (plot, line, circle, point, attr)
 func main()
@@ -484,10 +479,6 @@ end
 --- screen
 --- expect
 15 56
-ink and paper 8: theirs kept
-ink 9: white on dark paper
-paper 9: against the ink
-bright and flash 8: kept
 7 28 49 14 35 56 21 42 
 7 31 48 15 32 56 23 40 
 7 4 57 6 59 56 5 58 
@@ -691,6 +682,45 @@ func main()
 end
 --- expect
 const X needs a type to shift in: const X: long = ... at line 1
+
+=== text printed at a place is the screen's alone; plain print is the program's output (and on the screen too)
+func main()
+  cls()
+  print "answer: "; 42
+  for i in 0..5 do print at 5, 3; "a counter: "; i end
+  print at 10, 0; "x", "y";
+  print "after"
+  print at 12, 3; "abc";
+  print "q", "r"
+  print "before "; at 14, 2; "placed"
+  print "plain"
+end
+--- screen
+--- expect
+answer: 42
+after
+q         r
+before plain
+
+=== a failure in the middle of a print at says so in the output, though the text before it was the screen's
+func main()
+  print "start"
+  print at 2, 2; "ok "; 300; " "; at 30, 0; "never"
+end
+--- expect
+start
+print at (30, 0) is off the screen at line 3
+
+=== a failure working out an item of a print at says so in the output, outside the screen's text
+func main()
+  var a: int[3]
+  var k = 5
+  print "start"
+  print at 2, 2; "ok "; 300; " "; a[k]
+end
+--- expect
+start
+index 5 is outside 0..3 at line 5
 
 === a trailing comma in print keeps the line open, and ends the statement
 func main()

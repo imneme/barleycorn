@@ -1833,11 +1833,14 @@ class Interp:
         self.call(self.ck.funcs['main'], [])
 
     # -- output, as BASIC prints
-    def write(self, s):
+    def write(self, s, screen_only=False):
+        """print's text: on the virtual screen, and in the output unless it was printed at a place (screen_only)"""
         data = s.encode('latin-1')
         for ch in data:                                     # every printed byte also lands on the virtual screen
             self.screen.out(ch)
-        if hasattr(self.out, 'buffer'):                     # bytes as they are, 80h-FFh included, as C and the Z80 print
+        if screen_only:
+            pass
+        elif hasattr(self.out, 'buffer'):                   # bytes as they are, 80h-FFh included, as C and the Z80 print
             self.out.flush()
             self.out.buffer.write(data)
         else:
@@ -1916,17 +1919,19 @@ class Interp:
             if not self.ev(s.e, env):
                 raise BarleyError('assertion failed', s.line)
         elif k == 'print':
+            placed = False                                  # from the first at on, the text is the screen's alone
             for kind, e in s.items:
                 if kind == 'item':
-                    self.write(self.show(self.ev(e, env), e.ty))
+                    self.write(self.show(self.ev(e, env), e.ty), placed)
                 elif kind == 'at':
                     r, c = self.ev(e[0], env), self.ev(e[1], env)
                     self.screen_call(lambda: self.screen.at(r, c), s.line)
                     self.col = c
+                    placed = True
                 else:
-                    self.write(' ' * (16 - self.col % 16))
+                    self.write(' ' * (16 - self.col % 16), placed)
             if s.newline:
-                self.write('\n')
+                self.write('\n', placed)
 
     def walk(self, it, t, s):
         """what for walks, one item at a time, live: a for sees element changes, and stops if the container's
