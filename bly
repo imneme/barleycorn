@@ -22,6 +22,16 @@ sys.path.insert(0, ROOT)
 import paths                                                # noqa: E402
 
 
+def reads_keys(prog):
+    """does the program call ask(), inkey() or key()? (If it doesn't parse, the build will say why.)"""
+    sys.path.insert(0, os.path.join(ROOT, 'interp'))
+    import barley
+    try:
+        return barley.uses_keys(barley.Parser(open(prog).read()).program())
+    except barley.BarleyError:
+        return False
+
+
 def typed(keys):
     """subprocess.run's stdin: the keys, or the terminal's own when there are none"""
     return {} if keys is None else {'input': keys.encode('latin-1')}
@@ -195,7 +205,9 @@ def main(argv):
         if a.cmd == 'cpm':
             code, msg = run_cpm(prog, inp, work)
             sys.exit(msg.rstrip() if code and msg else code)
-        keys = None if sys.stdin is None or sys.stdin.isatty() else sys.stdin.buffer.read().decode('latin-1')
+        keys = None                                     # stdin is read only if the program reads keys: reading it
+        if sys.stdin is not None and not sys.stdin.isatty() and reads_keys(prog):      # otherwise could wait for ever
+            keys = sys.stdin.buffer.read().decode('latin-1')
         if a.cmd == 'all':
             sys.exit(run_all(prog, inp, work, a.minutes, keys))
         tap = (a.out if a.cmd == 'tap' else None) or os.path.join(paths.build_dir('bly'), stem + '.tap')
