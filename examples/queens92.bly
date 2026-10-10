@@ -1,0 +1,123 @@
+-- Eight queens: all 92 ways to put eight queens on a chessboard with none attacking another, found by
+-- backtracking a row at a time. The search shows on the board as it goes, with a click for each queen it puts
+-- down, higher the deeper it is, and a chord for each answer.
+--
+-- Turn an answer round or reflect it and it's still an answer, so the 92 come in families. On the right, each
+-- family gets a line when its first member turns up, and a stripe for every member after that. Most families
+-- have eight members. Watch for the one that stops at four: it looks the same turned halfway round.
+
+var col: byte[8]                           -- col[r]: the column of the queen in row r
+var taken: bool[8]                         -- the columns and diagonals already attacked
+var rising: bool[15]                       -- r + c is the same all along a rising diagonal
+var falling: bool[15]                      -- and r - c along a falling one
+var found: int = 0
+var family = map[long, int](12)            -- a family's smallest member, as a number (key), to its line
+var members: byte[12]
+var kept: byte[8]                          -- the first answer, to leave on the board at the end
+
+-- The board: each square is two character cells across and two down, with a crown drawn in lines for a queen.
+
+func crown(r: byte, c: byte, shown: bool)
+  if ZX then
+    var x = 8 + 16 * int(c)
+    var y = 144 - 16 * int(r)              -- the square's bottom left corner
+    if (r + c) % 2 == 0 then paper(7) else paper(5) end
+    ink(2)
+    inverse(not shown)
+    line(x + 3, y + 3, x + 12, y + 3); line(x + 3, y + 4, x + 12, y + 4)
+    line(x + 3, y + 5, x + 3, y + 12); line(x + 12, y + 5, x + 12, y + 12)
+    line(x + 4, y + 11, x + 7, y + 7); line(x + 8, y + 7, x + 11, y + 11)
+    inverse(false)
+  end
+end
+
+func stripe(f: int, m: byte)               -- family f's member m (counting from 1)
+  if ZX then
+    var x = 8 * 28 + 3 * int(m - 1)
+    var y = 168 - 8 * (4 + f)              -- inside character row 4 + f
+    ink(6); paper(0)
+    line(x, y + 1, x, y + 5); line(x + 1, y + 1, x + 1, y + 5)
+  end
+end
+
+func setup()
+  if ZX then
+    border(0); paper(0); bright(true); cls()
+    for r in 0..16 do
+      for c in 0..16 do                    -- light and dark squares: white and cyan, with red queens
+        if (r / 2 + c / 2) % 2 == 0 then attr(2 + r, 1 + c, 64 + 8 * 7 + 2) else attr(2 + r, 1 + c, 64 + 8 * 5 + 2) end
+      end
+    end
+  end
+end
+
+-- Families: the eight ways to turn and reflect a board.
+
+func key(q: byte[], mirror: bool): long    -- an answer read as one number, eight base-8 digits
+  var k: long = 0
+  for r in 0..8 do
+    if mirror then k = k * 8 + (7 - q[r]) else k = k * 8 + q[r] end
+  end
+  return k
+end
+
+func smallest_relative(): long             -- the smallest of this answer's turns and reflections
+  var t: byte[8]
+  var u: byte[8]
+  for r in 0..8 do t[r] = col[r] end
+  var least = key(t, false)
+  for turn in 0..4 do
+    for r in 0..8 do u[t[r]] = byte(7 - r) end      -- a quarter turn: (r, c) goes to (c, 7 - r)
+    for r in 0..8 do t[r] = u[r] end
+    least = min(least, min(key(t, false), key(t, true)))
+  end
+  return least
+end
+
+-- The search.
+
+func answer()
+  found += 1
+  if found == 1 then
+    for r in 0..8 do kept[r] = col[r] end
+  end
+  var k = smallest_relative()
+  if not (k in family) then                -- a new family: its line, and a brighter chord
+    var f = int(family.len)
+    family[k] = f
+    if ZX then ink(7); paper(0); print at 4 + f, 19; end
+    for r in 0..8 do print col[r] + 1; end
+    print
+    if ZX then beep(30, 2 * col[0] + 12) end
+  end
+  var f = family[k]
+  members[f] += 1
+  stripe(f, members[f])
+  if ZX then beep(40, 2 * col[0]); beep(40, 2 * col[0] + 4); beep(40, 2 * col[0] + 7) end
+end
+
+func place(r: byte)
+  if r == 8 then
+    answer()
+    return
+  end
+  for c in byte(0)..8 do
+    if not taken[c] and not rising[r + c] and not falling[r + 7 - c] then
+      col[r] = c
+      taken[c] = true; rising[r + c] = true; falling[r + 7 - c] = true
+      crown(r, c, true)
+      if ZX then beep(1, 24 + 3 * r) end
+      place(r + 1)
+      crown(r, c, false)
+      taken[c] = false; rising[r + c] = false; falling[r + 7 - c] = false
+    end
+  end
+end
+
+func main()
+  setup()
+  place(0)
+  for r in byte(0)..8 do crown(r, kept[r], true) end
+  if ZX then ink(7); paper(0); print at 19, 1; end
+  print found; " solutions, "; family.len; " up to symmetry"
+end

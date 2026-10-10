@@ -1,0 +1,175 @@
+-- Sudoku, by backtracking: fill the empty squares in reading order, try 1 to 9 in each, and when a square has
+-- nothing left that fits, back up to the one before and try its next digit. The search draws each digit as it puts
+-- it down and rubs it out when it takes it back, so you can watch it surge forward and fall back, a click for each
+-- placement. When the board is full the answer turns green a row at a time, and a scale climbs with it.
+--
+-- The puzzle is sudoku.txt, made by make_sudoku.py, which works out the answer too (in Python), to check this one.
+
+const WHITE = 7                            -- the clues
+const YELLOW = 6                           -- the search
+const GREEN = 4                            -- the answer
+
+var board = grid[byte](9, 9, 0)            -- 0 for an empty square
+var given = grid[bool](9, 9, false)
+var inrow: word[9]                         -- the digits already in each row, column and box, as bits 1 to 9
+var incol: word[9]
+var inbox: word[9]
+var placed: word = 0
+var undone: word = 0
+
+func box(r: int, c: int): int              -- the boxes are numbered across, 0 to 8
+  return r / 3 * 3 + c / 3
+end
+
+func fits(r: int, c: int, d: byte): bool
+  var used = inrow[r] | incol[c] | inbox[box(r, c)]
+  return (used >> d) % 2 == 0
+end
+
+func put(r: int, c: int, d: byte)
+  var m = word(1) << d
+  board[r, c] = d
+  inrow[r] |= m; incol[c] |= m; inbox[box(r, c)] |= m
+end
+
+func take(r: int, c: int, d: byte)
+  var m = ~(word(1) << d)
+  board[r, c] = 0
+  inrow[r] &= m; incol[c] &= m; inbox[box(r, c)] &= m
+end
+
+-- The screen. Each square is two character cells across and two down, and the boxes alternate blue and black.
+-- The digits are drawn with lines, seven-segment style: printing them would also send every digit the search
+-- tries to the program's output, and there are thousands.
+
+func shade(r: int, c: int): byte           -- the paper of the box (r, c) is in
+  return byte(1 - box(r, c) % 2)
+end
+
+func paint(r: int, c: int, colour: byte)   -- a square's four cells, all at once
+  if ZX then
+    var a = 64 + 8 * shade(r, c) + colour  -- bright
+    attr(2 + 2 * r, 1 + 2 * c, a); attr(2 + 2 * r, 2 + 2 * c, a)
+    attr(3 + 2 * r, 1 + 2 * c, a); attr(3 + 2 * r, 2 + 2 * c, a)
+  end
+end
+
+func segments(d: byte): byte               -- bits 0 to 6 are segments a to g: a at the top, then clockwise
+  case d                                   -- round the outside, and g across the middle
+    when 1 then return %0000110
+    when 2 then return %1011011
+    when 3 then return %1001111
+    when 4 then return %1100110
+    when 5 then return %1101101
+    when 6 then return %1111101
+    when 7 then return %0000111
+    when 8 then return %1111111
+  end
+  return %1101111
+end
+
+func segment(s: byte, x: int, y: int)      -- one segment of the digit whose bottom left corner is (x, y)
+  if ZX then
+    case s
+      when 0 then line(x, y + 12, x + 7, y + 12)
+      when 1 then line(x + 7, y + 6, x + 7, y + 12)
+      when 2 then line(x + 7, y, x + 7, y + 6)
+      when 3 then line(x, y, x + 7, y)
+      when 4 then line(x, y, x, y + 6)
+      when 5 then line(x, y + 6, x, y + 12)
+      else line(x, y + 6, x + 7, y + 6)
+    end
+  end
+end
+
+func digit(r: int, c: int, d: byte, shown: bool)   -- draw d in square (r, c), or rub it out
+  if ZX then
+    paper(shade(r, c))                     -- drawing gives a cell the current colours, so set them first
+    if given[r, c] then ink(WHITE) else ink(YELLOW) end
+    inverse(not shown)
+    var bits = segments(d)
+    for s in byte(0)..7 do
+      if (bits >> s) % 2 == 1 then segment(s, 12 + 16 * c, 146 - 16 * r) end
+    end
+    inverse(false)
+  end
+end
+
+func setup()
+  if ZX then
+    border(0); paper(0); ink(WHITE); bright(true); cls()
+    for r in 0..9 do
+      for c in 0..9 do paint(r, c, YELLOW) end
+    end
+  end
+end
+
+func note(row: int): int                   -- a major scale, a step for each row
+  case row
+    when 0 then return 0
+    when 1 then return 2
+    when 2 then return 4
+    when 3 then return 5
+    when 4 then return 7
+    when 5 then return 9
+    when 6 then return 11
+    when 7 then return 12
+  end
+  return 14
+end
+
+-- The search.
+
+func solve(k: int): bool                   -- fill every empty square from k = 9 * row + column on
+  while k < 81 and board[k / 9, k % 9] != 0 do k += 1 end
+  if k == 81 then return true end
+  var r = k / 9
+  var c = k % 9
+  for d in byte(1)..10 do
+    if fits(r, c, d) then
+      put(r, c, d)
+      placed += 1
+      digit(r, c, d, true)
+      if ZX then beep(1, 30 + d) end       -- a click
+      if solve(k + 1) then return true end
+      take(r, c, d)
+      undone += 1
+      digit(r, c, d, false)
+    end
+  end
+  return false
+end
+
+func main()
+  var puzzle = grid()
+  setup()
+  for r in 0..9 do
+    for c in 0..9 do
+      if puzzle[r, c] != '.' then
+        put(r, c, puzzle[r, c] - '0')
+        given[r, c] = true
+        digit(r, c, board[r, c], true)
+      end
+    end
+  end
+  assert solve(0)
+  if ZX then
+    for r in 0..9 do
+      for c in 0..9 do
+        if not given[r, c] then paint(r, c, GREEN) end
+      end
+      beep(90, note(r))
+    end
+    paper(0); ink(GREEN)
+  end
+  for r in 0..9 do                         -- the answer as text, beside the board on a Spectrum
+    if ZX then print at 2 + 2 * r, 21; end
+    for c in 0..9 do
+      print board[r, c];
+      if c == 2 or c == 5 then print " "; end
+    end
+    print
+  end
+  if ZX then ink(WHITE); print at 21, 1; end
+  print placed; " put down, "; undone; " taken back"
+end

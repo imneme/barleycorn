@@ -1,0 +1,124 @@
+-- The Towers of Hanoi: seven discs, moved by the recursion everyone learns, and shown as it runs.
+--
+-- Seven, because the Spectrum has seven colours that aren't black, and each disc wears one. The lights above the
+-- pegs count the moves in binary, and they show something worth watching for: move m always moves the disc whose
+-- light is m's lowest 1. The smallest disc moves every other time, the next every fourth time, and so on. The
+-- program checks that on every move, along with the rule that no disc ever lands on a smaller one. Each move plays
+-- a note, high for the small discs and low for the big ones.
+
+const N = 7
+
+var stack = grid[byte](3, N, 0)            -- stack[peg, level]: the disc there, 1 (smallest) to N
+var count: byte[3]                         -- how many discs each peg holds
+var moves: word = 0
+
+func colour(disc: byte): byte              -- the Spectrum's colours run dark to light, blue to white:
+  return 8 - disc                          -- the biggest disc is blue, the smallest white
+end
+
+func note(disc: byte): int                 -- a pentatonic scale, falling as the discs grow
+  case disc
+    when 1 then return 12
+    when 2 then return 9
+    when 3 then return 7
+    when 4 then return 4
+    when 5 then return 2
+    when 6 then return 0
+  end
+  return -3
+end
+
+func centre(peg: int): int                 -- 44, 128 and 212: far enough apart that no two discs share a cell
+  return 44 + 84 * peg
+end
+
+-- The drawing. Each function keeps its drawing inside if ZX, so the same program runs on CP/M and just counts.
+
+func grey(x0: int, y0: int, x1: int, y1: int)       -- the pegs and the floor
+  if ZX then
+    bright(false); ink(7)
+    line(x0, y0, x1, y1)
+    bright(true)
+  end
+end
+
+-- A disc is two character rows of horizontal lines. The Spectrum keeps one ink per 8 x 8 cell, so a disc gets
+-- cells of its own, and its own colour. Drawing it with inverse on rubs it out (and the peg behind it with it).
+func draw(disc: byte, peg: int, level: int, shown: bool)
+  if ZX then
+    var x = centre(peg)
+    var w = 5 * disc + 1
+    var y = 8 + 16 * level
+    ink(colour(disc))
+    inverse(not shown)
+    for i in 1..15 do line(x - w, y + i, x + w, y + i) end
+    inverse(false)
+    if not shown then grey(x, y, x, y + 15) end
+  end
+end
+
+func light(disc: byte, on: bool)           -- outlined in the disc's colour when off, filled when on
+  if ZX then
+    var a: byte = 64 + colour(disc)        -- bright, with the disc's colour as ink
+    if on then a += 8 * colour(disc) end   -- and as paper
+    var c = 6 + 3 * (N - disc)             -- the biggest disc's light is on the left, as the top bit is
+    attr(3, c, a); attr(3, c + 1, a)
+  end
+end
+
+func setup()
+  if ZX then
+    border(0); paper(0); bright(true); cls()
+    grey(0, 6, 255, 6)
+    for peg in 0..3 do grey(centre(peg), 7, centre(peg), 127) end
+    for level in 0..N do draw(stack[0, level], 0, level, true) end
+    for d in byte(1)..N + 1 do             -- the lights' outlines, in character row 3
+      var x = 8 * (6 + 3 * (N - d))
+      ink(colour(d))
+      line(x + 1, 145, x + 14, 145); line(x + 14, 145, x + 14, 150)
+      line(x + 14, 150, x + 1, 150); line(x + 1, 150, x + 1, 145)
+      light(d, false)
+    end
+  end
+end
+
+-- The puzzle itself.
+
+func lowest(m: word): byte                 -- the place of m's lowest 1 bit, counting from 1
+  var place: byte = 1
+  while m % 2 == 0 do m /= 2; place += 1 end
+  return place
+end
+
+func shift(from: int, to: int)             -- one move: the top disc of one peg onto another
+  count[from] -= 1
+  var disc = stack[from, count[from]]
+  if count[to] > 0 then assert stack[to, count[to] - 1] > disc end      -- never onto a smaller disc
+  moves += 1
+  assert disc == lowest(moves)                                          -- and always the one the lights say
+  draw(disc, from, count[from], false)
+  draw(disc, to, count[to], true)
+  for d in byte(1)..N + 1 do light(d, (moves >> (d - 1)) % 2 == 1) end
+  if ZX then beep(60, note(disc)) end
+  stack[to, count[to]] = disc
+  count[to] += 1
+end
+
+func hanoi(n: byte, from: int, to: int, via: int)      -- move n discs from one peg to another
+  if n == 0 then return end
+  hanoi(n - 1, from, via, to)
+  shift(from, to)
+  hanoi(n - 1, via, to, from)
+end
+
+func main()
+  for level in 0..N do stack[0, level] = byte(N - level) end
+  count[0] = N
+  setup()
+  hanoi(N, 0, 2, 1)
+  if ZX then
+    for d in rev(byte(1)..N + 1) do beep(120, note(d)) end      -- and back up the scale, to finish
+    ink(7); print at 0, 6;                 -- print at with nothing after it: the next print goes here
+  end
+  print N; " discs in "; moves; " moves"
+end
