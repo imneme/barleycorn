@@ -738,3 +738,61 @@ end
 255 39 1 20000 255 64 0
 50 1 15 8 144 253 232 128
 54464 65526 16384 0 0 40001 0 197 0
+
+=== on CP/M, a Spectrum-only call a run can reach is an error, said at its line (the interpreter --as cpm agrees)
+func main()
+  print "before"
+  bright(true)
+end
+--- as cpm
+--- expect
+bright() is Spectrum-only: put it inside if ZX then ... end at line 3
+
+=== on CP/M, print at is Spectrum-only too
+func main()
+  var x = 1
+  if x > 0 then print at 2, 3; "here" end
+end
+--- as cpm
+--- expect
+print at is Spectrum-only: put it inside if ZX then ... end at line 3
+
+=== on CP/M, if ZX and ... is a guard, and a helper reached only through one is never built
+func shade(r: int)
+  attr(r, 0, 56)
+  beep(5, 12)
+end
+func main()
+  var x = 3
+  if ZX and x > 2 then
+    shade(1)
+  elif CPM or x > 99 then
+    print "on CP/M"
+  end
+  if not ZX then print "still CP/M" end
+  print "fine "; x
+end
+--- as cpm
+--- expect
+on CP/M
+still CP/M
+fine 3
+
+=== a constant on the left of and/or decides without evaluating the right, at run time as when folded
+const ON = true
+const OFF = false
+var calls: int = 0
+func f(): bool
+  calls += 1
+  return true
+end
+func main()
+  if OFF and f() then print "no" end
+  if ON or f() then print "yes" end
+  if f() and ON then print "both" end
+  print calls
+end
+--- expect
+yes
+both
+1

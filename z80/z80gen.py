@@ -535,7 +535,7 @@ class Gen:
     # -- the program ---------------------------------------------------------------------------------------------
     def program(self):
         ck = self.ck
-        funcs = [d for d in ck.decls if d.k == 'func']
+        funcs = [d for d in ck.decls if d.k == 'func' and d.name in ck.reachable]    # only what this target can reach
         out = []
         bodies = []
         for f in funcs:

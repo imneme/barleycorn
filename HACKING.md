@@ -71,6 +71,7 @@ because integer widths decide where arithmetic wraps (unsigned) or traps (signed
   --- input           (optional: the text lines() and grid() read)
   ...
   --- screen          (optional: the final screen must match the interpreter's too, pixel for pixel)
+  --- as cpm          (optional: a test of CP/M's rules, run by the interpreter --as cpm and the CP/M backend)
   --- expect
   the exact output
   ```

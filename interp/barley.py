@@ -801,6 +801,73 @@ class Checker:
                         self.declare(Var(pname, pty, 'local'), d.line)
                 self.block(d.body)
                 self.scopes = []
+        self.reachable = self.reach()
+        if self.target == 'cpm':
+            self.spectrum_only()
+
+    # -- what this target can reach
+    def walk_live(self, x, visit):
+        """call visit(node) on every node a run can reach on this target: a branch that folds away here (if ZX on
+        CP/M, say), and a constant expression's parts (false and f()), are skipped"""
+        if isinstance(x, (list, tuple)):
+            for v in x:
+                self.walk_live(v, visit)
+            return
+        if not isinstance(x, N):
+            return
+        if getattr(x, 'cval', None) is not None and x.k != 'name':
+            return
+        visit(x)
+        if x.k == 'if':
+            for cond, body in x.arms:
+                if cond.cval is not None and not cond.cval:
+                    continue
+                self.walk_live(cond, visit)
+                self.walk_live(body, visit)
+                if cond.cval:
+                    return                            # a true arm: nothing after it can run
+            self.walk_live(x.else_, visit)
+            return
+        if x.k == 'while' and x.cond.cval is not None and not x.cond.cval:
+            return
+        for k, v in x.__dict__.items():
+            if k not in ('func', 'var', 'ty', 'record', 'cast', 'opnode', 'cval'):
+                self.walk_live(v, visit)
+
+    def reach(self):
+        """the functions a run can reach on this target, from main and the globals' first values"""
+        seen, todo = set(), ['main']
+        def calls(node):
+            if node.k == 'call' and getattr(node, 'func', None) is not None and node.func.name not in seen:
+                todo.append(node.func.name)
+        for d in self.decls:
+            if d.k == 'var' and d.e is not None:
+                self.walk_live(d.e, calls)
+        while todo:
+            name = todo.pop()
+            if name in seen:
+                continue
+            seen.add(name)
+            self.walk_live(self.funcs[name].body, calls)
+        return seen
+
+    def spectrum_only(self):
+        """on CP/M, the screen and sound are an error wherever a run can reach them: the same rule in the interpreter
+        (--as cpm) and every compiler, said at the line"""
+        found = []
+        def visit(node):
+            if node.k == 'call' and getattr(node, 'name', None) in SCREEN_FUNCS and not hasattr(node, 'func'):
+                found.append((node.line, f'{node.name}()'))
+            elif node.k == 'print' and any(kind == 'at' for kind, _ in node.items):
+                found.append((node.line, 'print at'))
+        for d in self.decls:
+            if d.k == 'var' and d.e is not None:
+                self.walk_live(d.e, visit)
+        for name in sorted(self.reachable, key=lambda n: self.funcs[n].line):
+            self.walk_live(self.funcs[name].body, visit)
+        if found:
+            line, what = min(found)
+            raise BarleyError(f'{what} is Spectrum-only: put it inside if ZX then ... end', line)
 
     def var_type(self, d):
         if d.tyx:
@@ -1109,8 +1176,11 @@ class Checker:
         if op in ('and', 'or'):
             self.want_bool(e.a)
             self.want_bool(e.b)
-            if e.a.cval is not None and e.b.cval is not None:
-                e.cval = (e.a.cval and e.b.cval) if op == 'and' else (e.a.cval or e.b.cval)
+            if e.a.cval is not None:                  # a constant on the left decides, or hands over to the right:
+                if (op == 'and') != bool(e.a.cval):   # so `if ZX and x > 2` folds away where ZX is false, and the
+                    e.cval = bool(e.a.cval)           # right side is never evaluated, as at run time
+                elif e.b.cval is not None:
+                    e.cval = bool(e.b.cval)
             e.ty = BOOL
             return BOOL
         if op == 'in':

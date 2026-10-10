@@ -161,7 +161,8 @@ SCREEN       cls ink paper bright flash inverse over border   print at r, c; ...
              circle(x, y, r)  point(x, y)  attr(r, c, a)  udg(n, bytes)      key()  ticks()
 SOUND        beep(ms, semitone)        (on a 128, later: ay(reg, v)  tone(voice, hz, vol)  quiet())
              (on the Spectrum, the real thing; in the interpreter and C, a virtual screen saved as a picture and a
-             log of the sound; on CP/M, an error outside if ZX then ... end)
+             log of the sound; on CP/M, an error, at its line, wherever a run could reach it: guard it with
+             if ZX then ... end, or if ZX and ... then)
 
 MACHINE      peek poke (not on the Z80 yet; inp outp call later)    const ZX, CPM, C: the target, folded away
              func f(...) ... asm "f.asm" end    the body is f's reference twin (the Z80 running the fragment: later)

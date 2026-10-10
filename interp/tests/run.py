@@ -50,12 +50,14 @@ TNYLPO = paths.TNYLPO
 ZBUILD = os.path.join(paths.BUILD, 'zbuild', RUN_ID)
 
 
-def run_z80(prog, args_in):
+def run_z80(prog, args_in, cpm=False):
     """generate, assemble, and run the .COM under tnylpo; a library part nobody has written yet is PENDING"""
     os.makedirs(ZBUILD, exist_ok=True)
     stem = 'p' + str(abs(hash(prog)) % 10**6)
     gen = subprocess.run([sys.executable, '-I', Z80GEN, os.path.join(HERE, prog)], capture_output=True, text=True, encoding='latin-1')
     if gen.returncode == 1:
+        if 'is Spectrum-only' in gen.stdout and not cpm:   # the checker's rule for CP/M (DESIGN.md, section 4)
+            return 'NOTHERE: the screen and sound are Spectrum-only'
         return gen.stdout                              # the checker's words, as the interpreter's
     if gen.returncode:
         err = (gen.stdout + gen.stderr).strip().splitlines()[-1]
@@ -63,7 +65,7 @@ def run_z80(prog, args_in):
             return 'PENDING: ' + err.replace('Z80: ', '')
         if 'floats are not on the Z80' in err:
             return 'NOTHERE: floats are not in the Z80 version 1'
-        if 'Spectrum-only' in err:
+        if 'Spectrum-only' in err and not cpm:
             return 'NOTHERE: the screen and sound are Spectrum-only'
         return 'GENERATOR: ' + err
     open(os.path.join(ZBUILD, stem + '.asm'), 'w').write(gen.stdout)
@@ -119,15 +121,18 @@ def screen_of(prog, inp, backend):
     return open(scr, 'rb').read() if os.path.exists(scr) else None
 
 
-def run(prog, inp):
-    """the program's output: from the interpreter, or (with --c) from its C, built with the sanitizers on"""
+def run(prog, inp, cpm=False):
+    """the program's output: from the interpreter, or (with --c) from its C, built with the sanitizers on. cpm: a test
+    of CP/M's rules (`--- as cpm`), for the interpreter --as cpm and the CP/M backend only"""
     args_in = [os.path.join(HERE, inp)] if inp else []
+    if cpm and BACKEND in ('c', 'zx'):
+        return 'NOTHERE: a test of CP/M'
     if BACKEND == 'z80':
-        return run_z80(prog, args_in)
+        return run_z80(prog, args_in, cpm)
     if BACKEND == 'zx':
         return run_zx(prog, args_in)
     if BACKEND == 'interp':
-        args = [sys.executable, '-I', BARLEY, os.path.join(HERE, prog)] + args_in
+        args = [sys.executable, '-I', BARLEY] + (['--as', 'cpm'] if cpm else []) + [os.path.join(HERE, prog)] + args_in
         return subprocess.run(args, capture_output=True, text=True, encoding='latin-1').stdout
     os.makedirs(BUILD, exist_ok=True)
     base = os.path.join(BUILD, os.path.splitext(prog)[0])
@@ -152,13 +157,15 @@ def semantics():
         prog, expect = rest.split('\n--- expect\n')
         wants_screen = '\n--- screen' in prog
         prog = prog.replace('\n--- screen', '')
+        as_cpm = '\n--- as cpm' in prog
+        prog = prog.replace('\n--- as cpm', '')
         inp = None
         if '\n--- input\n' in prog:
             prog, text = prog.split('\n--- input\n')
             open(os.path.join(HERE, f'_case{RUN_ID}.in'), 'w').write(text + '\n')
             inp = f'_case{RUN_ID}.in'
         open(os.path.join(HERE, f'_case{RUN_ID}.bly'), 'w').write(prog)
-        got = run(f'_case{RUN_ID}.bly', inp)
+        got = run(f'_case{RUN_ID}.bly', inp, as_cpm)
         if wants_screen and BACKEND in ('c', 'zx') and not got.startswith(('PENDING', 'NOTHERE')) and got == expect:
             want_scr = screen_of(f'_case{RUN_ID}.bly', inp, 'interp')
             got_scr = screen_of(f'_case{RUN_ID}.bly', inp, BACKEND)
