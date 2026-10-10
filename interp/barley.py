@@ -783,6 +783,10 @@ class Checker:
         for d in self.decls:
             if d.k == 'const':
                 t = self.expr(d.e)
+                if d.e.k == 'str':                    # a string constant: each use becomes the literal itself
+                    self.globals[d.name] = Var(d.name, STR, 'const', const=True)
+                    self.globals[d.name].sval = d.e.v
+                    continue
                 if d.e.cval is None:
                     raise BarleyError(f'const {d.name} has to be a constant', d.line)
                 if d.tyx:
@@ -1145,6 +1149,9 @@ class Checker:
 
     def x_name(self, e):
         v = self.lookup(e.name, e.line)
+        if v.const and hasattr(v, 'sval'):           # a string constant is its literal, everywhere it's used
+            e.k, e.v = 'str', v.sval
+            return STR
         e.var = v
         if v.const:
             e.cval = v.cval

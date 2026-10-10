@@ -827,3 +827,18 @@ func main()
 end
 --- expect
 a word where an int is needed at line 4
+
+=== a string constant is its literal wherever it's used: a table of bytes, sliced, walked, compared
+const INKS = "\x01\x05\x04\x06\x07"
+const ART = " .:+#"
+func main()
+  for b in byte(0)..5 do print INKS[b]; " "; chr(ART[b]); "|"; end
+  print
+  print ART[2..4]; " "; ART.len; " "; ART == " .:+#"
+  for ch in ART do print int(ch); " "; end
+  print
+end
+--- expect
+1  |5 .|4 :|6 +|7 #|
+:+ 5 true
+32 46 58 43 35 

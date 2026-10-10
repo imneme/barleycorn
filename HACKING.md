@@ -83,6 +83,9 @@ because integer widths decide where arithmetic wraps (unsigned) or traps (signed
   `and`/`or`/`not`, casts, constants, loops whose bounds change, functions that change globals, self-calls that shuffle
   their own arguments), run in the interpreter, as C and as CP/M programs. Any disagreement is kept in
   `build/fuzz-failures/`.
+- **One program, every backend**: `./bly all PROGRAM [INPUT]` compares the text each prints and the final screens.
+  A program that compares screens should `cls()` first: otherwise the 48K's screen still has the tape loader's text
+  on it, which the interpreter's never had.
 - **The screen**: `c/tests/test_screen.py` holds C to the reference; `z80/tests/test_zxgfx.py` holds the Z80's
   drawing to it; `z80/tests/rom_text_check.py` holds the reference's text to the real ROM.
 

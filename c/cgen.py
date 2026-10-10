@@ -661,6 +661,9 @@ class Gen:
                 return self.temp('b8', f'bly_cmp_{k}({a}, {b}) {op} 0')
             if B.FLOAT in (ta, tb):
                 return self.temp('b8', f'(f64){a} {op} (f64){b}')
+            if ta in INT_C and tb in INT_C and ta is not tb:   # both sides in the wider type, as the checker has them:
+                w = tb if B.widens(ta, tb) else ta             # word < 65536 is a long comparison, and C shouldn't
+                a, b = f'(({self.ctype(w)}){a})', f'(({self.ctype(w)}){b})'   # see a u16 against 65536
             return self.temp('b8', f'{a} {op} {b}')
         if t is B.POS:
             return self.temp('bly_pos', f'bly_pos_{"add" if op == "+" else "sub"}({a}, {b}, {line})')

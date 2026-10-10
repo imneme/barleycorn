@@ -120,7 +120,7 @@ same program made to sing.
 ## 4. The whole language, on one page
 
 ```
--- a comment          const N = 140          var total: long = 0      (every variable starts with a value)
+-- a comment          const N = 140   const NOTES = "\x00\x02\x04"   var total: long = 0   (every variable has a value)
 func f(a: int, xs: list[word]): long ... end          recursion anywhere, call before define; main() runs first
 record Step  risk: word; at: pos  end                  Step(5, p) makes one; s.risk; records compare field by field
 
@@ -134,6 +134,8 @@ NUMBERS      byte word       unsigned 8, 16        int long quad    signed 16, 3
              overflow wraps; checked builds trap signed overflow.  Widen up freely; narrow with a cast: int(x)
              + - * / %  (as C: / truncates, % has the dividend's sign)   mod(a, m) is never negative
              & | ^ ~ << >>   and or not    literals 42 0x2A $2A %101010 'a'    abs min max sign gcd lcm
+             loosest first: or, and, not, == != < > <= >= in, .., | ^, &, << >>, + -, * / %, unary - ~, **
+             (as Python, not C: & binds tighter than ==, so x & 1 == 0 means (x & 1) == 0)
              float: the machine's own (the ROM's on a Spectrum). 1.5 2e9 float(i) trunc floor round sqrt
              sin cos tan asin acos atan ln exp x ** y.   You use them, you get what you get.
 
@@ -158,7 +160,7 @@ IN AND OUT   lines() (for line in lines(), or .next())   grid()   input()
              the line open.  A print takes the rest of its line.
 
 SCREEN       cls ink paper bright flash inverse over border   print at r, c; ...   plot(x, y)  line(x0, y0, x1, y1)
-             circle(x, y, r)  point(x, y)  attr(r, c, a)  udg(n, bytes)      key()  ticks()
+             circle(x, y, r)  point(x, y)  attr(r, c, a)  udg(n, bytes)      key()  ticks()  pause(frames)
 SOUND        beep(ms, semitone)        (on a 128, later: ay(reg, v)  tone(voice, hz, vol)  quiet())
              (on the Spectrum, the real thing; in the interpreter and C, a virtual screen saved as a picture and a
              log of the sound; on CP/M, an error, at its line, wherever a run could reach it: guard it with
@@ -331,6 +333,11 @@ pixel against the reference (`z80/zxgfx.py`), which is in turn checked against t
 
 **Sound** is `beep(ms, semitone)` through the ROM's BEEPER on any Spectrum. On a 128 it would be the AY too: raw
 registers with `ay(reg, v)`, and `tone(voice, hz, vol)` and `quiet()` for everyone else.
+
+**Printing somewhere on the screen, and the same text everywhere**: `if ZX then print at 20, 4; end` and then an
+ordinary `print`. On the Spectrum it lands at row 20; elsewhere it's the next line; the text is the same. (Text
+printed with `at` goes to the program's output too, as everything printed does, so a counter shown live with
+`print at` puts every value it passes through into the output: show those with `attr` or drawing instead.)
 
 **Off the Spectrum, they still run.** The interpreter and the C backend give `peek` and `poke` a 64K memory, and the
 screen library's twins draw into it **at 4000h, laid out exactly as the Spectrum's screen is**. The twin of `plot`
