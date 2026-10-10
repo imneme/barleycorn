@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <unistd.h>               /* isatty: typed keys, or a terminal */
 
 typedef uint8_t u8;
 typedef uint16_t u16;
@@ -500,6 +501,42 @@ static bly_str bly_lines_next(bly_lines *it, int l) {
 static bly_str bly_input(int l) {
     if (bly_tlen > 65535) bly_fail("the input is longer than 65535, too long for one str", l);
     return bly_s(bly_text, (u16)bly_tlen);
+}
+
+/* -- the keyboard: what's typed comes on stdin (zxgfx.py's Keys is the meaning). A terminal has no keys to give
+ * key() and inkey() (bly_zx.h), but ask() reads its lines. ask()'s prompt is display, as on the 48K: stderr. ----- */
+
+static int bly_keys_terminal(void) {
+    static int t = -1;
+    if (t < 0) t = isatty(0);
+    return t;
+}
+
+static void bly_zx_asked(void);
+
+static bly_str bly_ask(bly_str prompt, int l) {
+    bly_flush();                                           /* what was printed first shows first */
+    fwrite(prompt.p, 1, prompt.n, stderr);
+    fflush(stderr);
+    size_t n = 0, cap = 256;
+    u8 *buf = (u8 *)malloc(cap);
+    int c;
+    if (!buf) bly_fail("no memory for a line typed", l);
+    while ((c = getchar()) != EOF && c != '\n') {
+        if (n == cap) {
+            u8 *b = (u8 *)realloc(buf, cap *= 2);
+            if (!b) bly_fail("no memory for a line typed", l);
+            buf = b;
+        }
+        buf[n++] = (u8)c;
+    }
+    bly_zx_asked();
+    if (c == EOF && n == 0) bly_fail("STOP in ask", l);
+    if (n > 65535) bly_fail("the line typed is longer than 65535, too long for one str", l);
+    u8 *p = (u8 *)bly_alloc(n, l);
+    memcpy(p, buf, n);
+    free(buf);
+    return bly_s(p, (u16)n);
 }
 
 /* -- intern: names become small numbers ---------------------------------------------------------------------- */

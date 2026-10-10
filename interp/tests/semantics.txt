@@ -855,6 +855,107 @@ end
 --- expect
 outp() is Spectrum-only: put it inside if ZX then ... end at line 3
 
+=== ask() reads a line typed at the keyboard; its prompt and the typing are display, but on CP/M's one console, output
+func main()
+  var name = ask("Name? ")
+  print "Hello, "; name; "!"
+  var n = ask("How many? ").int()
+  print n * 2
+  print "["; ask(); "]"
+  var s = ask("Say: ")
+  print s.len; " "; s
+end
+--- keys
+Fern
+21
+
+Hi, 2+2=4 (yes!) <ok> "q" 
+--- expect
+Hello, Fern!
+42
+[]
+26 Hi, 2+2=4 (yes!) <ok> "q" 
+--- expect cpm
+Name? Fern
+Hello, Fern!
+How many? 21
+42
+[
+]
+Say: Hi, 2+2=4 (yes!) <ok> "q" 
+26 Hi, 2+2=4 (yes!) <ok> "q" 
+
+=== STOP in ask: the keys running out (cursor down on the 48K, as INPUT LINE's STOP; ^C or the end of input on CP/M)
+func main()
+  var name = ask("Name? ")
+  print "Hello, "; name; "!"
+  var n = ask("How many? ").int()
+  print n * 2
+end
+--- keys
+Fern
+--- expect
+Hello, Fern!
+STOP in ask at line 4
+--- expect cpm
+Name? Fern
+Hello, Fern!
+How many? STOP in ask at line 4
+
+=== inkey() is the key held now, key() a new keypress (each typed key is down, then up); ask() starts afresh
+func wait(): byte
+  var k: byte = 0
+  while k == 0 do k = inkey() end
+  while inkey() != 0 do end
+  return k
+end
+
+func main()
+  print wait(); " "; wait(); " "; wait(); " "; wait(); " "; wait()
+  var k: byte = 0
+  while k == 0 do k = key() end
+  print k
+  var n = 0
+  while n < 3 do
+    k = key()
+    if k != 0 then
+      print k; " ";
+      n += 1
+    end
+  end
+  print
+  outp(254, 0x12)
+  var c = wait()
+  var d = wait()
+  print inp(0xFFFE); " "; ask("? "); " "; inkey(); " "; inp(0xFFFE); " "; key(); " "; c; " "; d
+end
+--- keys
+aB7 
+%xyqz
+--- expect
+97 66 55 32 13
+13
+37 120 121 
+255 z 0 191 0 121 113
+
+=== on CP/M, ask() takes a key at a time: DELETE and backspace rub out, other control keys are not taken, ^C is a STOP
+func main()
+  print "["; ask("> "); "]"
+  print "["; ask("> "); "]"
+  print "["; ask("> "); "]"
+end
+--- as cpm
+--- keys
+Ferern
+abc
+xyz
+--- expect
+[> Fe r ern
+Fern]
+[> ab  c
+c]
+[> xySTOP in ask at line 4
+
 === dword: unsigned 32 bits, which wrap (+ - * / % >> << - ~, min, max, a hash), and its widenings and casts
 func hash(s: str): dword
   var h: dword = 2166136261

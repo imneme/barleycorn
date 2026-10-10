@@ -25,6 +25,11 @@ Every algorithm here is written to be followed exactly:
            bits 0-2 (BORDCR, which cls and the lower screen use, is border()'s alone). An odd port with bits 5-7
            clear is the Kempston joystick, 0 when nothing's pushed; any other reads FFh. border() and a beep
            long enough to sound write it too: the ROM's BEEPER finishes with the speaker off and BORDCR's border.
+  keys     the model has no keyboard of its own: a Keys (keys) gives what was typed, or nothing. key() is the next
+           key; inkey() sees each key held for one look and released for the next. ask() on the 48K is display:
+           each key it takes clicks (BEEPER again), and it ends by clearing the lower screen (CLS-LOWER), so
+           asked() does both. (A line long enough to grow the lower screen past its two rows also writes over
+           the upper screen there, which the model doesn't follow.)
 """
 
 import os
@@ -50,6 +55,58 @@ def rom():
 WHITE_ON_BLACK = 0x38                         # paper 7, ink 0: the Spectrum's own start
 
 
+class Keys:
+    """what was typed, as the interpreter and C have it: keys on a stream (stdin, when it isn't a terminal; the
+    suite's `--- keys`), a newline being ENTER (13). A terminal has none to give key() and inkey(), which find
+    none held, but ask() reads its lines.
+
+    Each key is pressed, then let go, as on the 48K, where the ROM registers a key while it's down. inkey() sees
+    the key down for one look and up for the next, then takes the next key typed. key() is a new keypress: the
+    latest key registered if key() hasn't had it yet (inkey() seeing one doesn't take it from key(), as on the
+    48K, where both see every key the ROM takes and key() keeps only the latest), or else the next key typed,
+    which is still down for inkey()'s next look. ask()'s editor takes its own keys, and starts and ends with
+    none down or waiting."""
+    def __init__(self, stream=None, terminal=False):
+        self.stream, self.terminal = stream, terminal
+        self.down, self.up = 0, False               # the key being typed, and whether inkey() has seen it down
+        self.pending = 0                            # the latest key registered that key() hasn't had
+
+    def take(self):
+        """the next key typed, now down, or 0"""
+        if self.stream is None or self.terminal:
+            return 0
+        b = self.stream.read(1)
+        k = 0 if not b else 13 if b == b'\n' else b[0]
+        if k:
+            self.down, self.up, self.pending = k, False, k
+        return k
+
+    def key(self):
+        if self.pending:
+            k, self.pending = self.pending, 0
+            return k
+        k = self.take()
+        self.pending = 0
+        return k
+
+    def inkey(self):
+        if not self.down and not self.take():
+            return 0
+        if not self.up:
+            self.up = True
+            return self.down
+        self.down = 0
+        return 0
+
+    def line(self):
+        """the rest of the line, without its end, or None if the keys have run out"""
+        self.down = self.pending = 0
+        s = self.stream.readline() if self.stream is not None else b''
+        if not s:
+            return None
+        return s[:-1] if s.endswith(b'\n') else s
+
+
 class ScreenError(Exception):
     """a mistake in a drawing call: the interpreter turns it into "... at line N" """
 
@@ -71,6 +128,7 @@ class Screen:
         self.inverse = self.over = False
         self.border_colour = 7                        # BORDCR's
         self.shown_border, self.ear = 7, 0            # what the ULA was last told: the border showing, and bit 4
+        self.keys = None                              # the keyboard (Keys), if anything's been typed
         self.row = self.col = 0
         self.font = font() if glyphs is None else glyphs
         self.udgs = bytearray(self.font[(ord('A') - 32) * 8:(ord('U') - 31) * 8])     # A..U, as at power-on
@@ -338,7 +396,19 @@ class Screen:
         self.frames = (self.frames + n) % (1 << 24)
 
     def key(self):
-        return 0
+        return self.keys.key() if self.keys else 0
+
+    def inkey(self):
+        return self.keys.inkey() if self.keys else 0
+
+    def asked(self):
+        """after ask(): the editor's clicks and INPUT's CLS-LOWER"""
+        self.shown_border, self.ear = self.border_colour, 0
+        for row in (22, 23):
+            for line in range(8):
+                start = ((row & 0x18) << 8) | (line << 8) | ((row & 7) << 5)
+                self.mem[start:start + 32] = bytes(32)
+            self.mem[6144 + 32 * row:6144 + 32 * row + 32] = bytes([self.bordcr()]) * 32
 
     # -- saving ------------------------------------------------------------------------------------------------
     def scr(self):

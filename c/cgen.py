@@ -890,6 +890,8 @@ class Gen:
             return self.temp('bly_lines *', f'bly_lines_new({line})')
         if name == 'input':
             return self.temp('bly_str', f'bly_input({line})')
+        if name == 'ask':
+            return self.temp('bly_str', f'bly_ask({args[0] if args else "bly_s(0, 0)"}, {line})')
         if name == 'grid':
             self.gname(B.Gen('grid', B.BYTE))
             return self.temp('grid_u8 *', f'bly_grid_input({line})')
@@ -938,7 +940,7 @@ class Gen:
                 cargs += [f'{view}.p', f'{view}.n']
             else:
                 cargs.append(self.conv(v, a.ty, p))
-        if name not in ('cls', 'inverse', 'over', 'ticks', 'key'):
+        if name not in ('cls', 'inverse', 'over', 'ticks', 'key', 'inkey'):
             cargs.append(str(e.line))
         call = f'bly_zx_{name}({", ".join(cargs)})'
         if ret is B.VOID:

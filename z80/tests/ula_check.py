@@ -2,7 +2,9 @@
 spelled as a literal or as a variable of a random type, compiled for the 48K and run there, and the same calls made
 on zxgfx.Screen. What inp read and the border showing at the end must agree. (The suite's cases hold the
 interpreter and C to the same words; this holds the model to the machine, including what the suite can't see:
-the border, which only a picture shows.) Run it with omse-ai's Python."""
+the border, which only a picture shows.) And one more, with SPACE held down: the top byte of the port must reach
+the bus, choosing the keyboard's half-rows, which no key held (the model's keyboard) can't show. Run it with
+omse-ai's Python."""
 import argparse
 import os
 import random
@@ -85,6 +87,36 @@ def machine(src, k):
     return 'TIMEOUT', None
 
 
+HELD = """const PORTS = word[0x7FFE, 0xFEFE, 0xBFFE, 0x00FE, 0x7F1F]
+
+func main()
+  while inkey() != 32 do end
+  for p in PORTS do
+    print inp(p)
+  end
+end
+"""
+HELD_WANT = '190\n191\n191\n190\n0\n'      # SPACE is bit 0 of the 7FFEh half-row; 7F1Fh is the joystick's
+
+
+def held(k):
+    """HELD on the 48K, with SPACE held down from before it looks until it's finished"""
+    bly, tap = os.path.join(BUILD, f'u{k}.bly'), os.path.join(BUILD, f'u{k}.tap')
+    open(bly, 'w').write(HELD)
+    b = subprocess.run([sys.executable, '-I', ZXBUILD, bly, '-o', tap], capture_output=True, text=True)
+    if b.returncode:
+        return f'BUILD: {(b.stdout + b.stderr).strip()}'
+    zx = Speccy()
+    zx.wait_ready()
+    zx.load_tap(tap)
+    zx.press('SPACE')
+    for _ in range(40):
+        if zx.wait_ready(max_frames=250) is not None:
+            break
+    zx.release()
+    return transcript.answer(zx.printed())
+
+
 def main():
     ap = argparse.ArgumentParser(prog='ula_check.py', description=__doc__)
     ap.add_argument('n', metavar='N', type=int, nargs='?', default=40, help='how many programs (default 40)')
@@ -102,6 +134,12 @@ def main():
             print(f'FAIL program {k}: the 48K printed {got[0]!r} and left border {got[1]}; the model says {want[0]!r} '
                   f'and {want[1]}\n{src}')
     print(f'{a.n - bad} of {a.n} programs: the ports as omse-ai\'s 48K answers them')
+    got = held(a.n)
+    if got != HELD_WANT:
+        bad += 1
+        print(f'FAIL with SPACE held: the 48K printed {got!r}, not {HELD_WANT!r}')
+    else:
+        print('and with SPACE held, the half-rows the ports choose')
     return 1 if bad else 0
 
 

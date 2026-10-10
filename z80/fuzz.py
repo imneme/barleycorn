@@ -240,7 +240,7 @@ def run_one(seed, zx=False):
         return seed, 'rejected', src, {'why': str(err)}         # the checker said no: the generator's fault
     try:
         want = subprocess.run([sys.executable, '-I', R.BARLEY, '--as', 'cpm', path], capture_output=True, text=True,
-                              encoding='latin-1', timeout=60)
+                              encoding='latin-1', timeout=60, stdin=subprocess.DEVNULL)
     except subprocess.TimeoutExpired:
         return seed, 'slow', src, {}
     if want.returncode not in (0, 1) or 'Traceback' in want.stderr:
@@ -257,7 +257,8 @@ def run_one(seed, zx=False):
         cc = subprocess.run(R.CC + [base + '.c', '-lm', '-o', base], capture_output=True, text=True, encoding='latin-1')
         got['c'] = ('C COMPILER: ' + cc.stderr) if cc.returncode else \
             (lambda r: r.stdout + (('\nSTDERR: ' + r.stderr) if r.stderr.strip() else ''))(
-                subprocess.run([base], capture_output=True, text=True, encoding='latin-1', timeout=60))
+                subprocess.run([base], capture_output=True, text=True, encoding='latin-1', timeout=60,
+                               stdin=subprocess.DEVNULL))
     if zx:
         got['zx'] = R.run_zx(path, [])
     bad = {k: v for k, v in got.items() if v != want.stdout}

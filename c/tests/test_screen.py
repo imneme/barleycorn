@@ -68,7 +68,7 @@ def read(path):
 def run_interp(src, d):
     png, snd = os.path.join(d, 'i.png'), os.path.join(d, 'i.txt')
     r = subprocess.run([sys.executable, '-I', '-c', RUN_INTERP, INTERP, '--screen', png, '--sound', snd, src],
-                       capture_output=True, timeout=600)
+                       capture_output=True, timeout=600, stdin=subprocess.DEVNULL)     # no keys: key() is 0
     return r.returncode, r.stdout, r.stderr, read(os.path.join(d, 'i.scr')), read(snd)
 
 
@@ -82,7 +82,7 @@ def run_c(src, d):
     if cc.returncode or cc.stderr.strip():
         return None, ('C compiler: ' + cc.stderr).encode(), b'', None, None
     scr, snd = os.path.join(d, 'c.scr'), os.path.join(d, 'c.txt')
-    r = subprocess.run([exe], capture_output=True, timeout=600,
+    r = subprocess.run([exe], capture_output=True, timeout=600, stdin=subprocess.DEVNULL,
                        env=dict(os.environ, BARLEY_SCREEN=scr, BARLEY_SOUND=snd))
     return r.returncode, r.stdout, r.stderr, read(scr), read(snd)
 

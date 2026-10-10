@@ -5,6 +5,10 @@ and run it.
 The tools it uses (a C compiler, sjasmplus, tnylpo, omse-ai) are found as
 paths.py says. Each run builds in a folder of its own under build/bly, so
 runs at the same time don't collide.
+
+What the keyboard types (for ask(), key() and inkey()) comes on stdin: from
+the terminal as you type, for run, c and cpm; zx and all take it from a file
+or a pipe, and the 48K has it typed for it (zxrun.py --keys).
 """
 import argparse
 import os
@@ -18,7 +22,12 @@ sys.path.insert(0, ROOT)
 import paths                                                # noqa: E402
 
 
-def run_c(prog, inp, work, capture=False):
+def typed(keys):
+    """subprocess.run's stdin: the keys, or the terminal's own when there are none"""
+    return {} if keys is None else {'input': keys.encode('latin-1')}
+
+
+def run_c(prog, inp, work, capture=False, keys=None):
     stem = os.path.splitext(os.path.basename(prog))[0]
     c, exe = os.path.join(work, stem + '.c'), os.path.join(work, stem)
     g = subprocess.run([sys.executable, os.path.join(ROOT, 'c', 'cgen.py'), prog], capture_output=True, text=True)
@@ -29,11 +38,11 @@ def run_c(prog, inp, work, capture=False):
     b = subprocess.run([cc, '-std=c11', '-O2', '-I', os.path.join(ROOT, 'c', 'rt'), c, '-lm', '-o', exe])
     if b.returncode:
         return b.returncode, ''
-    r = subprocess.run([exe] + inp, capture_output=capture, text=capture, encoding='latin-1' if capture else None)
-    return r.returncode, (r.stdout if capture else '')
+    r = subprocess.run([exe] + inp, capture_output=capture, **typed(keys))
+    return r.returncode, (r.stdout.decode('latin-1') if capture else '')
 
 
-def run_cpm(prog, inp, work, capture=False):
+def run_cpm(prog, inp, work, capture=False, keys=None):
     stem = os.path.splitext(os.path.basename(prog))[0]
     name = ''.join(ch for ch in stem.lower() if ch.isalnum())[:8] or 'prog'   # a CP/M name: 8 letters or digits
     asm, com = os.path.join(work, stem + '.asm'), os.path.join(work, name + '.com')
@@ -52,9 +61,8 @@ def run_cpm(prog, inp, work, capture=False):
         args = ['input.txt']
     conf = os.path.join(work, 'tnylpo.conf')
     open(conf, 'w').write(f'drive a = "{work}"\ndefault drive = a\n')
-    r = subprocess.run([tn, '-f', conf, name] + args, capture_output=capture, text=capture,
-                       encoding='latin-1' if capture else None)
-    return r.returncode, (r.stdout if capture else '')
+    r = subprocess.run([tn, '-f', conf, name] + args, capture_output=capture, **typed(keys))
+    return r.returncode, (r.stdout.decode('latin-1') if capture else '')
 
 
 def make_tap(prog, inp, tap):
@@ -64,10 +72,14 @@ def make_tap(prog, inp, tap):
     return t.returncode
 
 
-def run_zx(tap, scr, minutes, capture=False):
+def run_zx(tap, scr, minutes, capture=False, keys=None):
     paths.omse_ai()
     cmd = [paths.OMSE_AI_PYTHON, os.path.join(ROOT, 'z80', 'zxrun.py'), tap, '--minutes', str(minutes)] + \
         (['--scr', scr] if scr else [])
+    if keys is not None:
+        kf = os.path.splitext(tap)[0] + '.keys'
+        open(kf, 'w', encoding='latin-1').write(keys)
+        cmd += ['--keys', kf]
     r = subprocess.run(cmd, capture_output=capture, text=capture, encoding='latin-1' if capture else None)
     return r.returncode, (r.stdout if capture else '')
 
@@ -77,20 +89,22 @@ def upper(a):
     return a >= 6144 and (a - 6144) // 32 < 22 or a < 6144 and (((a >> 8) & 0x18) | ((a >> 5) & 7)) < 22
 
 
-def run_all(prog, inp, work, minutes):
+def run_all(prog, inp, work, minutes, keys):
+    """keys: the same keys typed for each (none: an empty stdin, not the terminal's)"""
+    keys = keys or ''
     outs, codes = {}, {}
     png = os.path.join(work, 'interp.png')
     r = subprocess.run([sys.executable, os.path.join(ROOT, 'interp', 'barley.py'), '--screen', png, prog] + inp,
-                       capture_output=True, text=True, encoding='latin-1')
-    outs['interp'], codes['interp'] = r.stdout, r.returncode
+                       capture_output=True, **typed(keys))
+    outs['interp'], codes['interp'] = r.stdout.decode('latin-1'), r.returncode
     r = subprocess.run([sys.executable, os.path.join(ROOT, 'interp', 'barley.py'), '--as', 'cpm', prog] + inp,
-                       capture_output=True, text=True, encoding='latin-1')
-    outs['interp-cpm'] = r.stdout                          # what CP/M must print: ZX is false there, CPM true
-    codes['c'], outs['c'] = run_c(prog, inp, work, capture=True)
-    codes['cpm'], outs['cpm'] = run_cpm(prog, inp, work, capture=True)
+                       capture_output=True, **typed(keys))
+    outs['interp-cpm'] = r.stdout.decode('latin-1')        # what CP/M must print: ZX is false there, CPM true
+    codes['c'], outs['c'] = run_c(prog, inp, work, capture=True, keys=keys)
+    codes['cpm'], outs['cpm'] = run_cpm(prog, inp, work, capture=True, keys=keys)
     tap, zscr = os.path.join(work, 'prog.tap'), os.path.join(work, 'zx.scr')
     if make_tap(prog, inp, tap) == 0:
-        codes['zx'], outs['zx'] = run_zx(tap, zscr, minutes, capture=True)
+        codes['zx'], outs['zx'] = run_zx(tap, zscr, minutes, capture=True, keys=keys)
     else:
         codes['zx'], outs['zx'] = 1, '(the tape failed to build)'
     sys.stdout.write(outs['interp'])
@@ -181,15 +195,16 @@ def main(argv):
         if a.cmd == 'cpm':
             code, msg = run_cpm(prog, inp, work)
             sys.exit(msg.rstrip() if code and msg else code)
+        keys = None if sys.stdin is None or sys.stdin.isatty() else sys.stdin.buffer.read().decode('latin-1')
         if a.cmd == 'all':
-            sys.exit(run_all(prog, inp, work, a.minutes))
+            sys.exit(run_all(prog, inp, work, a.minutes, keys))
         tap = (a.out if a.cmd == 'tap' else None) or os.path.join(paths.build_dir('bly'), stem + '.tap')
         if make_tap(prog, inp, tap):
             sys.exit(1)
         if a.cmd == 'tap':
             print(tap)
             return
-        code, _ = run_zx(tap, a.scr, a.minutes)
+        code, _ = run_zx(tap, a.scr, a.minutes, keys=keys)
         sys.exit(code)
     finally:
         shutil.rmtree(work, ignore_errors=True)

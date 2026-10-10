@@ -318,7 +318,50 @@ static void bly_zx_pause(i16 n, int l) {
     bly_zx_frames = BLY_ZX_FRAMES(bly_zx_frames + (u32)n);
 }
 
-static u8 bly_zx_key(void) { return 0; }
+/* the keys, as zxgfx.py's Keys has them: each pressed, then let go. inkey() sees it down for one look and up for
+ * the next; key() is the latest key registered if it hasn't had it, or else the next typed (down for inkey()) */
+static u8 bly_zx_down, bly_zx_pending;
+static b8 bly_zx_up;
+static u8 bly_zx_take(void) {
+    if (bly_keys_terminal()) return 0;
+    int c = getchar();
+    u8 k = c == EOF ? 0 : c == '\n' ? 13 : (u8)c;
+    if (k) {
+        bly_zx_down = bly_zx_pending = k;
+        bly_zx_up = 0;
+    }
+    return k;
+}
+static u8 bly_zx_key(void) {
+    u8 k = bly_zx_pending;
+    if (k) {
+        bly_zx_pending = 0;
+        return k;
+    }
+    k = bly_zx_take();
+    bly_zx_pending = 0;
+    return k;
+}
+static u8 bly_zx_inkey(void) {
+    if (!bly_zx_down && !bly_zx_take()) return 0;
+    if (!bly_zx_up) {
+        bly_zx_up = 1;
+        return bly_zx_down;
+    }
+    return bly_zx_down = 0;
+}
+
+/* after ask(), on the 48K: each key the editor took clicked (BEEPER: BORDCR's border, the speaker off), and INPUT's
+ * end cleared the lower screen (CLS-LOWER) */
+static void bly_zx_asked(void) {
+    bly_zx_down = bly_zx_pending = 0;            /* the editor took its keys for itself */
+    bly_zx_shown = bly_zx_border_c;
+    bly_zx_ear = 0;
+    for (int row = 22; row < 24; row++) {
+        for (int line = 0; line < 8; line++) memset(bly_zx_mem + (((row & 0x18) << 8) | (line << 8) | ((row & 7) << 5)), 0, 32);
+        memset(bly_zx_mem + 6144 + 32 * row, (bly_zx_border_c << 3) | ((bly_zx_border_c & 4) ? 0 : 7), 32);
+    }
+}
 
 /* -- the machine's memory: an address is any whole number, checked as an index is ------------------------------- */
 

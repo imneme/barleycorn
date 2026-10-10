@@ -148,15 +148,28 @@ spectrum-minilib), when it comes.
   end
   --- input           (optional: the text lines() and grid() read)
   ...
+  --- keys            (optional: what's typed, for ask(), inkey() and
+  ...                 key(); stdin off the Spectrum, and zxrun --keys
+                      types it on the 48K. The keys running out is a
+                      STOP in ask)
   --- screen          (optional: the final screen must match the
                       interpreter's too, pixel for pixel)
   --- as cpm          (optional: a test of CP/M's rules, run by the
                       interpreter --as cpm and by the CP/M backend)
   --- expect
   the exact output
+  --- expect cpm      (optional: CP/M's output, where it differs: its
+  ...                 one console shows ask()'s prompt and echo. The
+                      interpreter --as cpm is held to it too)
   ```
   A failure's message is part of the output
-  (`index 9 is outside 0..8 at line 4`), so tests pin failures too.
+  (`index 9 is outside 0..8 at line 4`), so tests pin failures too. On
+  the 48K, `zxrun` also fails a run that ends in any report but BASIC's
+  `0 OK`: a Barley program goes back to BASIC by returning, failure or
+  not, so any other report is the ROM's own error. Anything that runs
+  programs gives them a stdin of its own, the keys or an empty one: a
+  program that reads keys reads stdin, and one inherited from a terminal
+  or a pipe can leave it waiting for ever. (The screen test did, once.)
 - **The fragments** (`z80/tests/test_*.py`, with omse-ai's Python): each
   library area on a bare Z80 against a Python model of what it should
   do, usually the interpreter's own code, over random and edge cases.

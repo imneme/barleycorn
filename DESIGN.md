@@ -214,6 +214,7 @@ CONTAINERS  list[T](cap)    push pop [i] len sort clear
             mark() release(m) free()  (not yet)
 
 IN AND OUT  lines() (for line in lines(), or .next())   grid()   input()
+            ask(prompt): a line typed (ask("n? ").int() for a number)
             print a; b, c;   BASIC's: ; joins, , pads to the next
             16-column zone, a trailing ; or , keeps the line open.
             A print takes the rest of its line.
@@ -222,7 +223,7 @@ SCREEN      cls  ink(0..9)  paper(0..9)  bright(0, 1, 8)  flash(0, 1, 8)
             (8: a square keeps its own; 9: the contrast)  inverse over border
             print at r, c; ...    plot(x, y)  line(x0, y0, x1, y1)
             circle(x, y, r)  point(x, y)  attr(r, c[, a])  udg(n, bytes)
-            key()  ticks()  pause(frames)
+            key()  inkey()  ticks()  pause(frames)
 SOUND       beep(ms, semitone)
             (on a 128, later: ay(reg, v)  tone(voice, hz, vol)  quiet())
             On the Spectrum, the real thing; in the interpreter and C, a
@@ -460,6 +461,25 @@ the first few by hand, then `for` takes the rest. A blank line is `""`.
 ways in. **How the input gets there** depends on the target (section 7):
 bundled onto the tape, read from a CP/M file, or read from a file by the
 interpreter and the C.
+
+**The keyboard** is three words. `ask(prompt)` is BASIC's INPUT LINE:
+the line typed, as a `str`, and `ask("How many? ").int()` for a number.
+On the Spectrum it is the ROM's own editor in the lower screen, cursor
+keys, DELETE and all; the way in is spectrum-minilib's, which was worked
+out from the HiSoft BASIC compiler. `inkey()` is INKEY$, the key held
+down now, as a `byte` (0 for none), so it compares with `'q'`. `key()`
+is a new keypress since it last looked. **The prompt and the typing are
+display, not output,** as `print at` is: on the Spectrum they're in the
+lower screen, which `ask()` clears again as INPUT does, and the
+interpreter and C put the prompt on stderr. CP/M has one console, so
+there they're output: the prompt, the line echoed, and a newline.
+**Cursor down stops an `ask()`**, as it stops INPUT LINE (BREAK, in the
+ROM's editor, only types a space), and so do ^C on CP/M and running out
+of keys anywhere; it fails with `STOP in ask`. In the interpreter and C,
+the keys come on stdin, which is how the tests type them. A terminal
+gives `ask()` its lines but has no keys for `inkey()` and `key()`, which
+find none held. `inkey()` and `key()` are the Spectrum's, so they're
+Spectrum-only on CP/M; `ask()` is everywhere.
 
 **`print` is BASIC's PRINT.** `;` joins, `,` moves to the next 16-column
 zone, and a trailing `;` or `,` keeps the line open. Everyone who grew

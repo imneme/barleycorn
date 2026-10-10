@@ -1020,6 +1020,101 @@ dropping `ld b,h` before `in a,(c)` changes only which keyboard
 half-rows are read, which can't be seen with no key held. A test with a
 key held (`--- keys`, coming with `inkey()`) will see it.
 
+## The keyboard: inkey, key and ask
+
+Saturday 10 October, from Melissa: "some of my own AoC solutions use
+INKEY$ (which could just be `inkey()` here) and input of both strings
+and numbers... It's a bit of a pain using the rom, but minilib does it."
+
+**`inkey()` is the ROM's own INKEY$** (S-INKEY$, 2634h) without the
+string: KEY-SCAN (028Eh), K-TEST (031Eh), then K-DECODE (0333h) with C =
+0 and D = FFh, which is L mode, with the caps lock as it stands. It
+lives in `zxask.asm` with `ask()`: 274 bytes for both.
+
+**`ask()` on the 48K is INPUT LINE**, step for step: the ROM's INPUT
+(2089h, IN-ITEM at 20C1h) checked against spectrum-minilib's
+`zx_input_line.asm`, which Melissa worked out from the HiSoft BASIC
+compiler. So: stream 1 (channel K, the lower screen), CLS-LOWER, the
+prompt, FLAGX bits 5 and 7 (input mode, INPUT LINE), a workspace holding
+just ENTER, then EDITOR (0F2Ch); afterwards ED-COPY, CL-SET, INPUT's own
+ending (20A0h: the upper screen's print position, SCR_CT and CLS-LOWER),
+the workspace given back and stream 2 again. Some things were found on
+the way:
+- **There's no BREAK in the editor.** CAPS SHIFT with SPACE just types a
+  space; omse-ai showed it. INPUT LINE is left by cursor down: ED-DOWN
+  (0FF3h), in input mode, puts 10h in ERR_NR and ED-END (1024h) leaves
+  through ERR_SP, which BASIC reports as `H STOP in INPUT`. So `ask()`
+  sets ERR_SP to its own `.stop` around the editor (minilib's
+  `call_with_errhandler`), fails with `STOP in ask`, and puts ERR_NR
+  back to FFh, since BASIC would otherwise report the STOP at the end.
+- **The editor runs on BASIC's stack.** Its room check (TEST-ROOM)
+  measures against SP. Ours is high, above the input and the arena, so a
+  long enough line could have grown the workspace over them.
+- **A key pressed before isn't the answer's first letter**, one
+  `inkey()` saw, say. Opening channel K clears FLAGS bit 5 (CHAN-K,
+  1634h), for INPUT as for `ask()`. I first cleared it myself as well,
+  and the mutant that took mine out survived, which is how I found the
+  ROM already did.
+- **One thing INPUT doesn't do:** `ask()` returns only once every key is
+  let go, so ENTER isn't still held for an `inkey()` straight
+  afterwards. omse-ai showed why: `PRINT IN 254` in BASIC gives 190, not
+  191, because ENTER is still down while the line runs.
+- **Every key the editor takes clicks**, through BEEPER, which leaves
+  the border BORDCR's and the speaker bit clear, so the model's
+  `asked()` says so, and clears the lower screen as INPUT's CLS-LOWER
+  does. A line long enough to grow the lower screen past its two rows
+  also writes over the upper screen, which the model doesn't follow.
+- **omse-ai's transcript leaves the prompt and typing out by itself:**
+  it logs printing only while the last stream CHAN-OPEN opened is 2.
+
+**On CP/M, `ask()` reads a key at a time through BDOS 6**
+(`cpmask.asm`). BDOS 10 was the obvious choice, and tnylpo showed why
+not: it echoes, and at the end of stdin it reads 1Ah after 1Ah, echoing
+`^Z` each time, until its buffer fills; and ^C at the start of a line is
+a warm boot, out of the program with nothing said. So: a printable key
+is taken and echoed; DELETE or backspace rubs one out (backspace, space,
+backspace); ENTER ends the line; 1Ah ends it too once something's typed;
+^C, or 1Ah first, is the STOP. (tnylpo turns a newline on stdin into
+0Dh, and the end of stdin into 1Ah.) The line goes straight into the
+arena's free room and is then allocated where it is, since
+`bly_alloc_raw` hands out `bly_atop`: no buffer, and no limit but the
+arena. The interpreter `--as cpm` takes the keys the same way.
+
+**The keys off the Spectrum** are `zxgfx.Keys`, which the C repeats:
+what stdin holds, a newline being ENTER. The first model said that
+`inkey()` sees each key held for one look and released for the next, and
+that `key()` takes the next one. The 48K disagreed twice, and it was
+right both times. `key()` after a run of `inkey()`s gives the last key
+`inkey()` saw, because the ROM registered it and nothing took it.
+`inkey()` straight after `key()` finds that key still down. So each key
+is pressed, then let go: `inkey()` sees it down, then up; `key()` has
+the latest key registered if it hasn't had it, or else the next key
+typed, which is then still down.
+
+**`zxrun --keys` types them on the 48K.** A key goes into the editor if
+the program is waiting in `ask()` (WAIT-KEY1, 15DEh, with FLAGX bit 5
+set) within half a second. Otherwise it's pressed and let go, and five
+frames pass before the next. When the keys run out and the program is
+asking, cursor down stops it, as the end of stdin does elsewhere. A
+shifted key is pressed shift first, a frame early. Pressed at once, a
+key scan already under way when they went down could find the letter
+without its shift: `inkey()` saw `b` before it saw `B`. Fingers do the
+same. And zxrun now fails a run whose last report isn't `0 OK`.
+
+**How it's tested.** Four suite cases with `--- keys`: lines and
+numbers, with the prompt and echo on CP/M's console (`--- expect cpm`);
+the STOP; `inkey()` and `key()` together, across `ask()`, with the
+border and EAR bit `ask()` leaves; and CP/M's rubbing out, control keys
+and ^C. Each runs on all four backends where it can. `ula_check.py` now
+holds SPACE down and reads five ports, which catches the `ld b,h` mutant
+that the ports' tests couldn't see. **21 mutants, 20 caught.** Two of
+those survived at first and found a bug in the model: at the end of the
+keys, `take()` dropped a key the ROM had registered and `key()` hadn't
+had. The other is equivalent: opening stream 1 before CLS-LOWER, which
+opens the K channel itself. INPUT does both, and so does `ask()`. An
+earlier mutant, taking out my own clearing of FLAGS bit 5, survived
+because CHAN-K does that too, so mine went.
+
 ## Floats on the Spectrum: the ROM's calculator, and the plumbing to it
 
 *Files: `fp.asm` (target `zx48`), the float parts of `../z80gen.py`

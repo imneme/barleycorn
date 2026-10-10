@@ -2179,6 +2179,13 @@ class Gen:
             self.emit(f'ld de,{r.val}')
             self.call('bly_input')
             return r
+        if name == 'ask':                                   # zxask.asm on the 48K, cpmask.asm on CP/M
+            p = self.mem(args[0]) if args else self.materialize(Op('imm', 0, B.LONG))     # no prompt: an empty str
+            r = self.temp(B.STR)
+            self.emit(f'ld hl,{self.addr(p)}')
+            self.emit(f'ld de,{r.val}')
+            self.call('bly_ask')
+            return r
         if name == 'grid':
             self.uses_input = True
             self.call('bly_grid_input')
@@ -2456,7 +2463,7 @@ class Gen:
             self.load_hl(ints(0))
             self.emit(f'ld de,{view}')
             self.call(routine)
-        elif name == 'key':
+        elif name in ('key', 'inkey'):
             self.call(routine)
             r = self.temp(B.BYTE)
             self.emit(f'ld ({r.val}),a')

@@ -83,7 +83,7 @@ def main():
             p = os.path.join(d, 't.bly')
             open(p, 'w').write(src)
             subprocess.run([sys.executable, '-I', BARLEY, '--screen', os.path.join(d, 't.png'), p],
-                           capture_output=True)
+                           capture_output=True, stdin=subprocess.DEVNULL)
             want = open(os.path.join(d, 't.scr'), 'rb').read()
             b = subprocess.run(['python3', '-I', ZXBUILD, p, '-o', os.path.join(d, 't.tap')], capture_output=True, text=True)
             if b.returncode:

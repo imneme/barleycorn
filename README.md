@@ -137,6 +137,9 @@ options (every script here answers `-h`).
 
 A program reads its input with `lines()`, `grid()` or `input()`. On a
 Spectrum the input travels on the tape and loads like any other block.
+What's typed at the keyboard comes through `ask()` (a line), `inkey()`
+and `key()`. Off the Spectrum it comes on stdin, and `./bly zx` has
+omse-ai type it.
 
 ## Testing and measuring
 

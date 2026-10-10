@@ -11,6 +11,8 @@ status 1.
 
 The screen and sound draw with ../z80/zxgfx.py into a 64K memory that peek
 and poke share (the ROM at 0000h, the screen at 4000h, the UDGs at FF58h).
+What's typed at the keyboard comes on stdin: ask() reads its lines, and
+key() and inkey() its keys, unless stdin is a terminal, where they find none.
 Not here yet: mark/release.
 """
 
@@ -679,7 +681,7 @@ SCREEN_FUNCS = {                                   # the Spectrum's screen and s
     'bright': (['level'], VOID), 'flash': (['level'], VOID), 'inverse': (['flag'], VOID), 'over': (['flag'], VOID),
     'plot': ([INT, INT], VOID), 'line': ([INT] * 4, VOID), 'circle': ([INT] * 3, VOID),
     'point': ([INT, INT], BOOL), 'attr': ([INT, INT, BYTE], VOID), 'udg': ([INT, Gen('array', BYTE, n=None)], VOID),
-    'key': ([], BYTE), 'ticks': ([], LONG), 'pause': ([INT], VOID), 'beep': ([INT, INT], VOID)}
+    'key': ([], BYTE), 'inkey': ([], BYTE), 'ticks': ([], LONG), 'pause': ([INT], VOID), 'beep': ([INT, INT], VOID)}
 MACHINE_FUNCS = {                                  # the machine's 64K: an address is any whole number, as an index is
     'peek': (['addr'], BYTE), 'poke': (['addr', BYTE], VOID),
     'inp': (['port'], BYTE), 'outp': (['port', BYTE], VOID)}   # and its ports (IN and OUT), numbered the same way
@@ -688,7 +690,7 @@ FLOAT_FUNCS = {'sqrt': math.sqrt, 'sin': math.sin, 'cos': math.cos, 'tan': math.
                'trunc': lambda x: float(math.trunc(x)), 'floor': lambda x: float(math.floor(x)),
                'round': lambda x: float(math.floor(x + 0.5))}
 BUILTIN_FUNCS = {'lines', 'grid', 'input', 'intern', 'name', 'chr', 'min', 'max', 'abs', 'sign', 'gcd', 'lcm', 'mod',
-                 'rev', 'pos'}
+                 'rev', 'pos', 'ask'}
 TARGET_CONSTS = ('ZX', 'CPM', 'C')
 
 
@@ -1589,6 +1591,12 @@ class Checker:
         if name == 'intern':
             self.one(e, STR)
             return WORD
+        if name == 'ask':                                 # ask() or ask(prompt): a line typed at the keyboard
+            if len(args) > 1:
+                raise BarleyError('ask takes a prompt, or nothing', e.line)
+            if args:
+                self.coerce(args[0], STR)
+            return STR
         if name == 'name':
             self.one(e, WORD)
             return STR
@@ -1852,6 +1860,47 @@ class Interp:
             self.out.write(s)
         nl = s.rfind('\n')
         self.col = len(s) - nl - 1 if nl >= 0 else self.col + len(s)
+
+    def ask(self, prompt, line):
+        """a line typed at the keyboard (the keys: zxgfx.Keys). On the 48K, and so here and in C, the prompt and
+        the typing are display, not output: the prompt goes to stderr. On CP/M there's one console, so they're
+        output, taken a key at a time as cpmask.asm takes them: a printable key echoed, DELETE or backspace
+        rubbing one out (echoed as backspace, space, backspace), ENTER ending the line and a newline printed;
+        ^C, or the keys running out before anything's typed, is a STOP, as it is everywhere"""
+        keys = self.screen.keys
+        if self.ck.target != 'cpm':
+            self.out.flush()                                 # what was printed first shows first
+            if hasattr(self.out, 'buffer'):
+                self.out.buffer.flush()
+            sys.stderr.buffer.write(prompt)
+            sys.stderr.flush()
+            got = keys.line() if keys else None
+            self.screen.asked()
+            if got is None:
+                raise BarleyError('STOP in ask', line)
+            if len(got) > 65535:
+                raise BarleyError('the line typed is longer than 65535, too long for one str', line)
+            return got
+        self.write(prompt.decode('latin-1'))
+        got, echo = bytearray(), []
+        while True:
+            b = keys.stream.read(1) if keys and keys.stream else b''
+            c = b[0] if b else 0x1A                          # tnylpo reads the end of stdin as 1Ah, and so do we
+            if c in (13, 10) or c == 0x1A and got:
+                self.write(''.join(echo) + '\n')
+                if len(got) > 65535:
+                    raise BarleyError('the line typed is longer than 65535, too long for one str', line)
+                return bytes(got)
+            if c in (3, 0x1A):
+                self.write(''.join(echo))
+                raise BarleyError('STOP in ask', line)
+            if c in (8, 0x7F):
+                if got:
+                    got.pop()
+                    echo.append('\b \b')
+            elif c >= 32:
+                got.append(c)
+                echo.append(chr(c))
 
     def show(self, v, t):
         if t is BOOL:
@@ -2318,6 +2367,8 @@ class Interp:
             return self.screen_call(lambda: f(*args), e.line)
         if name == 'lines':
             return BLines(self.input_lines)
+        if name == 'ask':
+            return self.ask(args[0] if args else b'', e.line)
         if name == 'input':
             if len(self.text) > 65535:
                 raise BarleyError('the input is longer than 65535, too long for one str', e.line)
@@ -2397,13 +2448,14 @@ def uses_machine(decls):
     return walk(decls)
 
 
-def run(src, text=b'', target='zx48', out=sys.stdout, screen=None, sound=None):
+def run(src, text=b'', target='zx48', out=sys.stdout, screen=None, sound=None, keys=None):
     """screen: a .png path to save the virtual screen to at the end (and a .scr beside it); sound: a path for the
-    beep log, one "ms semitone" a line"""
+    beep log, one "ms semitone" a line; keys: what was typed (a zxgfx.Keys), or none"""
     decls = Parser(src).program()
     ck = Checker(decls, target)
     ck.check()
     it = Interp(ck, text, out, need_rom=bool(screen))
+    it.screen.keys = keys
     try:
         it.run()
     finally:
@@ -2412,6 +2464,13 @@ def run(src, text=b'', target='zx48', out=sys.stdout, screen=None, sound=None):
             open(os.path.splitext(screen)[0] + '.scr', 'wb').write(it.screen.scr())
         if sound:
             open(sound, 'w').write(''.join(f'{ms} {st}\n' for ms, st in it.screen.sound))
+
+
+def it_keys(stdin):
+    """the keyboard: stdin's keys, unless it's a terminal, where only ask() reads (a line at a time)"""
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'z80'))
+    import zxgfx
+    return zxgfx.Keys(stdin.buffer, stdin.isatty())
 
 
 def main(argv):
@@ -2433,7 +2492,8 @@ def main(argv):
         sys.exit(f'barley.py: {err.filename}: {err.strerror}')
     sys.setrecursionlimit(20000)
     try:
-        run(src, text, a.target, screen=a.screen, sound=a.sound)
+        keys = None if sys.stdin is None else it_keys(sys.stdin)
+        run(src, text, a.target, screen=a.screen, sound=a.sound, keys=keys)
     except BarleyError as err:
         sys.stdout.flush()
         sys.stdout.buffer.flush()

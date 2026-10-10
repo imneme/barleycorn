@@ -538,6 +538,16 @@ none. An `int` is `bit 7,d` and a jump to `bly_fail_addr_i16` or
 port; out: HL = the address). They fail with
 `address {a} is outside 0..65536`, or `port {a} ...`.
 
+**The keyboard.** `zxask.asm`'s `bly_zx_inkey` takes nothing and returns
+A = the key held down now, as INKEY$ decodes it, or 0; `key()` is
+`plat_zx.asm`'s `bly_zx_key`. `ask()` is `bly_ask` on both platforms: HL =
+&prompt, DE = &dest (both `str`s); the line typed, without its end, is a
+new `str` in the arena at DE. It fails with `STOP in ask`. On the 48K
+that's `zxask.asm`, the ROM's INPUT LINE run on BASIC's stack, with the
+prompt and typing in the lower screen (stream 1), clobbering all but IY.
+On CP/M it's `cpmask.asm`, a key at a time through BDOS 6, with the
+prompt and echo as output, which leaves print's column at 0.
+
 ## 11. Floats: the ROM's, on the Spectrum only
 
 **A `float` is the ROM's own 5 bytes** (`lib/fp.asm`, target `zx48`), so

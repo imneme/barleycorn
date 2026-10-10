@@ -24,8 +24,8 @@ ZXRUN = os.path.join(HERE, '..', '..', 'z80', 'zxrun.py')
 OMSEPY = paths.OMSE_AI_PYTHON
 
 
-def run_zx(prog, args_in):
-    """build a tape, load it on omse-ai's 48K, and take what the program printed"""
+def run_zx(prog, args_in, keys=None):
+    """build a tape, load it on omse-ai's 48K, and take what the program printed (zxrun typing the keys, if any)"""
     os.makedirs(ZBUILD, exist_ok=True)
     tap = os.path.join(ZBUILD, 'zx.tap')
     b = subprocess.run([sys.executable, '-I', ZXBUILD, os.path.join(HERE, prog)] + args_in + ['-o', tap],
@@ -40,8 +40,12 @@ def run_zx(prog, args_in):
         if b.returncode == 1:
             return b.stdout                                   # the checker's words
         return 'BUILD: ' + last
+    typing = []
+    if keys is not None:
+        open(os.path.join(ZBUILD, 'zx.keys'), 'w', encoding='latin-1').write(keys)
+        typing = ['--keys', os.path.join(ZBUILD, 'zx.keys')]
     try:
-        r = subprocess.run([OMSEPY, ZXRUN, tap], capture_output=True, text=True, encoding='latin-1', timeout=600)
+        r = subprocess.run([OMSEPY, ZXRUN, tap] + typing, capture_output=True, text=True, encoding='latin-1', timeout=600)
     except subprocess.TimeoutExpired:
         return 'TIMEOUT'
     return r.stdout + (('\nSTDERR: ' + r.stderr[-500:]) if r.returncode else '')
@@ -51,7 +55,7 @@ TNYLPO = paths.TNYLPO
 ZBUILD = os.path.join(paths.BUILD, 'zbuild', RUN_ID)
 
 
-def run_z80(prog, args_in, cpm=False):
+def run_z80(prog, args_in, cpm=False, keys=None):
     """generate, assemble, and run the .COM under tnylpo; a library part nobody has written yet is PENDING"""
     os.makedirs(ZBUILD, exist_ok=True)
     stem = 'p' + str(abs(hash(prog)) % 10**6)
@@ -83,7 +87,7 @@ def run_z80(prog, args_in, cpm=False):
         cpm_args = ['input.txt']
     try:
         r = subprocess.run([TNYLPO, '-f', conf, stem] + cpm_args, capture_output=True, text=True, encoding='latin-1',
-                           stdin=subprocess.DEVNULL, timeout=120)
+                           input=keys or '', timeout=120)
     except subprocess.TimeoutExpired:
         return 'TIMEOUT: ran for two minutes (a loop that never ends?)'
     return r.stdout + (('\nSTDERR: ' + r.stderr) if r.stderr.strip() else '')
@@ -122,19 +126,20 @@ def screen_of(prog, inp, backend):
     return open(scr, 'rb').read() if os.path.exists(scr) else None
 
 
-def run(prog, inp, cpm=False):
+def run(prog, inp, cpm=False, keys=None):
     """the program's output: from the interpreter, or (with --c) from its C, built with the sanitizers on. cpm: a test
-    of CP/M's rules (`--- as cpm`), for the interpreter --as cpm and the CP/M backend only"""
+    of CP/M's rules (`--- as cpm`), for the interpreter --as cpm and the CP/M backend only. keys: what's typed (on
+    stdin; zxrun types them on the 48K); none, and stdin is empty, whatever the runner's own is"""
     args_in = [os.path.join(HERE, inp)] if inp else []
     if cpm and BACKEND in ('c', 'zx'):
         return 'NOTHERE: a test of CP/M'
     if BACKEND == 'z80':
-        return run_z80(prog, args_in, cpm)
+        return run_z80(prog, args_in, cpm, keys)
     if BACKEND == 'zx':
-        return run_zx(prog, args_in)
+        return run_zx(prog, args_in, keys)
     if BACKEND == 'interp':
         args = [sys.executable, '-I', BARLEY] + (['--as', 'cpm'] if cpm else []) + [os.path.join(HERE, prog)] + args_in
-        return subprocess.run(args, capture_output=True, text=True, encoding='latin-1').stdout
+        return subprocess.run(args, capture_output=True, text=True, encoding='latin-1', input=keys or '').stdout
     os.makedirs(BUILD, exist_ok=True)
     base = os.path.join(BUILD, os.path.splitext(prog)[0])
     gen = subprocess.run([sys.executable, '-I', CGEN, os.path.join(HERE, prog)], capture_output=True, text=True, encoding='latin-1')
@@ -144,18 +149,36 @@ def run(prog, inp, cpm=False):
     cc = subprocess.run(CC + [base + '.c', '-lm', '-o', base], capture_output=True, text=True, encoding='latin-1')
     if cc.returncode or cc.stderr.strip():
         return 'C COMPILER: ' + cc.stderr
-    r = subprocess.run([base] + args_in, capture_output=True, text=True, encoding='latin-1')
-    return r.stdout + (('\nSTDERR: ' + r.stderr) if r.stderr.strip() else '')
+    r = subprocess.run([base] + args_in, capture_output=True, text=True, encoding='latin-1', input=keys or '')
+    err = r.stderr
+    if keys is not None:                       # ask()'s prompts are display, on stderr: the interpreter's, exactly
+        args = [sys.executable, '-I', BARLEY, os.path.join(HERE, prog)] + args_in
+        prompts = subprocess.run(args, capture_output=True, text=True, encoding='latin-1', input=keys).stderr
+        err = err[len(prompts):] if err.startswith(prompts) else err
+    return r.stdout + (('\nSTDERR: ' + err) if err.strip() else '')
 
 
 def semantics():
-    """semantics.txt: programs separated by '=== name', each followed by '--- expect' and its exact output"""
+    """semantics.txt: programs separated by '=== name', each followed by '--- expect' and its exact output. Before
+    that, '--- input' and its text, and '--- keys' and what's typed (the keys running out is a STOP in ask());
+    after it, '--- expect cpm' for where CP/M's output differs (its one console shows ask()'s prompt and echo),
+    which the interpreter --as cpm is held to as well"""
     if not os.path.exists(EXTRA):
         return []
     out, cases = [], open(EXTRA).read().split('\n=== ')[1:]
     for c in cases:
         name, rest = c.split('\n', 1)
         prog, expect = rest.split('\n--- expect\n')
+        cpm_expect = None
+        if '\n--- expect cpm\n' in expect:
+            expect, cpm_expect = expect.split('\n--- expect cpm\n')
+            expect += '\n'
+        keys = None
+        if prog.endswith('\n--- keys'):
+            prog, keys = prog[:-len('\n--- keys')], ''
+        elif '\n--- keys\n' in prog:
+            prog, keys = prog.split('\n--- keys\n')
+            keys += '\n'
         wants_screen = '\n--- screen' in prog
         prog = prog.replace('\n--- screen', '')
         as_cpm = '\n--- as cpm' in prog
@@ -166,7 +189,9 @@ def semantics():
             open(os.path.join(HERE, f'_case{RUN_ID}.in'), 'w').write(text + '\n')
             inp = f'_case{RUN_ID}.in'
         open(os.path.join(HERE, f'_case{RUN_ID}.bly'), 'w').write(prog)
-        got = run(f'_case{RUN_ID}.bly', inp, as_cpm)
+        got = run(f'_case{RUN_ID}.bly', inp, as_cpm, keys)
+        if cpm_expect is not None and BACKEND == 'z80':
+            expect = cpm_expect
         if wants_screen and BACKEND in ('c', 'zx') and not got.startswith(('PENDING', 'NOTHERE')) and got == expect:
             want_scr = screen_of(f'_case{RUN_ID}.bly', inp, 'interp')
             got_scr = screen_of(f'_case{RUN_ID}.bly', inp, BACKEND)
@@ -178,6 +203,8 @@ def semantics():
                 if diff:
                     got += f'\nSCREEN: {len(diff)} bytes differ from the interpreter, first at {0x4000 + diff[0]:04X}h'
         out.append((name, got, expect))
+        if cpm_expect is not None and BACKEND == 'interp':
+            out.append((name + ' (--as cpm)', run(f'_case{RUN_ID}.bly', inp, True, keys), cpm_expect))
     return out
 
 
