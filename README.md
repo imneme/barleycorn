@@ -5,11 +5,11 @@ A small programming language for the ZX Spectrum and CP/M, for programs that wor
 
 | | | |
 |:---:|:---:|:---:|
-| ![A maze flooded in bands of colour, with the way through in white](docs/maze.png) | ![The Ulam spiral of the primes up to 25,600](docs/ulam.png) | ![The Mandelbrot set with three contours, and its area](docs/mandel.png) |
+| <img src="docs/maze.png" width="256" alt="A maze flooded in bands of colour, with the way through in white"> | <img src="docs/ulam.png" width="256" alt="The Ulam spiral of the primes up to 25,600"> | <img src="docs/mandel.png" width="256" alt="The Mandelbrot set with three contours, and its area"> |
 | [a maze, carved and solved](examples/maze.bly) | [the Ulam spiral](examples/ulam.bly) | [Mandelbrot, with no multiply](examples/mandel.bly) |
-| ![Life settled after 300 generations, on the blue map of everywhere life has been](docs/life.png) | ![A chessboard of crowns, and the 92 queens sorted into 12 families](docs/queens92.png) | ![A sudoku solved in seven-segment digits](docs/sudoku.png) |
+| <img src="docs/life.png" width="256" alt="Life settled after 300 generations, on the blue map of everywhere life has been"> | <img src="docs/queens92.png" width="256" alt="A chessboard of crowns, and the 92 queens sorted into 12 families"> | <img src="docs/sudoku.png" width="256" alt="A sudoku solved in seven-segment digits"> |
 | [Life](examples/life.bly) | [all 92 queens](examples/queens92.bly) | [sudoku, by backtracking](examples/sudoku.bly) |
-| ![Langton's ant's scribble, and its highway](docs/ant.png) | ![Collatz steps for every number below 10,240, with the record holder circled](docs/collatz.png) | ![Seven discs on the right-hand peg, all seven lights on](docs/towers.png) |
+| <img src="docs/ant.png" width="256" alt="Langton's ant's scribble, and its highway"> | <img src="docs/collatz.png" width="256" alt="Collatz steps for every number below 10,240, with the record holder circled"> | <img src="docs/towers.png" width="256" alt="Seven discs on the right-hand peg, all seven lights on"> |
 | [Langton's ant](examples/ant.bly) | [Collatz, played as a tune](examples/collatz.bly) | [the Towers of Hanoi](examples/towers.bly) |
 
 Each is the last screen of one of the examples, which draw it as they work and beep as they go; a 48K Spectrum ends
