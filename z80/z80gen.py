@@ -1143,6 +1143,10 @@ class Gen:
             else:
                 self.emit(f'ld ({r.val}),hl')
             return r
+        if t in (B.LONG, B.QUAD) and op in ('&', '|', '^'):
+            return self.wide_bits(op, a, b, t, r)
+        if t is B.LONG and op in ('/', '%') and b.kind == 'imm' and 2 <= b.val <= 1 << 30 and b.val & (b.val - 1) == 0:
+            return self.long_pow2(op, a, b.val.bit_length() - 1, r)
         # long and quad: the library, by address
         a, b = self.mem(a), self.mem(b)
         n = {B.LONG: 'i32', B.QUAD: 'i64'}[t]
@@ -1260,6 +1264,161 @@ class Gen:
         self.emit(f'ld ({r.val}),hl')
         return True
 
+    def wide_bits(self, op, a, b, t, r):
+        """& | ^ on a long or quad, a byte at a time: a constant byte of 00h or FFh is a store or a copy"""
+        n = size(t)
+        if a.kind == 'imm':
+            a, b = b, a
+        if a.kind == 'imm':
+            a = self.mem(a)
+        ins = {'&': 'and', '|': 'or', '^': 'xor'}[op]
+        if b.kind == 'imm':
+            v = imm_bits(b.val, t) & ((1 << (8 * n)) - 1)
+            for k in range(n):
+                byte = (v >> (8 * k)) & 0xFF
+                if (op, byte) in (('&', 0), ('|', 0xFF)):
+                    self.emit(f'ld a,{byte}')
+                elif (op, byte) in (('&', 0xFF), ('|', 0), ('^', 0)):
+                    self.emit(f'ld a,({a.val}+{k})')
+                elif (op, byte) == ('^', 0xFF):
+                    self.emit(f'ld a,({a.val}+{k})')
+                    self.emit('cpl')
+                else:
+                    self.emit(f'ld a,({a.val}+{k})')
+                    self.emit(f'{ins} {byte}')
+                self.emit(f'ld ({r.val}+{k}),a')
+            return r
+        for k in range(n):
+            self.emit(f'ld a,({b.val}+{k})')
+            self.emit('ld c,a')
+            self.emit(f'ld a,({a.val}+{k})')
+            self.emit(f'{ins} c')
+            self.emit(f'ld ({r.val}+{k}),a')
+        return r
+
+    def load_dehl(self, a):
+        """a long into DE:HL (D the top byte)"""
+        if a.kind == 'imm':
+            v = imm_bits(a.val, B.LONG) & 0xFFFFFFFF
+            self.emit(f'ld hl,{v & 0xFFFF}')
+            self.emit(f'ld de,{v >> 16}')
+        else:
+            self.emit(f'ld hl,({a.val})')
+            self.emit(f'ld de,({a.val}+2)')
+
+    def shift_dehl(self, op, n):
+        """DE:HL shifted by 0 <= n < 32: << wraps, >> is arithmetic (as the interpreter's, on signed values)"""
+        nbytes, bits = divmod(n, 8)
+        for _ in range(nbytes):
+            if op == '<<':
+                for ins in ('ld d,e', 'ld e,h', 'ld h,l', 'ld l,0'):
+                    self.emit(ins)
+            else:
+                for ins in ('ld l,h', 'ld h,e', 'ld e,d', 'ld a,d', 'rla', 'sbc a,a', 'ld d,a'):
+                    self.emit(ins)
+        for _ in range(bits):
+            for ins in (('add hl,hl', 'rl e', 'rl d') if op == '<<' else ('sra d', 'rr e', 'rr h', 'rr l')):
+                self.emit(ins)
+
+    def const_shift(self, op, a, n, t, r):
+        """a shift by a constant count, in registers: a byte in A, a word or int in HL, a long in DE:HL. Past the
+        width, << gives 0, and >> gives 0, or -1 for a negative int or long"""
+        if t is B.BYTE:
+            self.load_a(a)
+            if n >= 8:
+                self.emit('xor a')
+            for _ in range(n if n < 8 else 0):
+                self.emit('add a,a' if op == '<<' else 'srl a')
+            self.emit(f'ld ({r.val}),a')
+            return r
+        if t in (B.WORD, B.INT):
+            self.load_hl(a)
+            if n >= 16:
+                if op == '>>' and t is B.INT:
+                    for ins in ('ld a,h', 'rla', 'sbc a,a', 'ld h,a', 'ld l,a'):
+                        self.emit(ins)
+                else:
+                    self.emit('ld hl,0')
+            else:
+                if n >= 8:
+                    if op == '<<':
+                        self.emit('ld h,l')
+                        self.emit('ld l,0')
+                    elif t is B.INT:
+                        for ins in ('ld l,h', 'ld a,h', 'rla', 'sbc a,a', 'ld h,a'):
+                            self.emit(ins)
+                    else:
+                        self.emit('ld l,h')
+                        self.emit('ld h,0')
+                    n -= 8
+                for _ in range(n):
+                    if op == '<<':
+                        self.emit('add hl,hl')
+                    else:
+                        self.emit('sra h' if t is B.INT else 'srl h')
+                        self.emit('rr l')
+            self.emit(f'ld ({r.val}),hl')
+            return r
+        if n >= 32:                                          # a long, all the way out
+            if op == '>>':
+                a = self.mem(a)
+                self.emit(f'ld a,({a.val}+3)')
+                self.emit('rla')
+                self.emit('sbc a,a')
+            else:
+                self.emit('xor a')
+            for k in range(4):
+                self.emit(f'ld ({r.val}+{k}),a')
+            return r
+        self.load_dehl(a)
+        self.shift_dehl(op, n)
+        self.emit(f'ld ({r.val}),hl')
+        self.emit(f'ld ({r.val}+2),de')
+        return r
+
+    def long_pow2(self, op, a, n, r):
+        """a long / or % 2^n (1 <= n <= 30), truncating as C does. q is the arithmetic shift of x + (2^n - 1) when x
+        is negative (which turns the shift's floor into truncation), and x % 2^n is x - ((x + that bias) & ~mask)"""
+        a = self.mem(a)
+        bias = (1 << n) - 1
+        pos = self.label()
+        self.load_dehl(a)
+        self.emit('bit 7,d')
+        self.emit(f'jr z,{pos}')
+        self.emit(f'ld bc,{bias & 0xFFFF}')
+        self.emit('add hl,bc')
+        self.emit('ex de,hl')
+        self.emit(f'ld bc,{bias >> 16}')
+        self.emit('adc hl,bc')
+        self.emit('ex de,hl')
+        self.place(pos)
+        if op == '/':
+            self.shift_dehl('>>', n)
+            self.emit(f'ld ({r.val}),hl')
+            self.emit(f'ld ({r.val}+2),de')
+            return r
+        keep = (~bias) & 0xFFFFFFFF                          # (x + bias) with its low n bits cleared
+        for reg, k in (('l', 0), ('h', 1), ('e', 2), ('d', 3)):
+            byte = (keep >> (8 * k)) & 0xFF
+            if byte == 0:
+                self.emit(f'ld {reg},0')
+            elif byte != 0xFF:
+                self.emit(f'ld a,{reg}')
+                self.emit(f'and {byte}')
+                self.emit(f'ld {reg},a')
+        self.emit(f'ld ({r.val}),hl')                         # then x minus that
+        self.emit(f'ld ({r.val}+2),de')
+        self.emit(f'ld hl,({a.val})')
+        self.emit(f'ld bc,({r.val})')
+        self.emit('or a')
+        self.emit('sbc hl,bc')
+        self.emit(f'ld ({r.val}),hl')
+        self.emit(f'ld hl,({a.val}+2)')
+        self.emit(f'ld bc,({r.val}+2)')
+        self.emit('sbc hl,bc')
+        self.emit(f'ld ({r.val}+2),hl')
+        return r
+
     def count_de(self, b):
         """a shift count into DE as a signed word, saturated to 64 when it's wider or a big word"""
         bt = b.ty
@@ -1289,6 +1448,8 @@ class Gen:
         self.helpers.setdefault('bly_count64', COUNT64)
 
     def shift(self, op, a, b, t, r, line):
+        if b.kind == 'imm' and b.val >= 0 and t in (B.BYTE, B.WORD, B.INT, B.LONG):
+            return self.const_shift(op, a, b.val, t, r)
         if t in (B.BYTE, B.WORD, B.INT):
             self.count_de(b)
             self.load_hl(a)
