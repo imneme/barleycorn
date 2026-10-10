@@ -144,7 +144,7 @@ KEYWORDS = {'const', 'var', 'func', 'record', 'end', 'if', 'then', 'elif', 'else
             'break', 'continue', 'return', 'case', 'when', 'and', 'or', 'not', 'print', 'assert',
             'true', 'false', 'asm'}
 OPS = ['<<=', '>>=', '..', '**', '<<', '>>', '==', '!=', '<=', '>=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=',
-       '+', '-', '*', '/', '%', '&', '|', '^', '~', '<', '>', '=', '(', ')', '[', ']', '{', '}', ',', ':', ';', '.', '#']
+       '+', '-', '*', '/', '%', '&', '|', '^', '~', '<', '>', '=', '(', ')', '[', ']', '{', '}', ',', ':', ';', '.', '#', '@']
 CONTINUES = {'<<', '>>', '==', '!=', '<=', '>=', '+', '-', '*', '/', '%', '&', '|', '^', '~', '<', '>', '=',
              '..', 'and', 'or', 'not', '(', '[', '{', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<=', '>>='}
 OPERAND_END = ('num', 'float', 'name', 'str', 'char')
@@ -304,7 +304,12 @@ class Parser:
                 name = self.name()
                 ty = self.type_() if self.at(':') and self.next() else None
                 self.expect('=')
-                decls.append(N('const', line, name=name, tyx=ty, e=self.expr()))
+                if self.at('@', 'op'):             # const F = @embed("font.fzx"): worked out as it's compiled
+                    self.next()
+                    at = self.name()
+                    decls.append(N('const', line, name=name, tyx=ty, e=N('compile', line, name=at, args=self.args())))
+                else:
+                    decls.append(N('const', line, name=name, tyx=ty, e=self.expr()))
             elif self.at('var', 'kw'):
                 decls.append(self.var())
             elif self.at('func', 'kw'):
@@ -515,8 +520,9 @@ class Parser:
 
         if self.at('#', 'op'):
             self.next()
-            if self.t.kind != 'num' or self.t.val not in (0, 1, 2):
-                raise BarleyError('print # takes a stream: #0 or #1 (the lower screen) or #2 (the screen)', line)
+            if self.t.kind != 'num' or self.t.val not in (0, 1, 2, 4):
+                raise BarleyError('print # takes a stream: #0 or #1 (the lower screen), #2 (the screen) or #4 '
+                                  '(FZX text)', line)
             stream = self.next().val
             if not ends():
                 if not self.at(';', 'op'):
@@ -540,6 +546,8 @@ class Parser:
             items.append(('item', self.expr()))
             if self.at(';', 'op') or self.at(',', 'op'):
                 sep = self.next().val
+                if sep == ',' and stream == 4:
+                    raise BarleyError('print #4 has no zones: use ; or at', line)
                 if sep == ',':
                     items.append(('zone', None))
                 if ends():
@@ -679,6 +687,8 @@ class Parser:
                 self.expect(']')
                 return N('new', t.line, kind=t.val, targs=targs, args=self.args())
             return N('name', t.line, name=t.val)
+        if t.kind == 'op' and t.val == '@':
+            raise BarleyError('a compile-time @ is a const\'s value: const F = @embed("font.fzx")', t.line)
         raise BarleyError(f'expected a value but found {self.describe()}', t.line)
 
 
@@ -694,6 +704,7 @@ SCREEN_FUNCS = {                                   # the Spectrum's screen and s
     'bright': (['level'], VOID), 'flash': (['level'], VOID), 'inverse': (['flag'], VOID), 'over': (['flag'], VOID),
     'plot': ([INT, INT], VOID), 'line': ([INT] * 4, VOID), 'circle': ([INT] * 3, VOID),
     'point': ([INT, INT], BOOL), 'attr': ([INT, INT, BYTE], VOID), 'udg': ([INT, Gen('array', BYTE, n=None)], VOID),
+    'fzx': ([Gen('array', BYTE, n=None)], VOID),
     'key': ([], BYTE), 'inkey': ([], BYTE), 'ticks': ([], LONG), 'pause': ([INT], VOID), 'beep': ([INT, INT], VOID)}
 MACHINE_FUNCS = {                                  # the machine's 64K: an address is any whole number, as an index is
     'peek': (['addr'], BYTE), 'poke': (['addr', BYTE], VOID),
@@ -705,6 +716,24 @@ FLOAT_FUNCS = {'sqrt': math.sqrt, 'sin': math.sin, 'cos': math.cos, 'tan': math.
 BUILTIN_FUNCS = {'lines', 'grid', 'input', 'intern', 'name', 'chr', 'min', 'max', 'abs', 'sign', 'gcd', 'lcm', 'mod',
                  'rev', 'pos', 'ask'}
 TARGET_CONSTS = ('ZX', 'CPM', 'C')
+EMBED_DIR = None                                   # where @embed finds files: beside the program (each tool's main)
+
+
+def embed(path):
+    """a file's name: its bytes, as a byte table (read from beside the program)"""
+    if not isinstance(path, bytes):
+        raise TypeError
+    name = path.decode('latin-1')
+    try:
+        data = open(os.path.join(EMBED_DIR or '.', name), 'rb').read()
+    except OSError:
+        raise ValueError(f'{name}: no such file beside the program')
+    if not data:
+        raise ValueError(f'{name} is empty')
+    return data
+
+
+COMPILE_TIME = {'embed': embed}                    # @f(...) in a const: what each runs as the program's compiled
 
 
 class Checker:
@@ -803,6 +832,11 @@ class Checker:
                 d.rty = self.ty(d.retx) if d.retx else VOID
                 self.funcs[d.name] = d
         for d in self.decls:
+            if d.k == 'const' and d.e.k == 'compile':
+                if d.name in self.globals:
+                    raise BarleyError(f'{d.name} is defined twice', d.line)
+                self.globals[d.name] = self.compile_time(d)
+                continue
             if d.k == 'const' and self.is_table(d.e):
                 if d.name in self.globals:
                     raise BarleyError(f'{d.name} is defined twice', d.line)
@@ -853,6 +887,36 @@ class Checker:
         return (e.k == 'index' and e.obj.k == 'name' and not any(e.obj.name in sc for sc in self.scopes)
                 and (e.obj.name in INTS or e.obj.name in ('bool', 'float', 'str', 'pos', 'bit')
                      or e.obj.name in self.records))
+
+    def compile_time(self, d):
+        """const NAME = @f(args): f runs as the program is compiled, in Python, and its value is the constant. So
+        every backend sees only the constant: the work is done once, here. The args are constants. Only
+        @embed for now; the same door would let a program bring its own (a .py beside it), which would mean
+        the compiler running that program's Python."""
+        f = COMPILE_TIME.get(d.e.name)
+        if f is None:
+            raise BarleyError(f'there is no compile-time @{d.e.name} (there is @embed)', d.line)
+        args = []
+        for a in d.e.args:
+            self.expr(a)
+            if a.k == 'str':
+                args.append(a.v)
+            elif a.cval is not None:
+                args.append(a.cval)
+            else:
+                raise BarleyError(f'@{d.e.name} takes constants', a.line)
+        if d.tyx:
+            raise BarleyError(f'{d.name}: @{d.e.name} gives its own type', d.line)
+        try:
+            data = f(*args)
+        except TypeError:
+            raise BarleyError(f'@{d.e.name} takes {f.__doc__.split(":")[0]}', d.line)
+        except ValueError as err:
+            raise BarleyError(f'@{d.e.name}: {err}', d.line)
+        if len(data) > 65535:
+            raise BarleyError(f'{d.name}: a table holds at most 65535, and @{d.e.name} gave {len(data)}', d.line)
+        d.table, d.ty = True, Gen('array', BYTE, n=len(data))
+        return Var(d.name, d.ty, 'const', const=True, cval=list(data))
 
     def table(self, d):
         """const NAME = T[e1, e2, ...]: a constant array, its elements constants of type T"""
@@ -1595,6 +1659,16 @@ class Checker:
                         self.settle_default(a)
                 else:
                     self.coerce(a, p)
+            if name == 'fzx':                                     # a font, read when the program's compiled
+                a = args[0]
+                var = getattr(a, 'var', None) if a.k == 'name' else None
+                if var is None or var.where != 'const' or var.cval is None:
+                    raise BarleyError('fzx takes a font: a constant table, as const F = embed "font.fzx"', a.line)
+                sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'z80'))
+                import zxgfx
+                why = zxgfx.fzx_problem(bytes(var.cval))
+                if why:
+                    raise BarleyError(f'fzx: {a.name} is not an FZX font: {why}', a.line)
             e.builtin = name
             return ret
         e.builtin = name
@@ -1987,6 +2061,17 @@ class Interp:
         elif k == 'assert':
             if not self.ev(s.e, env):
                 raise BarleyError('assertion failed', s.line)
+        elif k == 'print' and getattr(s, 'stream', 2) == 4:     # #4: FZX text, the screen's, and not output
+            sc = self.screen
+            for kind, e in s.items:
+                if kind == 'item':
+                    text = self.show(self.ev(e, env), e.ty).encode('latin-1')
+                    self.screen_call(lambda: [sc.fzx_out(b) for b in text], s.line)
+                else:
+                    y, x = self.ev(e[0], env), self.ev(e[1], env)
+                    self.screen_call(lambda: sc.fzx_at(y, x), s.line)
+            if s.newline:
+                self.screen_call(lambda: sc.fzx_out(10), s.line)
         elif k == 'print' and getattr(s, 'stream', 2) != 2:     # #0, #1: the lower screen's, and not output
             sc = self.screen
             put = lambda text: self.screen_call(lambda: [sc.lout(b) for b in text.encode('latin-1')], s.line)
@@ -2526,6 +2611,8 @@ def main(argv):
                     help="save the Spectrum's screen at the end as a picture (and OUT.scr beside it)")
     ap.add_argument('--sound', metavar='OUT.txt', help='save a log of the notes it played')
     a = ap.parse_args(argv)
+    global EMBED_DIR
+    EMBED_DIR = os.path.dirname(os.path.abspath(a.program))
     try:
         src = open(a.program).read()
         text = open(a.input, 'rb').read() if a.input else b''

@@ -221,11 +221,12 @@ IN AND OUT  lines() (for line in lines(), or .next())   grid()   input()
 
 SCREEN      cls  ink(0..9)  paper(0..9)  bright(0, 1, 8)  flash(0, 1, 8)
             (8: a square keeps its own; 9: the contrast)  inverse over border
-            print at r, c; ...    plot(x, y)  line(x0, y0, x1, y1)
-            print #1; ...  print #0; at r, c; ...   the lower screen's
-            two lines (#2: the screen, as print alone)
-            circle(x, y, r)  point(x, y)  attr(r, c[, a])  udg(n, bytes)
-            key()  inkey()  ticks()  pause(frames)
+            plot(x, y)  line(x0, y0, x1, y1)  circle(x, y, r)  point(x, y)
+            attr(r, c[, a])  udg(n, bytes)  pause(frames)  ticks()
+            key()  inkey()
+            print at r, c; ...           a place on the screen (not output)
+            print #1; ...  (or #0)       the lower screen's two lines
+            fzx(F)  print #4; at y, x; ...   text in an FZX font, in pixels
 SOUND       beep(ms, semitone)
             (on a 128, later: ay(reg, v)  tone(voice, hz, vol)  quiet())
             On the Spectrum, the real thing; in the interpreter and C, a
@@ -235,6 +236,7 @@ SOUND       beep(ms, semitone)
 
 MACHINE     peek(a)  poke(a, v)  inp(port)  outp(port, v)   (call later)
             const ZX, CPM, C: the target, folded away
+            const F = @embed("font.fzx")   a file's bytes, read as it compiles
             func f(...) ... asm "f.asm" end    the body is f's reference
             twin (the Z80 running the fragment: later)
 ```
@@ -510,6 +512,32 @@ square's byte back, as BASIC's `ATTR` does; `attr(r, c, a)` sets it.
 `z80/tests/co_temp_check.py` holds the model's colours to BASIC itself,
 typed in on omse-ai's 48K, and `rom_text_check.py` its drawing to the
 ROM.
+
+**Proportional text** is FZX, the Spectrum's standard for it: Andrew
+Owen's font format, and Einar Saukas's driver, which Barleycorn's 48K
+runtime uses, adapted, on stream 4, as BASIC's PRINT #4 does.
+`const F = @embed("font.fzx")` brings a font in, `fzx(F)` picks it, and
+`print #4; at y, x; "text"` draws in it, at pixels, and isn't output.
+The interpreter draws as the driver does, and `z80/tests/fzx_check.py`
+holds it to the driver itself, and to ours on the 48K. Two adaptations,
+which only a font breaking its own rules can show: nothing is written
+past x 255 or below the screen (the stock driver's arithmetic would put
+such pixels on the next text row's left, or in the attributes). Where
+the driver reports Out of screen, `print #4` fails:
+`print #4 would go below the screen`. The fonts themselves are their
+makers', and none ship here. The tests use `interp/tests/sprig.fzx`,
+which `tools/make_fzx.py` draws.
+
+**Compile-time work is marked with @.** `@embed("file")`, a const's
+value, is a file's bytes as a byte table, read from beside the program
+as it compiles. An `@` means Python runs then, once, in the checker,
+which every backend shares, so they only ever see the constant. It gives
+values, not syntax. `@embed` is the only one so far. A program bringing
+its own (a `.py` beside it) would come in through the same door, and
+that would mean the compiler running that program's Python. What else is
+known before the program runs isn't an action: `ZX`, `CPM` and `C` are
+facts about the target, and constant tables are written in the program.
+`input()` is read as the program runs; the tape only carries it.
 
 **Sound** is `beep(ms, semitone)` through the ROM's BEEPER on any
 Spectrum. On a 128 it would be the AY too: raw registers with

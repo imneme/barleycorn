@@ -704,6 +704,28 @@ class Gen:
             self.line(s.line)
             self.jp('bly_assert')
             self.place(ok)
+        elif k == 'print' and getattr(s, 'stream', 2) == 4:    # #4: FZX text (zxfzx.asm)
+            if self.target != 'zx48':
+                raise GenError('print #4 is Spectrum-only: put it inside if ZX then ... end')
+            for kind, e in s.items:
+                if kind == 'at':
+                    y, x = self.conv(self.ex(e[0]), B.INT), self.conv(self.ex(e[1]), B.INT)
+                    self.line(s.line)
+                    self.load_hl(x)
+                    self.emit('ex de,hl')
+                    self.load_hl(y)
+                    self.call('bly_zx_fzx_at')
+                else:
+                    v = self.ex(e)
+                    self.line(s.line)
+                    self.call('bly_zx_fzx_on')
+                    self.pr(v, e.ty)
+                    self.call('bly_zx_fzx_off')
+            if s.newline:
+                self.line(s.line)
+                self.call('bly_zx_fzx_on')
+                self.call('bly_nl')
+                self.call('bly_zx_fzx_off')
         elif k == 'print' and getattr(s, 'stream', 2) != 2:    # #0, #1: the lower screen's (zxlower.asm)
             if self.target != 'zx48':
                 raise GenError(f'print #{s.stream} is Spectrum-only: put it inside if ZX then ... end')
@@ -919,7 +941,10 @@ class Gen:
         if lab not in self.helpers:
             et = var.ty.args[0]
             lines = [f'{lab}:']
-            for v in var.cval:
+            if et is B.BYTE:                             # bytes, sixteen to a line (an embedded font is thousands)
+                vals = var.cval
+                lines += ['        db ' + ', '.join(str(v) for v in vals[i:i + 16]) for i in range(0, len(vals), 16)]
+            for v in [] if et is B.BYTE else var.cval:
                 lines += ['        ' + x for x in self.const_data(v, et)]
             self.helpers[lab] = lines
         return lab
@@ -2481,6 +2506,11 @@ class Gen:
             self.emit('ex de,hl')
             self.load_hl(r)
             self.call(routine)
+        elif name == 'fzx':                              # the font: a constant table's address (zxfzx.asm)
+            view = self.slot(None, 4)
+            self.pass_array(args[0], view)
+            self.emit(f'ld hl,({view})')
+            self.call(routine)
         elif name == 'udg':
             view = self.slot(None, 4)
             self.pass_array(args[1], view)
@@ -2986,6 +3016,7 @@ def main(argv):
     ap.add_argument('--target', choices=['cpm', 'zx48'], default='cpm', help='the machine (default cpm)')
     a = ap.parse_args(argv)
     try:
+        B.EMBED_DIR = os.path.dirname(os.path.abspath(a.program))
         src = open(a.program).read()
     except OSError as err:
         sys.exit(f'z80gen.py: {a.program}: {err.strerror}')

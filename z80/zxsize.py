@@ -13,6 +13,7 @@ try:
     src, text = open(a.program).read(), open(a.input, 'rb').read() if a.input else b''
 except OSError as err:
     sys.exit(f'zxsize.py: {err.filename}: {err.strerror}')
+z80gen.B.EMBED_DIR = os.path.dirname(os.path.abspath(a.program))       # embed's files are beside it
 tap, info = zxbuild.build(src, text)
 org = info['org']
 asm = z80gen.compile_program(src, 'zx48', org=org, bss_at=org - info['slots']) + \

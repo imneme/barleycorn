@@ -25,6 +25,7 @@ ap.add_argument('--top', type=int, default=30, metavar='N', help='show the N big
 a = ap.parse_args()
 try:
     src, text = open(a.prog).read(), open(a.input, 'rb').read() if a.input else b''
+    z80gen.B.EMBED_DIR = os.path.dirname(os.path.abspath(a.prog))           # embed's files are beside it
 except OSError as err:
     sys.exit(f'zxprof.py: {err.filename}: {err.strerror}')
 tap, info = zxbuild.build(src, text)

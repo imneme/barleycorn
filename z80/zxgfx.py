@@ -25,6 +25,16 @@ Every algorithm here is written to be followed exactly:
            are lazy, and the text is in BORDCR's colours with no INVERSE or OVER (TEMPS gives the lower screen
            those). Barley keeps it two lines: where the ROM would grow it upwards (a character after a newline
            from the bottom line, say), it fails instead. cls and ask() (CLS-LOWER) put it back on the bottom line.
+  fzx      print #4: proportional text in an FZX font (Andrew Owen's format), drawn as Einar Saukas's FZX
+           driver draws it (FZXdriver.asm, 2013), which the 48K runs, adapted. The position is in pixels: x
+           0..255 from the left, and the driver's line, 191 at the top down to 0. at y, x is pixels too (the
+           line is 191 - y). A newline goes back to x 0 and down the font's height. A character the font
+           hasn't got prints as ?. Kerning moves a character left, though not past 0; one that won't fit on
+           the line goes to the next first; one that won't fit above the bottom fails, where the driver
+           reports Out of screen. Pixels are ORed in, and the attributes left alone. One change from the
+           driver: it writes three screen bytes a row with only the low byte of the address counted, so at
+           the right edge the third can land on the next text row's left. Bits there are only ever a font's
+           stray bits past a character's width, so the adapted driver, and this, write nothing past x 255.
   ports    as omse-ai's 48K answers them. An even port is the ULA's: reading it gives BFh with no key held, and bit
            6 is the EAR line, which echoes bit 4 of the last thing written there; writing it shows the border in
            bits 0-2 (BORDCR, which cls and the lower screen use, is border()'s alone). An odd port with bits 5-7
@@ -112,6 +122,24 @@ class Keys:
         return s[:-1] if s.endswith(b'\n') else s
 
 
+def fzx_problem(f):
+    """what's wrong with f as an FZX font, or None. It has to have a ?, to print for what it hasn't got, and each
+    character's rows have to lie in it, whole"""
+    if len(f) < 3:
+        return 'it is shorter than the 3 bytes of its header'
+    if f[2] < ord('?'):
+        return 'it has no ? (its last character is below it)'
+    n = f[2] - 31
+    if len(f) < 3 + 3 * n + 2:
+        return f'its table of {n} characters runs past its {len(f)} bytes'
+    at = lambda i: 3 + 3 * i + ((f[3 + 3 * i] | f[4 + 3 * i] << 8) & 0x3FFF)
+    for i in range(n):
+        start, end = at(i), at(i + 1)
+        if not 3 + 3 * n + 2 <= start <= end <= len(f) or (f[5 + 3 * i] & 15) >= 8 and (end - start) % 2:
+            return f'character {i + 32} is not where its table says'
+    return None
+
+
 class ScreenError(Exception):
     """a mistake in a drawing call: the interpreter turns it into "... at line N" """
 
@@ -136,6 +164,7 @@ class Screen:
         self.keys = None                              # the keyboard (Keys), if anything's been typed
         self.row = self.col = 0
         self.lrow, self.lcol = 23, 0                  # the lower screen's print position: its bottom line
+        self.fzx_font, self.fzx_x, self.fzx_line = None, 0, 191     # print #4: the font, and where it goes
         self.font = font() if glyphs is None else glyphs
         self.udgs = bytearray(self.font[(ord('A') - 32) * 8:(ord('U') - 31) * 8])     # A..U, as at power-on
         self.sound = []                       # (ms, semitone), in order
@@ -318,6 +347,55 @@ class Screen:
         self.udgs[n * 8:n * 8 + 8] = bytes(rows)
 
     # -- text --------------------------------------------------------------------------------------------------
+    def fzx(self, font):
+        """fzx(font): the font print #4 uses (the checker has seen that it is one: fzx_problem)"""
+        self.fzx_font = bytes(font)
+
+    def fzx_at(self, y, x):
+        if not (0 <= y <= 191 and 0 <= x <= 255):
+            raise ScreenError(f'print #4; at ({y}, {x}) is off the screen (192 by 256 pixels)')
+        self.fzx_line, self.fzx_x = 191 - y, x
+
+    def fzx_newline(self):
+        f = self.fzx_font
+        self.fzx_x, self.fzx_line = 0, (self.fzx_line - f[0]) & 0xFF
+
+    def fzx_out(self, ch):
+        """one byte printed to stream 4, as FZXdriver.asm's START draws it"""
+        f = self.fzx_font
+        if f is None:
+            raise ScreenError('print #4 needs a font: fzx(font) first')
+        if ch == 10:
+            self.fzx_newline()
+            return
+        if not 32 <= ch <= f[2]:
+            ch = ord('?')
+        e = 3 + 3 * (ch - 32)                         # its entry: offset and kern, then shift and width
+        word = f[e] | f[e + 1] << 8
+        start, kern = e + (word & 0x3FFF), word >> 14
+        shift, width = f[e + 2] >> 4, (f[e + 2] & 15) + 1
+        nxt = f[e + 3] | f[e + 4] << 8                # the next entry's offset (or the table's last word)
+        end = e + 3 + (nxt & 0x3FFF)
+        self.fzx_x = max(self.fzx_x - kern, 0)
+        if self.fzx_x + width - 1 > 255:
+            self.fzx_newline()
+        if (1 - f[0]) % 256 + self.fzx_line < 256 or self.fzx_line > 191:   # (a line wrapped past 0: below too)
+            raise ScreenError('print #4 would go below the screen')
+        y, per = 191 - self.fzx_line + shift, 1 if width <= 8 else 2
+        for k, at in enumerate(range(start, end, per)):
+            bits = (f[at] << 16 | (f[at + 1] << 8 if per == 2 else 0)) >> (self.fzx_x & 7)
+            row = y + k
+            if row > 191:
+                break
+            for j in range(3):                        # three bytes of the row, not past x 255
+                if (self.fzx_x >> 3) + j <= 31:
+                    self.mem[self.cell(row >> 3, row & 7, (self.fzx_x >> 3) + j)] |= (bits >> (16 - 8 * j)) & 0xFF
+        x = self.fzx_x + width + f[1]
+        if x > 255:
+            self.fzx_newline()
+        else:
+            self.fzx_x = x
+
     def lat(self, r, c):
         """at, in a print to the lower screen: its two rows"""
         if not (0 <= r <= 1 and 0 <= c <= 31):

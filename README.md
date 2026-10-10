@@ -202,6 +202,15 @@ I'd like to try next. Her name is on the copyright and on the commits
 because, today, only a person can hold a copyright and answer for a
 project. The work is mine, and she wanted that said plainly.
 
+**Others' work it uses, gladly:**
+- `ask()` on the 48K reads a line through the ROM's own editor in the
+  way Melissa's spectrum-minilib does, which she worked out from the
+  HiSoft BASIC compiler.
+- `print #4` draws with the FZX font driver, copyright (c) 2013 Einar
+  Saukas, adapted (`z80/lib/zxfzx.asm` says how), in fonts made in the
+  FZX format, copyright (c) 2013 Andrew Owen. The driver's licence asks
+  that its use be clearly indicated: this is that.
+
 ## Licence
 
 MIT License. Copyright (c) 2026 Melissa O'Neill. See

@@ -355,6 +355,16 @@ class Gen:
         elif k == 'assert':
             c = self.ex(s.e)
             self.emit(f'if (!{c}) bly_fail("assertion failed", {line});')
+        elif k == 'print' and getattr(s, 'stream', 2) == 4:     # #4: FZX text, the screen's alone
+            for kind, e in s.items:
+                if kind == 'at':
+                    y, x = (self.conv(self.ex(v), v.ty, B.INT) for v in e)
+                    self.emit(f'bly_zx_fzx_at({y}, {x}, {line});')
+                else:
+                    v = self.ex(e)
+                    self.emit(f'BLY_FZX(' + self.pr(v, e.ty) + f', {line});')
+            if s.newline:
+                self.emit(f'BLY_FZX(bly_nl(), {line});')
         elif k == 'print' and getattr(s, 'stream', 2) != 2:     # #0, #1: the lower screen's alone
             for kind, e in s.items:
                 if kind == 'zone':
@@ -994,6 +1004,7 @@ def main(argv):
                     help='the machine it is, as far as the program can tell (default zx48)')
     a = ap.parse_args(argv)
     try:
+        B.EMBED_DIR = os.path.dirname(os.path.abspath(a.program))
         src = open(a.program).read()
     except OSError as err:
         sys.exit(f'cgen.py: {a.program}: {err.strerror}')

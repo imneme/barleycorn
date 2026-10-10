@@ -47,8 +47,13 @@ static int bly_showing;
 #define BLY_ATTEXT(x) do { bly_showing = 2; x; bly_showing = 0; } while (0)
 /* print #0 and #1: the lower screen's alone, showing 3, with print's column the lower screen's (for the zones) */
 #define BLY_LOWER(x, l) do { bly_zx_lower(l); x; bly_zx_upper(); } while (0)
+/* print #4: FZX text, the screen's alone, showing 4 */
+#define BLY_FZX(x, l) do { bly_zx_fzx_begin(l); x; bly_zx_fzx_end(); } while (0)
 static void bly_zx_out(u8 ch);
 static void bly_zx_lout(u8 ch);
+static void bly_zx_fzx_put(u8 ch);
+static void bly_zx_fzx_begin(int l);
+static void bly_zx_fzx_end(void);
 static void bly_zx_lower(int l);
 static void bly_zx_upper(void);
 static void bly_zx_init(void);
@@ -66,6 +71,10 @@ static void bly_out(const void *p, size_t n) {
         if (bly_showing == 3) {
             bly_col++;
             bly_zx_lout(s[i]);
+            continue;
+        }
+        if (bly_showing == 4) {
+            bly_zx_fzx_put(s[i]);
             continue;
         }
         if (bly_showing != 2) {

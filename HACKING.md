@@ -189,7 +189,12 @@ spectrum-minilib), when it comes.
   `z80/tests/test_zxgfx.py` holds the Z80's drawing to it;
   `z80/tests/rom_text_check.py` holds the reference's text to the real
   ROM, and `lower_check.py` its lower screen (`print #1`) to BASIC's own
-  PRINT #1.
+  PRINT #1. `fzx_check.py` holds `print #4` to Einar Saukas's FZX driver
+  itself, if `FZX_DRIVER` (paths.py) says where its source is, and to
+  our adapted one on the 48K. It uses `interp/tests/sprig.fzx`, and any
+  fonts in `FZX_FONTS`, since fonts aren't ours to ship.
+  `tools/make_fzx.py` draws `sprig.fzx`, and with `--stray`, a font that
+  breaks the rules on purpose.
 - **The docs** (`tools/check_docs.py`): a code block that starts like a
   program in `interp/tests` or `examples` quotes it, and must be all of
   it, exactly; DESIGN.md quotes five. Every command's `-h` must work and

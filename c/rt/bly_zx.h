@@ -271,6 +271,66 @@ grow:
     bly_fail("print would grow the lower screen past its two lines", bly_zx_lline);
 }
 
+/* print #4: FZX text, as zxgfx.py draws it (Einar Saukas's FZX driver, adapted: nothing written past x 255 or
+ * below the screen). The font is a constant table, which the checker has seen is one */
+static const u8 *bly_zx_fzxf;
+static i32 bly_zx_fzx_x, bly_zx_fzx_line = 191;
+static void bly_zx_fzx(const u8 *f, u16 n, int l) {
+    (void)n;
+    (void)l;
+    bly_zx_fzxf = f;
+}
+static void bly_zx_fzx_at(i16 y, i16 x, int l) {
+    if (!(0 <= y && y <= 191 && 0 <= x && x <= 255)) bly_zx_off("print #4; at ", y, x, " is off the screen (192 by 256 pixels)", l);
+    bly_zx_fzx_line = 191 - y;
+    bly_zx_fzx_x = x;
+}
+static void bly_zx_fzx_newline(void) {
+    bly_zx_fzx_x = 0;
+    bly_zx_fzx_line = (bly_zx_fzx_line - bly_zx_fzxf[0]) & 0xFF;
+}
+static inline i32 bly_zx_cell(i32 r, i32 i, i32 c);
+static void bly_zx_fzx_end(void) { bly_showing = 0; }
+static int bly_zx_fzx_l;
+static void bly_zx_fzx_begin(int l) {
+    bly_zx_fzx_l = l;
+    bly_showing = 4;
+}
+static void bly_zx_fzx_out(u8 ch, int l) {
+    const u8 *f = bly_zx_fzxf;
+    if (!f) {
+        bly_zx_fzx_end();                                    /* the failure's words are output */
+        bly_fail("print #4 needs a font: fzx(font) first", l);
+    }
+    if (ch == 10) {
+        bly_zx_fzx_newline();
+        return;
+    }
+    if (!(32 <= ch && ch <= f[2])) ch = '?';
+    i32 e = 3 + 3 * (ch - 32);
+    i32 word = f[e] | f[e + 1] << 8, nxt = f[e + 3] | f[e + 4] << 8;
+    i32 start = e + (word & 0x3FFF), kern = word >> 14, end = e + 3 + (nxt & 0x3FFF);
+    i32 shift = f[e + 2] >> 4, width = (f[e + 2] & 15) + 1, per = width <= 8 ? 1 : 2;
+    bly_zx_fzx_x = bly_zx_fzx_x - kern < 0 ? 0 : bly_zx_fzx_x - kern;
+    if (bly_zx_fzx_x + width - 1 > 255) bly_zx_fzx_newline();
+    if (((1 - f[0]) & 0xFF) + bly_zx_fzx_line < 256 || bly_zx_fzx_line > 191) {   /* room for its height */
+        bly_zx_fzx_end();
+        bly_fail("print #4 would go below the screen", l);
+    }
+    i32 y = 191 - bly_zx_fzx_line + shift, x = bly_zx_fzx_x;
+    for (i32 at = start, k = 0; at < end; at += per, k++) {
+        i32 row = y + k;
+        if (row > 191) break;
+        u32 bits = ((u32)f[at] << 16 | (per == 2 ? (u32)f[at + 1] << 8 : 0)) >> (x & 7);
+        for (i32 j = 0; j < 3; j++)
+            if ((x >> 3) + j <= 31) bly_zx_mem[bly_zx_cell(row >> 3, row & 7, (x >> 3) + j)] |= (u8)(bits >> (16 - 8 * j));
+    }
+    x += width + f[1];
+    if (x > 255) bly_zx_fzx_newline();
+    else bly_zx_fzx_x = x;
+}
+static void bly_zx_fzx_put(u8 ch) { bly_zx_fzx_out(ch, bly_zx_fzx_l); }
+
 static void bly_zx_at(i16 r, i16 c, int l) {
     if (!(0 <= r && r <= 21 && 0 <= c && c <= 31)) bly_zx_off("print at ", r, c, " is off the screen", l);
     bly_zx_row = r;

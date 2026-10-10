@@ -110,6 +110,7 @@ def main(argv):
     try:
         src = open(a.program).read()
         text = open(a.input, 'rb').read() if a.input else b''
+        z80gen.B.EMBED_DIR = os.path.dirname(os.path.abspath(a.program))     # embed's files are beside it
     except OSError as err:
         sys.exit(f'zxbuild.py: {err.filename}: {err.strerror}')
     try:

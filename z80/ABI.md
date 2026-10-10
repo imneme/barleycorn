@@ -558,6 +558,15 @@ takes HL = r and DE = c (ints) and fails with
 the lower screen fails with
 `print would grow the lower screen past its two lines`.
 
+**FZX text.** `zxfzx.asm`: `bly_zx_fzx` takes HL = the font, a constant
+table. The first time, it also makes the channel and gives it stream 4,
+as the driver's own installer does. `bly_zx_fzx_on` and `bly_zx_fzx_off`
+bracket each piece of a `print #4`, as the lower screen's do (stream 4,
+and `bly_putc` patched to send bytes on, a control code as `?`).
+`bly_zx_fzx_at` takes HL = y and DE = x (ints, pixels). A failure inside
+the driver happens inside RST 10, whose PRINT-A-2 has EXX'd and saved
+BASIC's HL', so `zxf_below` puts those back before failing.
+
 ## 11. Floats: the ROM's, on the Spectrum only
 
 **A `float` is the ROM's own 5 bytes** (`lib/fp.asm`, target `zx48`), so

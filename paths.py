@@ -8,6 +8,8 @@ this one (NAME=value lines, not tracked by git); otherwise it's looked for on PA
     OMSE_AI_PYTHON  a Python that can import omse-ai (it needs Pillow); default OMSE_AI/.venv/bin/python3 if present
     CC              the C compiler for the C backend's tests; default clang
     MDWRAP          mdwrap, which keeps the Markdown wrapped at 72 columns (./check's wrap stage)
+    FZX_DRIVER      Einar Saukas's FZXdriver.asm, for fzx_check to hold print #4 to the stock driver (optional)
+    FZX_FONTS       a folder of .fzx fonts for fzx_check to try besides its own (optional: fonts aren't ours to ship)
     BARLEY_BUILD    where builds go; default build/ in this checkout
 """
 import os
@@ -36,6 +38,8 @@ OMSE_AI_PYTHON = setting('OMSE_AI_PYTHON', _venv if os.path.exists(_venv) else s
 CC = setting('CC', 'clang')
 MDWRAP = setting('MDWRAP', shutil.which('mdwrap') or 'mdwrap')
 BUILD = setting('BARLEY_BUILD', os.path.join(ROOT, 'build'))
+FZX_DRIVER = setting('FZX_DRIVER')
+FZX_FONTS = setting('FZX_FONTS')
 os.environ.setdefault('OMSE_AI_ROMS', OMSE_AI_ROMS)     # omse-ai reads this too
 
 

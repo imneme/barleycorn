@@ -1175,6 +1175,83 @@ newline from below the bottom fails with the same words a character
 there would, so a case that ended with one couldn't tell which check had
 fired. Those cases now end with `;`, and one tests the newline alone.
 
+## FZX text: print #4, and @embed
+
+Saturday 10 October, from Melissa: "It'd be cool if we could support FZX
+fonts, which often use channels/streams... this renderer can be hooked
+into RST 10h via channels/streams to use the same mechanism. Or not, but
+it's likely least code to just use the library if desired." So
+`zxfzx.asm` is Einar Saukas's FZX driver (FZXdriver.asm, 2013: free to
+use and adapt, so long as the use is clearly indicated, which README.md
+and the fragment's header do), installed as his own installer does it (a
+channel 'S' made below PROG with MAKE-ROOM, on stream 4), so `print #4`
+goes through RST 10 exactly as BASIC's PRINT #4 does. The font format is
+Andrew Owen's open standard.
+
+**What it draws**, read in the driver: a position in pixels (x 0..255,
+and a line counting down from 191 at the top); `AT y, x` in pixels; a
+character the font hasn't got prints as `?`. Kerning moves a character
+left, though not past 0. A character that won't fit on the line goes to
+the next first, and one whose line can't hold the font's height is Out
+of screen. The pixels are ORed in, three screen bytes a row, rotated
+across them, and the attributes are left alone.
+
+**Adapted, in four places:**
+- The font is a variable (`fzx(F)` sets it), not an address fixed at
+  assembly.
+- Out of screen is our failure: `print #4 would go below the screen`. So
+  is a line wrapped past 0, which the driver would take for 255 and then
+  have PIXEL-ADD report B. That failure happens inside RST 10, whose
+  PRINT-A-2 has done EXX and saved BASIC's HL' beneath the driver's
+  pushes, so `zxf_below` puts both back first. Without that, BASIC came
+  back with "C Nonsense in BASIC", which zxrun's new report check caught
+  the first time a test failed there.
+- Nothing past x 255. The driver counts only the low byte of the screen
+  address across its three bytes, so at the right edge the third lands
+  on the next text row's left.
+- Nothing below row 191, which the driver's next-line arithmetic turns
+  into the attributes.
+
+The last two can only show with a font that breaks its own rules, with
+stray bits past a character's width or rows past its line. So
+`tools/make_fzx.py --stray` makes one, `interp/tests/stray.fzx`, and a
+suite case peeks where the stock driver would have written.
+
+**`@embed` brings the font in**: `const F = @embed("font.fzx")` is a
+byte table of the file, read from beside the program as it compiles.
+Melissa suggested the `@`, and that it be one door ("a generic macro
+mechanism, shared across all the generators"). `@f(...)` runs Python in
+the checker (`COMPILE_TIME` in `barley.py`) and gives a value that every
+backend sees only as a constant. `fzx()` takes only such a constant
+table, and the checker reads it as a font then (`zxgfx.fzx_problem`): a
+?, and every character's rows inside the file. So nothing at run time
+checks it, and a font can't be freed or moved under the driver.
+
+**The fonts are their makers'**, and none ship here. Their notes give
+copyrights but no licence to share them. `interp/tests/sprig.fzx` is
+mine, drawn by `tools/make_fzx.py`: a W 11 pixels wide (rows of two
+bytes), descenders (leading), kerning on `.`, `,` and `j`, and blanks
+for what it doesn't draw. (Melissa points out that, in the US, the
+shapes of bitmap fonts aren't copyrightable, so a proportional font
+worked out from the ROM's would be ours to make. It would be a nice
+second `@`.)
+
+**How it's tested.**
+- `z80/tests/fzx_check.py`, in `./check fragments`, does two things for
+  `sprig.fzx` and any fonts in `FZX_FONTS`. If `FZX_DRIVER` says where
+  his source is, it assembles the stock driver and types random PRINT #4
+  lines into BASIC with it, against the model. And it runs random Barley
+  programs, which may fail, on the 48K against the interpreter: the
+  output, BASIC's report, and the screen. With Melissa's eight fonts
+  that's 108 runs, all agreeing.
+- Thirteen suite cases cover the rest, `@embed`'s words among them.
+- **20 mutants, all caught**, in the model, the C and `zxfzx.asm`. Three
+  survived at first, each because a test happened to be gentle. A line
+  wrapped past 0 always landed on 255, so a check for 255 alone passed.
+  A stray pixel ORed into an attribute whose bits it already had. And no
+  string held a control code, which the driver would take as AT or
+  ENTER.
+
 ## Floats on the Spectrum: the ROM's calculator, and the plumbing to it
 
 *Files: `fp.asm` (target `zx48`), the float parts of `../z80gen.py`

@@ -1060,12 +1060,12 @@ end
 --- expect
 print #1 is Spectrum-only: put it inside if ZX then ... end at line 3
 
-=== print # takes a stream: #0, #1 or #2
+=== print # takes a stream: #0, #1, #2 or #4
 func main()
   print #3; "printer"
 end
 --- expect
-print # takes a stream: #0 or #1 (the lower screen) or #2 (the screen) at line 2
+print # takes a stream: #0 or #1 (the lower screen), #2 (the screen) or #4 (FZX text) at line 2
 
 === print #n needs a ; before what it prints
 func main()
@@ -1096,6 +1096,156 @@ end
 yes
 --- expect
 [yes]
+
+=== @embed: a file's bytes as a byte table, read beside the program as it's compiled
+const SPRIG = @embed("sprig.fzx")
+
+func main()
+  print SPRIG.len; " "; SPRIG[0]; " "; SPRIG[1]; " "; SPRIG[2]
+  var n = 0
+  for b in SPRIG do
+    if b == 0 then n += 1 end
+  end
+  print n
+end
+--- expect
+454 10 1 122
+132
+
+=== @embed's file has to be there
+const F = @embed("no-such.fzx")
+func main()
+end
+--- expect
+@embed: no-such.fzx: no such file beside the program at line 1
+
+=== a compile-time @ takes constants, and there's only @embed
+const F = @embedded("sprig.fzx")
+func main()
+end
+--- expect
+there is no compile-time @embedded (there is @embed) at line 1
+
+=== a compile-time @ is a const's value
+func main()
+  var f = @embed("sprig.fzx")
+end
+--- expect
+a compile-time @ is a const's value: const F = @embed("font.fzx") at line 2
+
+=== print #4 prints in an FZX font, in pixels, ORed in, and isn't output
+const SPRIG = @embed("sprig.fzx")
+
+func main()
+  cls()
+  ink(1)
+  fzx(SPRIG)
+  print "upstairs"
+  print #4; at 20, 8; "AB Wim gay, jam!"
+  print #4; "0123456789 Mix "; 42; " {x}\x16\x0d"
+  print #4; at 60, 250; "W"; at 100, 0; "j.j,"
+  print "done"
+end
+--- screen
+--- expect
+upstairs
+done
+
+=== the adapted driver writes nothing past x 255 or below the screen, where the stock one would (stray.fzx breaks the rules on purpose)
+const STRAY = @embed("stray.fzx")
+
+func main()
+  cls()
+  fzx(STRAY)
+  print #4; at 0, 254; "#"
+  print #4; at 1, 254; "#"
+  print #4; at 184, 100; "$"
+  print #4; at 184, 48; "%"
+  print peek(0x4000 + 31); " "; peek(0x4020); " "; peek(0x4120); " "; peek(0x580C); " "; peek(0x590C); " "; peek(0x5A0C)
+  print peek(0x5806); " "; peek(0x5906); " "; peek(0x5A06)
+end
+--- screen
+--- expect
+2 0 0 56 56 56
+56 56 56
+
+=== fzx's font is a constant table, and it has to be an FZX font
+const NOT = @embed("aoc2022d01.in")
+
+func main()
+  fzx(NOT)
+end
+--- expect
+fzx: NOT is not an FZX font: it has no ? (its last character is below it) at line 4
+
+=== print #4 needs a font first
+func main()
+  print "before"
+  print #4; "x"
+end
+--- expect
+before
+print #4 needs a font: fzx(font) first at line 3
+
+=== print #4 would go below the screen, where the driver says Out of screen
+const SPRIG = @embed("sprig.fzx")
+
+func main()
+  fzx(SPRIG)
+  print #4; at 182, 0; "fits";
+  print "fine"
+  print #4; at 183, 0; "x";
+  print "not here"
+end
+--- expect
+fine
+print #4 would go below the screen at line 7
+
+=== and so would a newline past the bottom, which the driver takes round to the top
+const SPRIG = @embed("sprig.fzx")
+
+func main()
+  fzx(SPRIG)
+  print #4; at 186, 0;
+  print #4
+  print "fine"
+  print #4; "below";
+  print "not here"
+end
+--- expect
+fine
+print #4 would go below the screen at line 8
+
+=== print #4's at is in pixels: 192 down, 256 across
+const SPRIG = @embed("sprig.fzx")
+
+func main()
+  fzx(SPRIG)
+  print #4; at 191, 255;
+  print "fine"
+  print #4; at 192, 0;
+end
+--- expect
+fine
+print #4; at (192, 0) is off the screen (192 by 256 pixels) at line 7
+
+=== print #4 has no zones
+func main()
+  print #4; "a", "b"
+end
+--- expect
+print #4 has no zones: use ; or at at line 2
+
+=== on CP/M, fzx and print #4 are Spectrum-only
+const SPRIG = @embed("sprig.fzx")
+
+func main()
+  print SPRIG.len
+  fzx(SPRIG)
+end
+--- as cpm
+--- expect
+fzx() is Spectrum-only: put it inside if ZX then ... end at line 5
 
 === dword: unsigned 32 bits, which wrap (+ - * / % >> << - ~, min, max, a hash), and its widenings and casts
 func hash(s: str): dword
