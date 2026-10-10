@@ -578,7 +578,8 @@ particular, place it first: `if ZX then print at 20, 4; end` and then
 the next line, and the output is the same everywhere. (The 48K's runtime
 marks each piece of placed text with two control codes that change
 nothing on the screen, so the transcript the tests read can leave it
-out; HACKING.md says how.)
+out; HACKING.md says how. A tape to keep, `bly tap`, leaves them out,
+since a real Spectrum has no transcript to read.)
 
 **The lower screen is display too.** `print #1; ...` (or `#0`) prints on
 the Spectrum's bottom two lines, as BASIC's PRINT #1 does, through the

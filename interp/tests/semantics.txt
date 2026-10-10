@@ -1429,6 +1429,14 @@ end
 --- expect
 250 251 252 253 254 10000
 
+=== a variable can't be named for a container type: map[0] would read as a map being made
+func main()
+  var map: byte[4]
+  map[0] = 1
+end
+--- expect
+map names a container type (map[...](capacity)): call it something else at line 2
+
 === dword: unsigned 32 bits, which wrap (+ - * / % >> << - ~, min, max, a hash), and its widenings and casts
 func hash(s: str): dword
   var h: dword = 2166136261

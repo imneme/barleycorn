@@ -111,7 +111,10 @@ Spectrum that is the ROM's own `RST 10h`.
   and `{OVER n}`, and `z80/transcript.py` drops what lies between (user
   code can't send them: `bly_putc` prints a control byte as `?`). An
   item is worked out before its bracket opens, so a failure's message is
-  never inside one. In C it's `BLY_ATTEXT`, a second setting of the flag
+  never inside one. They cost about 1,900 T-states a piece (12% of a
+  Life port in the Pasta/80 bake-off), so a tape for keeping (`bly tap`,
+  or `zxbuild.py --plain`) leaves them out. `bly zx`, the suite and the
+  bench keep them. In C it's `BLY_ATTEXT`, a second setting of the flag
   that puts print's text on the virtual screen; in the interpreter,
   `write(text, screen_only)`.
 - **On CP/M**, `bly_putc` is in `z80/lib/plat_cpm.asm`: BDOS function 2,

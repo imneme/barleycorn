@@ -32,6 +32,26 @@ def reads_keys(prog):
         return False
 
 
+def typed_keys():
+    """the keys on stdin for zx and all, which need them before the program runs: a file's, whole; a pipe's, as
+    much as has come and keeps coming without a pause (so a pipe nobody writes to or closes, a tool harness's,
+    say, gives none, rather than waiting for ever); a terminal's, none"""
+    import select
+    import stat
+    if sys.stdin is None or sys.stdin.isatty():
+        return None
+    fd = sys.stdin.fileno()
+    if stat.S_ISREG(os.fstat(fd).st_mode):
+        return sys.stdin.buffer.read().decode('latin-1')
+    data = b''
+    while select.select([fd], [], [], 0.5)[0]:
+        chunk = os.read(fd, 65536)
+        if not chunk:
+            break
+        data += chunk
+    return data.decode('latin-1') if data else None
+
+
 def typed(keys):
     """subprocess.run's stdin: the keys, or the terminal's own when there are none"""
     return {} if keys is None else {'input': keys.encode('latin-1')}
@@ -75,8 +95,9 @@ def run_cpm(prog, inp, work, capture=False, keys=None):
     return r.returncode, (r.stdout.decode('latin-1') if capture else '')
 
 
-def make_tap(prog, inp, tap):
-    t = subprocess.run([sys.executable, os.path.join(ROOT, 'z80', 'zxbuild.py'), prog] + inp + ['-o', tap],
+def make_tap(prog, inp, tap, plain=False):
+    t = subprocess.run([sys.executable, os.path.join(ROOT, 'z80', 'zxbuild.py'), prog] + inp + ['-o', tap] +
+                       (['--plain'] if plain else []),
                        capture_output=True, text=True)
     sys.stderr.write(t.stdout + t.stderr)                   # the build's report isn't the program's output
     return t.returncode
@@ -205,13 +226,11 @@ def main(argv):
         if a.cmd == 'cpm':
             code, msg = run_cpm(prog, inp, work)
             sys.exit(msg.rstrip() if code and msg else code)
-        keys = None                                     # stdin is read only if the program reads keys: reading it
-        if sys.stdin is not None and not sys.stdin.isatty() and reads_keys(prog):      # otherwise could wait for ever
-            keys = sys.stdin.buffer.read().decode('latin-1')
+        keys = typed_keys() if a.cmd in ('zx', 'all') and reads_keys(prog) else None     # tap never types
         if a.cmd == 'all':
             sys.exit(run_all(prog, inp, work, a.minutes, keys))
         tap = (a.out if a.cmd == 'tap' else None) or os.path.join(paths.build_dir('bly'), stem + '.tap')
-        if make_tap(prog, inp, tap):
+        if make_tap(prog, inp, tap, plain=a.cmd == 'tap'):          # a tape to keep: for a real Spectrum
             sys.exit(1)
         if a.cmd == 'tap':
             print(tap)

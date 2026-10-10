@@ -99,6 +99,27 @@ CC = [paths.CC, '-std=c11', '-g', '-O1', '-Wall', '-Wno-unused-function', '-Wno-
 
 
 SCREEN = {}                                            # the last run's screen, when a test asks for one
+LIMIT = 300                                            # CPU seconds a case's interpreter or C may use
+
+
+def limited():
+    """in each child, a CPU limit the kernel keeps: a case that never ends dies of it even if this runner has
+    been killed first (one ran nine hours that way, orphaned, after a mutant's timeout took its runner)"""
+    import resource
+    resource.setrlimit(resource.RLIMIT_CPU, (LIMIT, LIMIT))
+
+
+def guarded(args, **kw):
+    """subprocess.run with the CPU limit, and a wall-clock one: a case that loops is a TIMEOUT, not a hang"""
+    import signal
+    try:
+        r = subprocess.run(args, preexec_fn=limited, timeout=2 * LIMIT, **kw)
+    except subprocess.TimeoutExpired:
+        r = subprocess.CompletedProcess(args, -signal.SIGXCPU, b'', b'')
+    if r.returncode == -signal.SIGXCPU:
+        words = f'TIMEOUT: more than {LIMIT} s (a loop that never ends?)'
+        r.stdout = (r.stdout or ('' if kw.get('text') else b'')) + (words if kw.get('text') else words.encode())
+    return r
 
 
 def upper(i):
@@ -116,11 +137,11 @@ def screen_of(prog, inp, backend):
         os.remove(scr)
     args_in = [os.path.join(HERE, inp)] if inp else []
     if backend == 'interp':
-        subprocess.run([sys.executable, '-I', BARLEY, '--screen', scr.replace('.scr', '.png'),
+        guarded([sys.executable, '-I', BARLEY, '--screen', scr.replace('.scr', '.png'),
                         os.path.join(HERE, prog)] + args_in, capture_output=True)
     elif backend == 'c':
         base = os.path.join(BUILD, os.path.splitext(prog)[0])
-        subprocess.run([base] + args_in, capture_output=True, env=dict(os.environ, BARLEY_SCREEN=scr))
+        guarded([base] + args_in, capture_output=True, env=dict(os.environ, BARLEY_SCREEN=scr))
     elif backend == 'zx':
         subprocess.run([OMSEPY, ZXRUN, os.path.join(ZBUILD, 'zx.tap'), '--scr', scr], capture_output=True)
     return open(scr, 'rb').read() if os.path.exists(scr) else None
@@ -139,7 +160,7 @@ def run(prog, inp, cpm=False, keys=None):
         return run_zx(prog, args_in, keys)
     if BACKEND == 'interp':
         args = [sys.executable, '-I', BARLEY] + (['--as', 'cpm'] if cpm else []) + [os.path.join(HERE, prog)] + args_in
-        return subprocess.run(args, capture_output=True, text=True, encoding='latin-1', input=keys or '').stdout
+        return guarded(args, capture_output=True, text=True, encoding='latin-1', input=keys or '').stdout
     os.makedirs(BUILD, exist_ok=True)
     base = os.path.join(BUILD, os.path.splitext(prog)[0])
     gen = subprocess.run([sys.executable, '-I', CGEN, os.path.join(HERE, prog)], capture_output=True, text=True, encoding='latin-1')
@@ -149,11 +170,11 @@ def run(prog, inp, cpm=False, keys=None):
     cc = subprocess.run(CC + [base + '.c', '-lm', '-o', base], capture_output=True, text=True, encoding='latin-1')
     if cc.returncode or cc.stderr.strip():
         return 'C COMPILER: ' + cc.stderr
-    r = subprocess.run([base] + args_in, capture_output=True, text=True, encoding='latin-1', input=keys or '')
+    r = guarded([base] + args_in, capture_output=True, text=True, encoding='latin-1', input=keys or '')
     err = r.stderr
     if keys is not None:                       # ask()'s prompts are display, on stderr: the interpreter's, exactly
         args = [sys.executable, '-I', BARLEY, os.path.join(HERE, prog)] + args_in
-        prompts = subprocess.run(args, capture_output=True, text=True, encoding='latin-1', input=keys).stderr
+        prompts = guarded(args, capture_output=True, text=True, encoding='latin-1', input=keys).stderr
         err = err[len(prompts):] if err.startswith(prompts) else err
     return r.stdout + (('\nSTDERR: ' + err) if err.strip() else '')
 

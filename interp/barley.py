@@ -331,6 +331,8 @@ class Parser:
     def var(self):
         line = self.expect('var').line
         name = self.name()
+        if name in GENERIC_KINDS:                       # map[0] would read as a container being made
+            raise BarleyError(f'{name} names a container type ({name}[...](capacity)): call it something else', line)
         ty = None
         if self.at(':'):
             self.next()
@@ -365,6 +367,9 @@ class Parser:
         params = []
         while not self.at(')'):
             pname = self.name()
+            if pname in GENERIC_KINDS:
+                raise BarleyError(f'{pname} names a container type ({pname}[...](capacity)): call it something else',
+                                  line)
             self.expect(':')
             params.append((pname, self.type_()))
             if not self.at(')'):
@@ -811,7 +816,14 @@ class Checker:
             return self.globals[name]
         raise BarleyError(f'{name} is not defined', line)
 
+    def not_a_kind(self, name, line):
+        """list, queue, map, grid, heap and set name containers' types, and map[...] is one being made: a variable
+        of that name could be declared but never indexed (S1 found it in the Pasta/80 bake-off), so none can be"""
+        if name in GENERIC_KINDS:
+            raise BarleyError(f'{name} names a container type ({name}[...](capacity)): call it something else', line)
+
     def declare(self, var, line):
+        self.not_a_kind(var.name, line)
         for scope in self.scopes:
             if var.name in scope:
                 raise BarleyError(f'{var.name} is already defined in this function', line)
@@ -841,6 +853,8 @@ class Checker:
                 d.rty = self.ty(d.retx) if d.retx else VOID
                 self.funcs[d.name] = d
         for d in self.decls:
+            if d.k in ('const', 'var', 'func', 'record'):
+                self.not_a_kind(d.name, d.line)
             if d.k == 'const' and d.e.k == 'compile':
                 if d.name in self.globals:
                     raise BarleyError(f'{d.name} is defined twice', d.line)

@@ -146,6 +146,7 @@ class Op:
 class Gen:
     def __init__(self, ck, target):
         self.ck, self.target = ck, target
+        self.markers = True                 # the transcript's markers around text printed at a place
         self.code = []
         self.nlabel = 0
         self.strings = {}
@@ -752,8 +753,8 @@ class Gen:
                 piece(lambda: self.call('bly_nl'))
         elif k == 'print':
             placed = False                                   # from the first at on: the screen's alone (bracketed)
-            on = lambda: placed and self.call('bly_zx_scr_on')
-            off = lambda: placed and self.call('bly_zx_scr_off')
+            on = lambda: placed and self.markers and self.call('bly_zx_scr_on')
+            off = lambda: placed and self.markers and self.call('bly_zx_scr_off')
             for kind, e in s.items:
                 if kind == 'zone':
                     on()
@@ -2996,13 +2997,16 @@ COUNT64 = ['bly_count64:                        ; HL = &count (quad) -> DE = it,
            '        cp 65', '        ret c', '        ld e,64', '        ret']
 
 
-def compile_program(src, target='cpm', org=None, bss_at=None):
-    """org and bss_at place the code and the slots (the Spectrum's builder puts code high, slots beneath it)"""
+def compile_program(src, target='cpm', org=None, bss_at=None, markers=True):
+    """org and bss_at place the code and the slots (the Spectrum's builder puts code high, slots beneath it).
+    markers=False leaves out the two invisible control codes around each piece of text printed at a place, which
+    only the tests' transcript needs (HACKING.md): a tape for a real Spectrum is faster without them"""
     FLOATS['on'] = target == 'zx48'
     decls = B.Parser(src).program()
     ck = B.Checker(decls, 'cpm' if target == 'cpm' else 'zx48')
     ck.check()
     g = Gen(ck, target)
+    g.markers = markers
     if org is not None:
         g.org = org
     if bss_at is not None:

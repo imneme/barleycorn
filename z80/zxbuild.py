@@ -71,8 +71,8 @@ def loader(start, input_at=INPUT):
     return (10).to_bytes(2, 'big') + len(line).to_bytes(2, 'little') + line
 
 
-def build(src, text=b''):
-    asm1 = z80gen.compile_program(src, 'zx48', org=0x8000, bss_at=0) + '\nbly_input_at equ 8000h\n'
+def build(src, text=b'', markers=True):
+    asm1 = z80gen.compile_program(src, 'zx48', org=0x8000, bss_at=0, markers=markers) + '\nbly_input_at equ 8000h\n'
     code1, sym1 = assemble(asm1)
     size = sym1['bly_code_end'] - 0x8000
     bss = sym1['bly_bss_end'] - sym1['bly_bss']
@@ -86,7 +86,7 @@ def build(src, text=b''):
         input_at = bss_at - STACKROOM - need - 2 - len(text)
     if input_at < LOWEST:
         raise SystemExit(f'too big for a 48K: code {size}, slots {bss}, input {len(text)}, stack {STACKROOM}')
-    code, sym = assemble(z80gen.compile_program(src, 'zx48', org=org, bss_at=bss_at) +
+    code, sym = assemble(z80gen.compile_program(src, 'zx48', org=org, bss_at=bss_at, markers=markers) +
                          f'\nbly_input_at equ {input_at}\n')
     size2 = sym['bly_code_end'] - org
     if size2 != size:                                  # a fragment whose size depends on where it lands (an align, say)
@@ -107,6 +107,9 @@ def main(argv):
     ap.add_argument('program', metavar='PROGRAM.bly', help='the program')
     ap.add_argument('input', metavar='INPUT', nargs='?', help='its input, as a block on the tape')
     ap.add_argument('-o', dest='out', metavar='OUT.tap', help='the tape (default: PROGRAM.tap beside the program)')
+    ap.add_argument('--plain', action='store_true',
+                    help='without the transcript markers around text printed at a place: for a real Spectrum, '
+                         'which needs no transcript (faster: about 1,900 T-states a piece)')
     a = ap.parse_args(argv)
     try:
         src = open(a.program).read()
@@ -115,7 +118,7 @@ def main(argv):
     except OSError as err:
         sys.exit(f'zxbuild.py: {err.filename}: {err.strerror}')
     try:
-        tap, info = build(src, text)
+        tap, info = build(src, text, markers=not a.plain)
     except z80gen.B.BarleyError as err:
         print(err)                                     # the checker's words, as the interpreter prints them
         sys.exit(1)
