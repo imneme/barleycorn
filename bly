@@ -6,14 +6,20 @@
     ./bly c   PROGRAM.bly [INPUT]               compile to C, build it with the C compiler, run it
     ./bly cpm PROGRAM.bly [INPUT]               compile for CP/M, assemble, and run it under tnylpo
     ./bly tap PROGRAM.bly [INPUT] [-o OUT.tap]  a tape for a 48K Spectrum (a real one, or any emulator)
-    ./bly zx  PROGRAM.bly [INPUT] [--scr OUT]   that tape, run on omse-ai's 48K; prints what the program printed
+    ./bly zx  PROGRAM.bly [INPUT]               that tape, run on omse-ai's 48K; prints what the program printed
+              [--scr OUT.scr] [--minutes N]     (the 48K's screen at the end; give up after N minutes, 10 by default)
+    ./bly all PROGRAM.bly [INPUT]               all four, compared: the text each prints (CP/M's against the
+                                                interpreter's --as cpm), and the interpreter's final screen against
+                                                the 48K's (the upper 22 rows)
 
-The tools it uses (a C compiler, sjasmplus, tnylpo, omse-ai) are found as paths.py says.
+The tools it uses (a C compiler, sjasmplus, tnylpo, omse-ai) are found as paths.py says. Each run builds in a folder of
+its own under build/bly, so runs at the same time don't collide; a tape's default home is build/bly/NAME.tap.
 """
 import os
 import shutil
 import subprocess
 import sys
+import tempfile
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
@@ -29,61 +35,138 @@ def take(argv, flag, default=None):
     return default
 
 
+def run_c(prog, inp, work, capture=False):
+    stem = os.path.splitext(os.path.basename(prog))[0]
+    c, exe = os.path.join(work, stem + '.c'), os.path.join(work, stem)
+    g = subprocess.run([sys.executable, os.path.join(ROOT, 'c', 'cgen.py'), prog], capture_output=True, text=True)
+    if g.returncode:
+        return g.returncode, (g.stdout + g.stderr)
+    open(c, 'w').write(g.stdout)
+    cc = paths.need(paths.CC, 'a C compiler', 'set CC (paths.py)')
+    b = subprocess.run([cc, '-std=c11', '-O2', '-I', os.path.join(ROOT, 'c', 'rt'), c, '-lm', '-o', exe])
+    if b.returncode:
+        return b.returncode, ''
+    r = subprocess.run([exe] + inp, capture_output=capture, text=capture, encoding='latin-1' if capture else None)
+    return r.returncode, (r.stdout if capture else '')
+
+
+def run_cpm(prog, inp, work, capture=False):
+    stem = os.path.splitext(os.path.basename(prog))[0]
+    name = ''.join(ch for ch in stem.lower() if ch.isalnum())[:8] or 'prog'   # a CP/M name: 8 letters or digits
+    asm, com = os.path.join(work, stem + '.asm'), os.path.join(work, name + '.com')
+    g = subprocess.run([sys.executable, os.path.join(ROOT, 'z80', 'z80gen.py'), prog], capture_output=True, text=True)
+    if g.returncode:
+        return g.returncode, (g.stdout + g.stderr)
+    open(asm, 'w').write(g.stdout)
+    sj = paths.need(paths.SJASMPLUS, 'sjasmplus', 'set SJASMPLUS (paths.py)')
+    a = subprocess.run([sj, '--nologo', f'--raw={com}', asm], capture_output=True, text=True)
+    if a.returncode:
+        return a.returncode, a.stdout + a.stderr
+    tn = paths.need(paths.TNYLPO, 'tnylpo', 'set TNYLPO (paths.py)')
+    args = []
+    if inp:
+        shutil.copy(inp[0], os.path.join(work, 'input.txt'))
+        args = ['input.txt']
+    conf = os.path.join(work, 'tnylpo.conf')
+    open(conf, 'w').write(f'drive a = "{work}"\ndefault drive = a\n')
+    r = subprocess.run([tn, '-f', conf, name] + args, capture_output=capture, text=capture,
+                       encoding='latin-1' if capture else None)
+    return r.returncode, (r.stdout if capture else '')
+
+
+def make_tap(prog, inp, tap):
+    t = subprocess.run([sys.executable, os.path.join(ROOT, 'z80', 'zxbuild.py'), prog] + inp + ['-o', tap],
+                       capture_output=True, text=True)
+    sys.stderr.write(t.stdout + t.stderr)                   # the build's report isn't the program's output
+    return t.returncode
+
+
+def run_zx(tap, scr, minutes, capture=False):
+    paths.omse_ai()
+    cmd = [paths.OMSE_AI_PYTHON, os.path.join(ROOT, 'z80', 'zxrun.py'), tap, '--minutes', str(minutes)] + \
+        (['--scr', scr] if scr else [])
+    r = subprocess.run(cmd, capture_output=capture, text=capture, encoding='latin-1' if capture else None)
+    return r.returncode, (r.stdout if capture else '')
+
+
+def upper(a):
+    """the upper 22 rows of a .scr: what BASIC's report at the end doesn't touch"""
+    return a >= 6144 and (a - 6144) // 32 < 22 or a < 6144 and (((a >> 8) & 0x18) | ((a >> 5) & 7)) < 22
+
+
+def run_all(prog, inp, work, minutes):
+    outs, codes = {}, {}
+    png = os.path.join(work, 'interp.png')
+    r = subprocess.run([sys.executable, os.path.join(ROOT, 'interp', 'barley.py'), '--screen', png, prog] + inp,
+                       capture_output=True, text=True, encoding='latin-1')
+    outs['interp'], codes['interp'] = r.stdout, r.returncode
+    r = subprocess.run([sys.executable, os.path.join(ROOT, 'interp', 'barley.py'), '--as', 'cpm', prog] + inp,
+                       capture_output=True, text=True, encoding='latin-1')
+    outs['interp-cpm'] = r.stdout                          # what CP/M must print: ZX is false there, CPM true
+    codes['c'], outs['c'] = run_c(prog, inp, work, capture=True)
+    codes['cpm'], outs['cpm'] = run_cpm(prog, inp, work, capture=True)
+    tap, zscr = os.path.join(work, 'prog.tap'), os.path.join(work, 'zx.scr')
+    if make_tap(prog, inp, tap) == 0:
+        codes['zx'], outs['zx'] = run_zx(tap, zscr, minutes, capture=True)
+    else:
+        codes['zx'], outs['zx'] = 1, '(the tape failed to build)'
+    sys.stdout.write(outs['interp'])
+    ok = True
+    for k in ('c', 'cpm', 'zx'):
+        want = outs['interp-cpm'] if k == 'cpm' else outs['interp']
+        if outs[k] == want:
+            print(f'  {k}: the same text' + (' (as the interpreter prints it --as cpm)' if k == 'cpm' and want != outs['interp'] else ''))
+        elif k == 'cpm' and 'Spectrum-only' in outs[k]:
+            print(f'  cpm: not run (the program uses the Spectrum outside if ZX)')
+        else:
+            ok = False
+            print(f'  {k}: DIFFERENT text (exit {codes[k]}):')
+            for line in outs[k].splitlines()[:5]:
+                print(f'      {line}')
+    iscr = os.path.join(work, 'interp.scr')
+    if os.path.exists(iscr) and os.path.exists(zscr):
+        a, b = open(iscr, 'rb').read(), open(zscr, 'rb').read()
+        diff = [i for i in range(6912) if upper(i) and a[i] != b[i]]
+        if diff:
+            ok = False
+            print(f'  screen: {len(diff)} bytes differ between the interpreter and the 48K, first at {0x4000 + diff[0]:04X}h')
+        else:
+            print('  screen: the interpreter\'s and the 48K\'s are the same (upper 22 rows)')
+    return 0 if ok else 1
+
+
 def main(argv):
-    if len(argv) < 2 or argv[0] not in ('run', 'c', 'cpm', 'tap', 'zx'):
-        sys.exit(__doc__)
+    if not argv or argv[0] in ('-h', '--help', 'help') or argv[0] not in ('run', 'c', 'cpm', 'tap', 'zx', 'all') \
+            or len(argv) < 2 or argv[1] in ('-h', '--help'):
+        print(__doc__)
+        sys.exit(0 if argv and argv[0] in ('-h', '--help', 'help') or len(argv) > 1 else 1)
     cmd, rest = argv[0], argv[1:]
-    out = take(rest, '-o')
-    scr = take(rest, '--scr')
     if cmd == 'run':
         sys.exit(subprocess.run([sys.executable, os.path.join(ROOT, 'interp', 'barley.py')] + rest).returncode)
+    out, scr, minutes = take(rest, '-o'), take(rest, '--scr'), take(rest, '--minutes', '10')
     prog = rest[0]
     inp = [os.path.abspath(rest[1])] if len(rest) > 1 else []
     stem = os.path.splitext(os.path.basename(prog))[0]
-    build = paths.build_dir('bly')
-    if cmd == 'c':
-        c = os.path.join(build, stem + '.c')
-        exe = os.path.join(build, stem)
-        g = subprocess.run([sys.executable, os.path.join(ROOT, 'c', 'cgen.py'), prog], capture_output=True, text=True)
-        if g.returncode:
-            sys.exit((g.stdout + g.stderr).rstrip())
-        open(c, 'w').write(g.stdout)
-        cc = paths.need(paths.CC, 'a C compiler', 'set CC (paths.py)')
-        b = subprocess.run([cc, '-std=c11', '-O2', '-I', os.path.join(ROOT, 'c', 'rt'), c, '-lm', '-o', exe])
-        if b.returncode:
-            sys.exit(b.returncode)
-        sys.exit(subprocess.run([exe] + inp).returncode)
-    if cmd == 'cpm':
-        asm = os.path.join(build, stem + '.asm')
-        name = ''.join(ch for ch in stem.lower() if ch.isalnum())[:8] or 'prog'   # a CP/M name: 8 letters or digits
-        com = os.path.join(build, name + '.com')
-        g = subprocess.run([sys.executable, os.path.join(ROOT, 'z80', 'z80gen.py'), prog], capture_output=True,
-                           text=True)
-        if g.returncode:
-            sys.exit((g.stdout + g.stderr).rstrip())
-        open(asm, 'w').write(g.stdout)
-        sj = paths.need(paths.SJASMPLUS, 'sjasmplus', 'set SJASMPLUS (paths.py)')
-        a = subprocess.run([sj, '--nologo', f'--raw={com}', asm], capture_output=True, text=True)
-        if a.returncode:
-            sys.exit(a.stdout + a.stderr)
-        tn = paths.need(paths.TNYLPO, 'tnylpo', 'set TNYLPO (paths.py)')
-        args = []
-        if inp:
-            shutil.copy(inp[0], os.path.join(build, 'input.txt'))
-            args = ['input.txt']
-        conf = os.path.join(build, 'tnylpo.conf')
-        open(conf, 'w').write(f'drive a = "{build}"\ndefault drive = a\n')
-        sys.exit(subprocess.run([tn, '-f', conf, name] + args).returncode)
-    tap = out or os.path.join(build, stem + '.tap')
-    t = subprocess.run([sys.executable, os.path.join(ROOT, 'z80', 'zxbuild.py'), prog] + inp + ['-o', tap])
-    if t.returncode:
-        sys.exit(t.returncode)
-    if cmd == 'tap':
-        print(tap)
-        return
-    paths.omse_ai()
-    run = [paths.OMSE_AI_PYTHON, os.path.join(ROOT, 'z80', 'zxrun.py'), tap] + (['--scr', scr] if scr else [])
-    sys.exit(subprocess.run(run).returncode)
+    work = tempfile.mkdtemp(prefix=stem + '-', dir=paths.build_dir('bly'))    # this run's own folder
+    try:
+        if cmd == 'c':
+            code, msg = run_c(prog, inp, work)
+            sys.exit(msg.rstrip() if code and msg else code)
+        if cmd == 'cpm':
+            code, msg = run_cpm(prog, inp, work)
+            sys.exit(msg.rstrip() if code and msg else code)
+        if cmd == 'all':
+            sys.exit(run_all(prog, inp, work, minutes))
+        tap = out or os.path.join(paths.build_dir('bly'), stem + '.tap')
+        if make_tap(prog, inp, tap):
+            sys.exit(1)
+        if cmd == 'tap':
+            print(tap)
+            return
+        code, _ = run_zx(tap, scr, minutes)
+        sys.exit(code)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
 
 
 if __name__ == '__main__':

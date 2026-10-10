@@ -92,6 +92,7 @@ need the ROM, even in the interpreter.
 ./bly cpm PROGRAM.bly [INPUT]          # compile for CP/M and run it under tnylpo
 ./bly tap PROGRAM.bly [INPUT] -o x.tap # a tape: a BASIC loader, the input as its own block, and the program
 ./bly zx  PROGRAM.bly [INPUT]          # that tape on omse-ai's 48K; prints what the program printed
+./bly all PROGRAM.bly [INPUT]          # all four, compared: the text each prints, and the final screens
 ```
 
 A program reads its input with `lines()`, `grid()` or `input()`. On a Spectrum the input travels on the tape and
