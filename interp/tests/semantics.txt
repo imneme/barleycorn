@@ -437,6 +437,77 @@ end
 --- expect
 true true true
 
+=== the screen: ink and paper 8 (each square keeps its own) and 9 (contrast), bright and flash 8, attr(r, c)
+func paint_row(r: int)                      -- eight squares, each its own colours
+  for c in 0..32 do attr(r, c, byte((c % 8) * 8 + 7 - c % 8 + (c / 8) * 64)) end
+end
+
+func main()
+  paper(1)
+  ink(9)                                    -- on paper 1 (dark) the contrast is white
+  cls()                                     -- cls takes the colours as they are: paper 1, ink 7
+  print attr(0, 0); " "; attr(23, 31)
+  paint_row(2)
+  ink(8)
+  paper(8)
+  print at 2, 0; "ink and paper 8: theirs kept"
+  paint_row(4)
+  ink(9)
+  print at 4, 0; "ink 9: white on dark paper"
+  paint_row(6)
+  ink(8)
+  paper(9)
+  print at 6, 0; "paper 9: against the ink"
+  paint_row(8)
+  ink(4)
+  paper(2)
+  bright(8)
+  flash(8)
+  print at 8, 0; "bright and flash 8: kept"
+  bright(0)
+  flash(false)
+  paint_row(10)
+  ink(8)
+  paper(9)
+  for x in 0..256 do plot(x, 175 - 84) end
+  line(0, 175 - 80, 255, 175 - 87)
+  circle(128, 175 - 84, 6)
+  ink(0)
+  paper(7)
+  print at 14, 0;
+  for k in 1..6 do
+    var r = k * 2
+    for c in 0..8 do print attr(r, c * 3); " "; end
+    print
+  end
+end
+--- screen
+--- expect
+15 56
+ink and paper 8: theirs kept
+ink 9: white on dark paper
+paper 9: against the ink
+bright and flash 8: kept
+7 28 49 14 35 56 21 42 
+7 31 48 15 32 56 23 40 
+7 4 57 6 59 56 5 58 
+20 20 20 84 84 84 148 148 
+7 4 57 6 59 56 5 58 
+
+=== the colours' words: bright and flash take 0, 1 or 8 (a run-time check), and the rest stay as they were
+func main()
+  cls()
+  ink(9)
+  paper(8)
+  bright(8)
+  flash(true)
+  print attr(10, 10)
+  bright(2)
+end
+--- expect
+56
+bright 2 is not 0, 1 or 8 at line 8
+
 === a trailing comma in print keeps the line open, and ends the statement
 func main()
   print "a",

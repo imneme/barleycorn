@@ -96,15 +96,19 @@ bly_zx_circle:                      ; HL = &block: cx, cy, r
         ld a,e
         ld (.op2a),a
         ld (.op2b),a
-        ld a,(ZXG_ATTR_P)
-        ld (.cola+1),a
-        ld (.colb+1),a
         ld a,d
         ld (.fop1),a
         ld a,e
         ld (.fop2),a
-        ld a,(ZXG_ATTR_P)
-        ld (.fcol+1),a
+        ld hl,.cola                 ; the colours: plain stores, or through .paint
+        ld de,.cpaint
+        call bly_zx_plot.site
+        ld hl,.colb
+        ld de,.qpaint
+        call bly_zx_plot.site
+        ld hl,.fcol
+        ld de,.fpaint
+        call bly_zx_plot.site
         ; wholly on the screen (r <= 87, r <= cx <= 255 - r, r <= cy <= 175 - r)? Then the fast way
         ld a,(.r+1)
         ld hl,.cx+1
@@ -392,8 +396,10 @@ bly_zx_circle:                      ; HL = &block: cx, cy, r
 .fop2:  xor d                       ; patched: xor d / nop
         ld (hl),a
         ld h,e
-.fcol:  ld (hl),0                   ; patched: ATTR_P
+.fcol:  ld (hl),0                   ; patched: ld (hl),ATTR_T, or jr .fpaint
         ret
+.fpaint: jp bly_zx_plot.paint       ; a mask or a contrast: .fcol is followed by ret, so .paint's own does
+        assert .fpaint - (.fcol + 2) < 128
 
 .rrec:  ; A = a row 0..175, HL = its record: +0 its bits of L, +1 the bitmap high byte, +2 the attributes' high byte
         push bc
@@ -614,7 +620,7 @@ bly_zx_circle:                      ; HL = &block: cx, cy, r
 .op2a:  xor d                       ; patched: xor d / nop
         ld (hl),a
         ld h,e
-.cola:  ld (hl),0                   ; patched: ATTR_P
+.cola:  ld (hl),0                   ; patched: ld (hl),ATTR_T, or jr .cpaint
 .qr2:   ld a,(.cm2)                 ; the second
         or a
         ret z
@@ -628,8 +634,12 @@ bly_zx_circle:                      ; HL = &block: cx, cy, r
 .op2b:  xor d                       ; patched
         ld (hl),a
         ld h,e
-.colb:  ld (hl),0                   ; patched
+.colb:  ld (hl),0                   ; patched: ld (hl),ATTR_T, or jr .qpaint
         ret
+.cpaint: call bly_zx_plot.paint     ; a mask or a contrast: the colours the PO-ATTR way
+        jr .qr2
+.qpaint: jp bly_zx_plot.paint       ; .colb is followed by ret, so .paint's own does
+        assert .cpaint - (.cola + 2) < 128 && .qpaint - (.colb + 2) < 128
 
 .colrec: ; A = a column 0..255, HL = its record: +0 its byte in the row (x >> 3), +1 its mask
         ld c,a

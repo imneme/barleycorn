@@ -172,9 +172,16 @@ EDGES += [
     ('every-attr', prog('for r in 0..24 do', '  for c in 0..32 do', '    attr(r, c, byte(r * 32 + c))', '  end', 'end',
                         'plot(0, 0)', 'plot(255, 175)', 'attr(23, 31, 0)', 'attr(0, 0, 255)', 'attr(12, 16, 0x47)')),
     ('colours', prog(*[ln for i in range(8) for ln in
-                       (f'ink({i})', f'paper({7 - i})', f'bright({i % 3})', f'flash({i // 4})', f'border({i})',
+                       (f'ink({i})', f'paper({7 - i})', f'bright({[0, 1, 8][i % 3]})', f'flash({i // 4})', f'border({i})',
                         f'print at {i}, {i}; "ink {i}"', f'plot({i * 30}, {i * 20})', f'attr(20, {i}, {i * 37 % 256})')],
                      'bright(true)', 'flash(false)', 'print "after"', 'cls()', 'plot(1, 1)', 'print "cls"')),
+    ('colours-8-9', prog('for r in 0..24 do', '  for c in 0..32 do', '    attr(r, c, byte(r * 32 + c * 7))', '  end',
+                         'end', 'ink(8)', 'paper(8)', 'print at 1, 0; "both kept"', 'ink(9)', 'print at 3, 0; "ink 9"',
+                         'paper(9)', 'print at 5, 0; "paper 9 too"', 'ink(8)', 'plot(0, 100)', 'line(0, 90, 255, 80)',
+                         'circle(128, 60, 30)', 'ink(3)', 'paper(8)', 'bright(8)', 'flash(8)',
+                         'print at 12, 0; "bright and flash kept"', 'bright(1)', 'flash(0)', 'paper(9)',
+                         'print at 14, 0; "contrast"', 'cls()', 'print "cls with paper 9"',
+                         'print attr(0, 0); " "; attr(5, 3); " "; attr(23, 31)')),
     ('cls-colours', prog('paper(1)', 'ink(6)', 'bright(1)', 'flash(1)', 'cls()', 'print "flashing"', 'paper(2)',
                          'flash(0)', 'cls()', 'circle(100, 100, 40)')),
     ('scroll', prog('for i in 0..30 do', '  ink(byte(i % 8))', '  print "line "; i', 'end', 'print "last";',
@@ -209,11 +216,12 @@ EDGES += [
                         'for i in 0..10239 do beep(32767, 0) end', 'print ticks()', 'pause(1)', 'print ticks()')),
     ('vars-as-args', prog('var b: byte = 200', 'var k: int = 100', 'plot(b, k - 30)', 'line(k, k, b, 0)',
                           'circle(k, k - 12, int(b) - 150)', 'attr(int(b) / 10, 3, b)', 'ink(k / 20)',
-                          'bright(b)', 'flash(k > 50)', 'print at k / 10, int(b) / 10; "here"', 'beep(k, k - 100)',
+                          'bright(b / 200)', 'flash(k > 50)', 'print at k / 10, int(b) / 10; "here"', 'beep(k, k - 100)',
                           'pause(b)', 'print ticks()', 'over(b == 200)', 'plot(b, k - 30)')),
-    ('flags-wide', prog('var k: int = 768', 'var w: word = 256', 'var q: long = 65536', 'bright(256)', 'flash(-256)',
-                        'print "bright and flash"', 'inverse(512)', 'print "inverse"', 'plot(9, 9)', 'over(k)',
-                        'plot(9, 9)', 'print "over"', 'inverse(0)', 'over(0)', 'bright(w)', 'flash(q)', 'plot(20, 20)',
+    ('flags-wide', prog('var k: int = 768', 'var w: word = 256', 'var q: long = 65536', 'bright(k / 96)',
+                        'flash(int(w / 256))', 'print "bright and flash"', 'inverse(512)', 'print "inverse"', 'plot(9, 9)',
+                        'over(k)', 'plot(9, 9)', 'print "over"', 'inverse(0)', 'over(0)', 'bright(int(q - 65528))',
+                        'flash(int(q / 65536))', 'plot(20, 20)',
                         'print "word and long"', 'inverse(-32768)', 'over(65536)', 'circle(50, 50, 20)', 'print "end"')),
     ('peek-rom', prog('var s: long = 0', 'var t: long = 0', 'for a in 0..16384 do',
                       '  s = (s * 31 + long(peek(a))) % 1000003', '  t += long(peek(a))', 'end', 'print s; " "; t',
@@ -247,9 +255,12 @@ EDGES += [
 # -- every failure, word for word ------------------------------------------------------------------------------------
 
 FAIL_CALLS = [
-    ('ink(8)', 'ink 8 is not a colour 0..7'), ('ink(-1)', 'ink -1 is not a colour 0..7'),
-    ('paper(8)', 'paper 8 is not a colour 0..7'), ('paper(-32768)', 'paper -32768 is not a colour 0..7'),
-    ('border(9)', 'border 9 is not a colour 0..7'), ('border(-1)', 'border -1 is not a colour 0..7'),
+    ('ink(10)', 'ink 10 is not a colour 0..9'), ('ink(-1)', 'ink -1 is not a colour 0..9'),
+    ('paper(10)', 'paper 10 is not a colour 0..9'), ('paper(-32768)', 'paper -32768 is not a colour 0..9'),
+    ('border(8)', 'border 8 is not a colour 0..7'), ('border(-1)', 'border -1 is not a colour 0..7'),
+    ('bright(2)', 'bright 2 is not 0, 1 or 8'), ('flash(9)', 'flash 9 is not 0, 1 or 8'),
+    ('bright(-1)', 'bright -1 is not 0, 1 or 8'), ('flash(-32768)', 'flash -32768 is not 0, 1 or 8'),
+    ('print attr(24, 0)', 'attr (24, 0) is off the screen'), ('print attr(0, -1)', 'attr (0, -1) is off the screen'),
     ('plot(256, 0)', '(256, 0) is off the screen'), ('plot(-1, 0)', '(-1, 0) is off the screen'),
     ('plot(0, 176)', '(0, 176) is off the screen'), ('plot(0, -1)', '(0, -1) is off the screen'),
     ('plot(-32768, 32767)', '(-32768, 32767) is off the screen'),
@@ -342,9 +353,12 @@ def random_program(rng, n):
             cy = coord(rng, 175, .15)
             st.append(f'circle({cx}, {cy}, {num(r)})')
         elif w < 40:
-            st.append(f'{rng.choice(["ink", "paper"])}({num(rng.randint(0, 7))})')
+            st.append(f'{rng.choice(["ink", "paper"])}({num(rng.randint(0, 9))})')
+        elif w < 44:
+            v = rng.choice(['true', 'false', '0', '1', '8', 8, 1, 'k0 > 0'])     # 8 and 1: perhaps through a variable
+            st.append(f'{rng.choice(["bright", "flash"])}({num(v) if isinstance(v, int) else v})')
         elif w < 49:
-            st.append(f'{rng.choice(["bright", "flash", "inverse", "over", "inverse", "over"])}({flag()})')
+            st.append(f'{rng.choice(["inverse", "over"])}({flag()})')
         elif w < 50:
             st.append(f'border({rng.randint(0, 7)})')
         elif w < 51:

@@ -6,6 +6,12 @@ sound log. Coordinates are BASIC's: x 0..255 from the left, y 0..175 from the bo
 0..21 and columns 0..31 from the top left.
 
 Every algorithm here is written to be followed exactly:
+  colours  as BASIC's: ink and paper 0..7, 8 (transparent: a square keeps its own) or 9 (contrast: white on dark,
+           black on light); bright and flash 0, 1 or 8. A square printed or plotted on gets them as the ROM's PO-ATTR
+           gives them (0BDBh): (old AND mask) OR (colours AND NOT mask), then the contrasts. cls and the new line a
+           scroll brings in take the colours as they are (CL-LINE), mask or not; cls gives the lower screen's two
+           rows the border's colours instead (BORDCR: the border's colour as paper, and a white ink on a dark one),
+           as the ROM's CLS does.
   plot     sets the pixel (INVERSE 1: clears it; OVER 1: XORs it; both: leaves it), and gives its cell the colours
   line     Bresenham, from (x0, y0) to (x1, y1), both ends plotted, every pixel once
   circle   the midpoint algorithm, its eight-way points deduplicated per step (so OVER can't cancel itself), and
@@ -52,7 +58,9 @@ class Screen:
         """glyphs: the font (96 characters of 8 bytes); by default the ROM's. A program that never looks at the screen
         can pass bytes(768), and needs no ROM: what it prints still moves the cursor, and nothing can see the rest"""
         self.mem = bytearray(6912)
-        self.attr_p = WHITE_ON_BLACK
+        self.attr_p = WHITE_ON_BLACK          # ATTR_P, and ATTR_T, which the runtime keeps the same
+        self.mask = 0                         # MASK_P (and MASK_T): the attribute bits a square keeps (8: transparent)
+        self.ink9 = self.paper9 = False       # P_FLAG's INK 9 and PAPER 9 (contrast) bits
         for i in range(768):
             self.mem[6144 + i] = self.attr_p
         self.inverse = self.over = False
@@ -65,22 +73,56 @@ class Screen:
         self.drawn = False
 
     # -- colours -----------------------------------------------------------------------------------------------
-    def colour(self, name, n):
-        if not 0 <= n <= 7:
-            raise ScreenError(f'{name} {n} is not a colour 0..7')
+    def colour(self, name, n, top=7):
+        if not 0 <= n <= top:
+            raise ScreenError(f'{name} {n} is not a colour 0..{top}')
         return n
 
+    def set_colour(self, name, n, bits, shift):
+        """ink or paper, as the ROM's CO-TEMP sets them (2234h): 0..7 a colour; 8 transparent, the mask's bits set;
+        9 the contrast: the mask's bits set too, the colour white if the other one is dark (0..3), else black, and
+        P_FLAG's bit set, so each square gets its own contrast as it's drawn on"""
+        n = self.colour(name, n, 9)
+        if n < 8:
+            self.attr_p = (self.attr_p & ~bits & 0xFF) | (n << shift)
+        elif n == 9:
+            other_dark = not self.attr_p & (0x20 if name == 'ink' else 0x04)
+            self.attr_p = (self.attr_p & ~bits & 0xFF) | (bits if other_dark else 0)
+        self.mask = (self.mask & ~bits & 0xFF) | (bits if n >= 8 else 0)
+        return n == 9
+
     def ink(self, n):
-        self.attr_p = (self.attr_p & 0xF8) | self.colour('ink', n)
+        self.ink9 = self.set_colour('ink', n, 0x07, 0)
 
     def paper(self, n):
-        self.attr_p = (self.attr_p & 0xC7) | (self.colour('paper', n) << 3)
+        self.paper9 = self.set_colour('paper', n, 0x38, 3)
 
-    def bright(self, b):
-        self.attr_p = (self.attr_p & 0xBF) | (0x40 if b else 0)
+    def level(self, name, v, bit):
+        """bright and flash, as CO-TEMP sets them (2273h): 0 off, 1 on, 8 transparent (the bit off, the mask's on)"""
+        n = int(v)
+        if n not in (0, 1, 8):
+            raise ScreenError(f'{name} {n} is not 0, 1 or 8')
+        self.attr_p = (self.attr_p & ~bit & 0xFF) | (bit if n == 1 else 0)
+        self.mask = (self.mask & ~bit & 0xFF) | (bit if n == 8 else 0)
 
-    def flash(self, b):
-        self.attr_p = (self.attr_p & 0x7F) | (0x80 if b else 0)
+    def bright(self, v):
+        self.level('bright', v, 0x40)
+
+    def flash(self, v):
+        self.level('flash', v, 0x80)
+
+    def paint(self, cell):
+        """a square printed or plotted on gets the colours, as the ROM's PO-ATTR gives them (0BDBh)"""
+        a = ((self.mem[6144 + cell] ^ self.attr_p) & self.mask) ^ self.attr_p
+        if self.paper9:
+            a &= 0xC7
+            if not a & 0x04:                  # a dark ink gets a white paper
+                a ^= 0x38
+        if self.ink9:
+            a &= 0xF8
+            if not a & 0x20:                  # a dark paper gets a white ink
+                a ^= 0x07
+        self.mem[6144 + cell] = a
 
     def set_inverse(self, b):
         self.inverse = bool(b)
@@ -91,12 +133,19 @@ class Screen:
     def border(self, n):
         self.border_colour = self.colour('border', n)
 
+    def bordcr(self):
+        """the lower screen's colours, as the runtime keeps BORDCR: the border as paper, a white ink on a dark one"""
+        return (self.border_colour << 3) | (0 if self.border_colour & 4 else 7)
+
     def cls(self):
+        """the ROM's CLS: the upper 22 rows in the colours as they are, the lower screen's 2 in the border's"""
         self.drawn = True
         for i in range(6144):
             self.mem[i] = 0
-        for i in range(768):
+        for i in range(704):
             self.mem[6144 + i] = self.attr_p
+        for i in range(704, 768):
+            self.mem[6144 + i] = self.bordcr()
         self.row = self.col = 0
 
     # -- pixels ------------------------------------------------------------------------------------------------
@@ -123,7 +172,7 @@ class Screen:
             self.mem[off] ^= value
         else:
             self.mem[off] = (self.mem[off] & ~bit & 0xFF) | value
-        self.mem[6144 + ((175 - y) >> 3) * 32 + (x >> 3)] = self.attr_p
+        self.paint(((175 - y) >> 3) * 32 + (x >> 3))
 
     def plot(self, x, y):
         self.check(x, y)
@@ -171,9 +220,12 @@ class Screen:
                 x -= 1
                 err += 2 * (y - x) + 1
 
-    def attr(self, r, c, a):
+    def attr(self, r, c, a=None):
+        """a square's attribute byte: set it, or with no a, read it (BASIC's ATTR)"""
         if not (0 <= r <= 23 and 0 <= c <= 31):
             raise ScreenError(f'attr ({r}, {c}) is off the screen')
+        if a is None:
+            return self.mem[6144 + r * 32 + c]
         self.drawn = True
         self.mem[6144 + r * 32 + c] = a & 0xFF
 
@@ -244,7 +296,7 @@ class Screen:
             v = (~g[i] & 0xFF) if self.inverse else g[i]
             k = self.cell(self.row, i, self.col)
             self.mem[k] = (self.mem[k] ^ v) if self.over else v
-        self.mem[6144 + self.row * 32 + self.col] = self.attr_p
+        self.paint(self.row * 32 + self.col)
         self.col += 1
 
     # -- sound and time ----------------------------------------------------------------------------------------

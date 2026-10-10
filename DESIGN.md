@@ -216,9 +216,10 @@ IN AND OUT  lines() (for line in lines(), or .next())   grid()   input()
             16-column zone, a trailing ; or , keeps the line open.
             A print takes the rest of its line.
 
-SCREEN      cls ink paper bright flash inverse over border
+SCREEN      cls  ink(0..9)  paper(0..9)  bright(0, 1, 8)  flash(0, 1, 8)
+            (8: a square keeps its own; 9: the contrast)  inverse over border
             print at r, c; ...    plot(x, y)  line(x0, y0, x1, y1)
-            circle(x, y, r)  point(x, y)  attr(r, c, a)  udg(n, bytes)
+            circle(x, y, r)  point(x, y)  attr(r, c[, a])  udg(n, bytes)
             key()  ticks()  pause(frames)
 SOUND       beep(ms, semitone)
             (on a 128, later: ay(reg, v)  tone(voice, hz, vol)  quiet())
@@ -454,6 +455,17 @@ The screen library speaks **BASIC's own vocabulary and coordinates**:
 drawing is done by Barleycorn's own Z80 routines, checked pixel for
 pixel against the reference (`z80/zxgfx.py`), which is in turn checked
 against the real ROM for text.
+
+**The colours are BASIC's, 8 and 9 included.** `ink` and `paper` take
+0..7, or 8 for transparent (a square printed or drawn on keeps its own
+ink, or paper), or 9 for the contrast (white on a dark square, black on
+a light one); `bright` and `flash` take 0, 1 or 8 (true and false too).
+A square gets them as the ROM's PO-ATTR gives them, and `cls` clears in
+the colours as they are, as BASIC's CLS does. `attr(r, c)` reads a
+square's byte back, as BASIC's `ATTR` does; `attr(r, c, a)` sets it.
+`z80/tests/co_temp_check.py` holds the model's colours to BASIC itself,
+typed in on omse-ai's 48K, and `rom_text_check.py` its drawing to the
+ROM.
 
 **Sound** is `beep(ms, semitone)` through the ROM's BEEPER on any
 Spectrum. On a 128 it would be the AY too: raw registers with
@@ -929,10 +941,9 @@ Barleycorn (HISTORY.md says why).
    counter shown live with `print at` floods it. Text printed at a place
    could be the screen's alone, if the 48K's transcript could leave it
    out too.
-6. **The Spectrum's own words that are missing:** a transparent ink and
-   paper (BASIC's INK 8 and PAPER 8, so `plot` and `line` can leave a
-   square's colours alone), and reading a square's attribute back
-   (BASIC's `ATTR`).
+6. *Answered (10 October):* BASIC's INK and PAPER 8 and 9, BRIGHT and
+   FLASH 8, and `attr(r, c)` reading a square back, all as the ROM does
+   them (section 5, "Screen and sound").
 7. **An unsigned 32-bit type**, for hashes that should wrap (a `long`
    traps on overflow, by design).
 

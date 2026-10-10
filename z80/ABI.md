@@ -454,18 +454,34 @@ right when the 6,912 bytes it leaves equal the reference's, after any
 sequence of calls.
 
 **State lives in the ROM's own system variables**, so the ROM's text
-(RST 10) and our graphics agree on colours:
-- `ATTR_P` (5C8Dh) and `ATTR_T` (5C8Fh): the colours, written together;
-  `MASK_P`/`MASK_T` (5C8Eh, 5C90h) kept 0.
+(RST 10) and our graphics agree on colours. Each is set as BASIC's own
+statements set it (the ROM's CO-TEMP), and the permanent and temporary
+copies are always written together:
+- `ATTR_P` and `ATTR_T` (5C8Dh, 5C8Fh): the colours; `MASK_P` and
+  `MASK_T` (5C8Eh, 5C90h): the bits a square keeps (INK, PAPER, BRIGHT
+  or FLASH 8, and INK or PAPER 9 too).
 - `P_FLAG` (5C91h): OVER in bits 0 and 1 (temporary, permanent), INVERSE
-  in bits 2 and 3. Graphics read the permanent bits.
-- `UDG` (5C7Bh): the address of the 21 user-defined graphics. The
-  platform (`plat_zx.asm`) owns `cls`, `ink`, `paper`, `bright`,
-  `flash`, `inverse`, `over`, `border`, `print at`, `key`, `ticks` and
-  `pause`; text goes through the ROM. `beep` is its own fragment,
-  `zxbeep.asm`, so a program that never beeps doesn't carry its tables
-  or the 32-bit multiply and divide it needs (about 2K). The fragment
-  `zxgfx.asm` owns the drawing:
+  in bits 2 and 3, INK 9 in bits 4 and 5, PAPER 9 in bits 6 and 7.
+  Graphics read OVER and INVERSE's permanent bits and the 9s' temporary
+  ones, as the ROM's PO-ATTR does.
+- `BORDCR` (5C48h): the lower screen's colours, the border's: CLS clears
+  the lower two rows in them.
+- `UDG` (5C7Bh): the address of the 21 user-defined graphics.
+
+A square drawn on gets (old AND `MASK_T`) OR (`ATTR_T` AND NOT
+`MASK_T`), then PAPER 9's and INK 9's contrasts: PO-ATTR's rule (0BE4h),
+which `zxgfx.asm`'s `.paint` repeats. With no mask and no 9 (nearly
+always) that is simply `ATTR_T`, which the drawing stores without asking
+twice: line and circle patch each of their colour stores to
+`ld (hl),ATTR_T` or to a jump to `.paint` once per call.
+
+The platform (`plat_zx.asm`) owns `cls`, `print at`, `key`, `ticks` and
+`pause`; text goes through the ROM. The colours (`ink`, `paper`,
+`bright`, `flash`, `inverse`, `over`, `border`) are `zxcolour.asm`, and
+`beep` is `zxbeep.asm`, each a fragment of its own, so a program that
+never sets a colour, or never beeps, doesn't carry them (the beep's
+tables and 32-bit multiply and divide are about 2K). The fragment
+`zxgfx.asm` owns the drawing:
 
 | routine | in | out, and failures |
 |---|---|---|
@@ -474,14 +490,22 @@ sequence of calls.
 | `bly_zx_line` | HL = &block: x0, y0, x1, y1 (four ints) | either end off the screen fails, naming that end |
 | `bly_zx_circle` | HL = &block: x, y, r (three ints) | `a circle needs a radius of at least 0`; clipped, never fails off the screen |
 | `bly_zx_attr` | HL = r, DE = c, C = a | `attr ({r}, {c}) is off the screen` |
+| `bly_zx_attr_read` | HL = r, DE = c | A = the square's attribute; the same failure |
 | `bly_zx_udg` | HL = n, DE = &view (a `byte[]`: address, length) | `udg {n} is not one of 0..20 (A to U)`; `a udg is 8 rows, not {len}` |
 
-`plot` writes its cell's attribute (as BASIC's PLOT does); INVERSE and
-OVER act as in the reference (INVERSE clears, OVER XORs, both together
-leave the pixel alone). The line is Bresenham exactly as the reference
-writes it; the circle is the reference's midpoint algorithm with its
-eight points deduplicated each step, so OVER can't cancel itself.
-Off-screen errors print the values as `int`s.
+And `zxcolour.asm`'s: `bly_zx_ink` and `bly_zx_paper` take HL = n and
+fail with `{name} {n} is not a colour 0..9`; `bly_zx_border` takes HL =
+n and fails with `border {n} is not a colour 0..7`; `bly_zx_bright` and
+`bly_zx_flash` take HL = n (true is 1) and fail with
+`{name} {n} is not 0, 1 or 8`; `bly_zx_inverse` and `bly_zx_over` take A =
+0 or 1.
+
+`plot` colours its cell (as BASIC's PLOT does); INVERSE and OVER act as
+in the reference (INVERSE clears, OVER XORs, both together leave the
+pixel alone). The line is Bresenham exactly as the reference writes it;
+the circle is the reference's midpoint algorithm with its eight points
+deduplicated each step, so OVER can't cancel itself. Off-screen errors
+print the values as `int`s.
 
 ## 11. Floats: the ROM's, on the Spectrum only
 

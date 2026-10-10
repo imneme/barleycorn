@@ -674,7 +674,7 @@ class Var:
 
 SCREEN_FUNCS = {                                   # the Spectrum's screen and sound (z80/zxgfx.py is their meaning)
     'cls': ([], VOID), 'ink': ([INT], VOID), 'paper': ([INT], VOID), 'border': ([INT], VOID),
-    'bright': (['flag'], VOID), 'flash': (['flag'], VOID), 'inverse': (['flag'], VOID), 'over': (['flag'], VOID),
+    'bright': (['level'], VOID), 'flash': (['level'], VOID), 'inverse': (['flag'], VOID), 'over': (['flag'], VOID),
     'plot': ([INT, INT], VOID), 'line': ([INT] * 4, VOID), 'circle': ([INT] * 3, VOID),
     'point': ([INT, INT], BOOL), 'attr': ([INT, INT, BYTE], VOID), 'udg': ([INT, Gen('array', BYTE, n=None)], VOID),
     'key': ([], BYTE), 'ticks': ([], LONG), 'pause': ([INT], VOID), 'beep': ([INT, INT], VOID)}
@@ -1426,11 +1426,21 @@ class Checker:
             return e.cast
         if name in SCREEN_FUNCS or name in MACHINE_FUNCS:
             params, ret = SCREEN_FUNCS.get(name) or MACHINE_FUNCS[name]
+            if name == 'attr' and len(args) == 2:                 # attr(r, c) reads a square back, as BASIC's ATTR
+                params, ret = [INT, INT], BYTE
+            elif name == 'attr' and len(args) != 3:
+                raise BarleyError('attr takes 2 values (to read a square) or 3 (to set it)', e.line)
             if len(args) != len(params):
                 raise BarleyError(f'{name} takes {len(params)} value{"s" * (len(params) != 1)}', e.line)
             for a, p in zip(args, params):
                 t = self.expr(a)
-                if p == 'flag':                                   # bright(1) and bright(true) both, as BASIC
+                if p == 'level':                                  # bright: true or false, or 0, 1 or 8, as BASIC
+                    if t is BOOL:
+                        continue
+                    if not (is_int(t) or t is FLEX):
+                        raise BarleyError(f'{name} takes true or false, or 0, 1 or 8', a.line)
+                    self.coerce(a, INT)
+                elif p == 'flag':                                 # inverse(1) and inverse(true) both, as BASIC
                     if not (t is BOOL or is_int(t) or t is FLEX):
                         raise BarleyError(f'{name} takes true or false (or 0 or 1)', a.line)
                     if t is FLEX:

@@ -42,10 +42,11 @@ if ARGS.lib:
     LIB = ARGS.lib
     harness.gather = lambda symbols, target: link.gather(symbols, target, lib=LIB)
 
-SCREEN, ATTR_P, P_FLAG, UDG = 0x4000, 0x5C8D, 0x5C91, 0x5C7B
+SCREEN, ATTR_P, ATTR_T, MASK_T, P_FLAG, UDG = 0x4000, 0x5C8D, 0x5C8F, 0x5C90, 0x5C91, 0x5C7B
 SCRIPT, DATA, POINTS, UDGS = 0xA000, 0xD000, 0xE000, 0xFF58
 STACK_LO, STACK_HI = 0xEC40, 0xFF00            # the harness paints this and the stack lives in it
-ROUTINES = ['bly_zx_plot', 'bly_zx_point', 'bly_zx_line', 'bly_zx_circle', 'bly_zx_attr', 'bly_zx_udg']
+ROUTINES = ['bly_zx_plot', 'bly_zx_point', 'bly_zx_line', 'bly_zx_circle', 'bly_zx_attr', 'bly_zx_attr_read',
+            'bly_zx_udg']
 MARKS = {'iy': 0x5C3A, 'bc': 0xB1B2, 'de': 0xD1D2, 'hl': 0xE1E2, 'af': 0xA1F1}
 
 DRIVER = r'''
@@ -85,16 +86,34 @@ tz_next:
         jp z,tz_point
         dec a
         jp z,tz_setattr
-        ld a,(hl)                   ; 8: P_FLAG
+        dec a
+        jp z,tz_setflag
+        dec a
+        jp z,tz_setmask
+        call tz_xy                  ; 10: attr read, into the points
+        call bly_zx_attr_read
+        ld hl,(tz_pp)
+        ld (hl),a
+        inc hl
+        ld (tz_pp),hl
+        jp tz_next
+tz_setflag:
+        ld a,(hl)                   ; P_FLAG
         inc hl
         ld (tz_sp),hl
         ld (5C91h),a
         jp tz_next
-tz_setattr:
-        ld a,(hl)
+tz_setmask:
+        ld a,(hl)                   ; MASK_T
         inc hl
         ld (tz_sp),hl
-        ld (5C8Dh),a
+        ld (5C90h),a
+        jp tz_next
+tz_setattr:
+        ld a,(hl)                   ; ATTR_T
+        inc hl
+        ld (tz_sp),hl
+        ld (5C8Fh),a
         jp tz_next
 tz_plot:
         call tz_xy
@@ -201,31 +220,45 @@ def build(ops):
             s += b'\x05' + w16(op[1]) + w16(op[2]) + w16(op[3])
         elif k == 'point':
             s += b'\x06' + w16(op[1]) + w16(op[2])
-        elif k == 'ink':                       # ATTR_P, the whole byte
+        elif k == 'ink':                       # ATTR_T, the whole byte
             s += b'\x07' + bytes([op[1]])
         elif k == 'flag':                      # P_FLAG, the whole byte
             s += b'\x08' + bytes([op[1]])
+        elif k == 'mask':                      # MASK_T, the whole byte
+            s += b'\x09' + bytes([op[1]])
+        elif k == 'attrr':                     # attr(r, c), read into the points
+            s += b'\x0a' + w16(op[1]) + w16(op[2])
     s += b'\x00'
     assert SCRIPT + len(s) <= DATA and DATA + len(data) <= POINTS, 'script too long'
     return bytes(s), bytes(data)
 
 
-def model(ops, scr0, udgs0, attr0, flag0):
+def set_flag(sc, f):
+    """P_FLAG's bits that count: OVER and INVERSE (permanent, 1 and 3), INK 9 and PAPER 9 (temporary, 4 and 6)"""
+    sc.over, sc.inverse, sc.ink9, sc.paper9 = bool(f & 2), bool(f & 8), bool(f & 0x10), bool(f & 0x40)
+
+
+def model(ops, scr0, udgs0, attr0, flag0, mask0=0):
     """the reference, driven the same way: (screen, udgs, points, failure message or None)"""
     sc = zxgfx.Screen()
     sc.mem[:] = scr0
     sc.udgs[:] = udgs0
-    sc.attr_p, sc.over, sc.inverse = attr0, bool(flag0 & 2), bool(flag0 & 8)
+    sc.attr_p, sc.mask = attr0, mask0
+    set_flag(sc, flag0)
     points = []
     try:
         for op in ops:
             k, a = op[0], op[1:]
             if k == 'point':
                 points.append(int(sc.point(*a)))
+            elif k == 'attrr':
+                points.append(sc.attr(*a))
             elif k == 'ink':
                 sc.attr_p = a[0]
+            elif k == 'mask':
+                sc.mask = a[0]
             elif k == 'flag':
-                sc.over, sc.inverse = bool(a[0] & 2), bool(a[0] & 8)
+                set_flag(sc, a[0])
             elif k == 'udg':
                 sc.udg(a[0], list(a[1]))
             elif k == 'udgv':
@@ -241,11 +274,13 @@ def run(ops, rng, line=0, why=''):
     """one script, on both; returns a list of what disagreed"""
     scr0 = bytes(rng.getrandbits(8) for _ in range(6912))
     udgs0 = bytes(rng.getrandbits(8) for _ in range(168))
-    attr0, flag0 = rng.getrandbits(8), rng.getrandbits(8)
-    want_scr, want_udgs, want_pts, want_msg = model(ops, scr0, udgs0, attr0, flag0)
+    attr0 = rng.getrandbits(8)
+    flag0 = noisy(rng, rng.choice(FLAGS) | rng.choice([0, 0, 0, 0x10, 0x40, 0x50]))
+    mask0 = rng.choice([0, 0, 0, rng.getrandbits(8), rng.choice([0x07, 0x38, 0xC0])])
+    want_scr, want_udgs, want_pts, want_msg = model(ops, scr0, udgs0, attr0, flag0, mask0)
     script, data = build(ops)
-    mem = {SCREEN: scr0, UDG: w16(UDGS), ATTR_P: bytes([attr0]), P_FLAG: bytes([flag0]), SCRIPT: script,
-           DATA: data, UDGS: udgs0}
+    mem = {SCREEN: scr0, UDG: w16(UDGS), ATTR_T: bytes([attr0, mask0, flag0]), SCRIPT: script, DATA: data,
+           UDGS: udgs0}
     res = R.call('tz_run', mem=mem, set16={'bly_line': line} if line else None, max_t=2_000_000_000)
     m, sym = res.mem, res.sym
     bad = []
@@ -278,8 +313,8 @@ def run(ops, rng, line=0, why=''):
     for addr, d in mem.items():
         init[addr:addr + len(d)] = d
     for op in ops:
-        if op[0] in ('ink', 'flag'):
-            init[ATTR_P if op[0] == 'ink' else P_FLAG] = op[1]
+        if op[0] in ('ink', 'mask', 'flag'):
+            init[{'ink': ATTR_T, 'mask': MASK_T, 'flag': P_FLAG}[op[0]]] = op[1]
     code_end = 0x8000 + len(R.build('tz_run')[0])
     for lo, hi in ((SCREEN + 6912, 0x8000), (code_end, POINTS), (POINTS + len(want_pts), STACK_LO),
                    (STACK_HI, UDGS)):
@@ -295,8 +330,9 @@ FLAGS = [0, 2, 8, 10]                          # plain, OVER, INVERSE, both (the
 
 
 def noisy(rng, f):
-    """a P_FLAG with these permanent bits, and noise in every bit that must not count"""
-    return f | (rng.getrandbits(8) & ~0x0A)
+    """a P_FLAG with these bits (OVER and INVERSE's permanent 1 and 3, INK 9 and PAPER 9's temporary 4 and 6), and
+    noise in every bit that must not count"""
+    return f | (rng.getrandbits(8) & ~0x5A)
 
 
 def edges(rng):
@@ -368,6 +404,17 @@ def edges(rng):
         ops.append(('circle', cx, cy, r))
     out.append(('circles reaching the window edges', ops, 0))
     out.append(('every udg', [('udg', n, [rng.getrandbits(8) for _ in range(8)]) for n in range(21)], 0))
+    # colours with a mask (ink, paper, bright, flash 8) and contrasts (ink and paper 9), on squares that all differ:
+    # plot, lines (the general way, horizontal, vertical) and circles (fast and clipped), and reading squares back
+    for mask, contrast in ((0x07, 0), (0x38, 0), (0xC0, 0), (0xFF, 0), (0x3F, 0x10), (0x07, 0x40), (0x38, 0x10),
+                           (0, 0x10), (0, 0x40), (0, 0x50), (0xC7, 0x50)):
+        ops = [('attr', r, c, rng.getrandbits(8)) for r in range(22) for c in range(32)]
+        ops += [('mask', mask), ('flag', noisy(rng, rng.choice(FLAGS) | contrast)), ('ink', rng.getrandbits(8))]
+        ops += [('plot', x, y) for x, y in corners + near]
+        ops += [('line', 0, 5, 255, 170), ('line', 3, 100, 250, 100), ('line', 40, 0, 40, 175), ('line', 9, 9, 9, 9),
+                ('circle', 128, 88, 60), ('circle', 10, 10, 30), ('circle', 128, 88, 0)]
+        ops += [('attrr', r, c) for r in (0, 10, 12, 21, 23) for c in (0, 5, 16, 31)]
+        out.append((f'mask {mask:02X}h, contrast bits {contrast:02X}h', ops, 0))
     return out
 
 
@@ -388,6 +435,7 @@ def failures(rng):
         out.append((f'circle radius {r}', pre() + [('circle', 128, 88, r)], line()))
     for r, c in ((-1, 0), (24, 0), (0, -1), (0, 32), (-32768, -32768), (32767, 5), (23, 32), (24, 31), (256, 0)):
         out.append((f'attr ({r}, {c})', pre() + [('attr', r, c, 7)], line()))
+        out.append((f'attr read ({r}, {c})', pre() + [('attrr', r, c)], line()))
     for n in (-1, 21, 22, -32768, 32767, 256):
         out.append((f'udg {n}', pre() + [('udg', n, [1] * rng.choice([8, 3]))], line()))
     for n, k in ((5, 264), (20, 32768), (0, 65535), (21, 7), (-1, 264)):
@@ -444,11 +492,15 @@ def random_op(rng, big):
         return ('circle', cx, cy, r)
     if k < 0.8:
         return ('attr', rng.randint(0, 23), rng.randint(0, 31), rng.getrandbits(8))
-    if k < 0.84:
+    if k < 0.83:
         return ('udg', rng.randint(0, 20), [rng.getrandbits(8) for _ in range(8)])
-    if k < 0.92:
+    if k < 0.86:
+        return ('attrr', rng.randint(0, 23), rng.randint(0, 31))
+    if k < 0.91:
         return ('ink', rng.getrandbits(8))
-    return ('flag', noisy(rng, rng.choice(FLAGS)))
+    if k < 0.94:
+        return ('mask', rng.choice([0, 0, 0x07, 0x38, 0xC0, rng.getrandbits(8)]))
+    return ('flag', noisy(rng, rng.choice(FLAGS) | rng.choice([0, 0, 0, 0x10, 0x40, 0x50])))
 
 
 def random_script(rng, n, big=False):
@@ -483,7 +535,7 @@ MUTANTS = [
     ('and 0F8h\n        xor h\n        ld h,a                      ; H = 010 TT SSS',
      'and 0F0h\n        xor h\n        ld h,a', 'plot splices badly'),
     ('db 80h,40h,20h,10h', 'db 80h,20h,40h,10h', 'two masks swapped'),
-    ('or 58h\n        ld h,a\n        ld a,(ZXG_ATTR_P)', 'or 59h\n        ld h,a\n        ld a,(ZXG_ATTR_P)',
+    ('or 58h\n        ld h,a\n        ld de,(ZXG_MASK_T)', 'or 59h\n        ld h,a\n        ld de,(ZXG_MASK_T)',
      "plot colours the wrong third's cell"),
     ('and (hl)\n        ret z\n        ld a,1', 'or (hl)\n        ret z\n        ld a,1', 'point ors'),
     # attr and udg
@@ -510,7 +562,8 @@ MUTANTS = [
      'line up into a row of cells'),
     ('ld hl,(.blk+4)\n        ld de,(.blk+6)\n        call bly_zx_plot.chk', 'ld hl,(.blk+4)\n        ld de,(.blk+6)',
      'line never checks its second end'),
-    ('ld (.lcol+1),a', 'nop\n        nop\n        nop', 'line keeps old colours'),
+    ('ld hl,.lcol                 ; the colours: a plain store, or through .paint\n        ld de,.lpaint\n'
+     '        call bly_zx_plot.site', 'nop', 'line keeps old colours'),
     ('ld (.xop2),a', 'nop\n        nop\n        nop', 'shallow lines keep an old operation'),
     ('ld (.vk+1),a', 'nop\n        nop\n        nop', 'vertical lines mistake their rows of cells'),
     ('ld (.vop1),a', 'nop\n        nop\n        nop', 'vertical lines keep an old operation'),
@@ -518,7 +571,8 @@ MUTANTS = [
     ('add a,a\n        dec a\n        ld d,a', 'add a,a\n        nop\n        ld d,a', 'horizontal: the first mask'),
     ('ld d,0FFh', 'ld d,0FEh', 'horizontal: a middle byte misses a pixel'),
     ('jr nc,.h1', 'jr .h1', 'horizontal: right to left'),
-    ('ld (.hcol2+1),a', 'nop\n        nop\n        nop', 'horizontal: the last cell keeps old colours'),
+    ('ld hl,.hcol2\n        ld de,.hpaint2\n        call bly_zx_plot.site', 'nop',
+     'horizontal: the last cell keeps old colours'),
     ('ld (.hop3),a', 'nop\n        nop\n        nop', 'horizontal: the last byte keeps an old operation'),
     ('cp b\n        jp z,.horiz', 'cp b\n        nop\n        nop\n        nop', 'CONTROL: horizontal lines the general way'),
     ('ld a,b\n        or a\n        jr z,.vert', 'ld a,b\n        or a\n        nop\n        nop',
@@ -564,7 +618,24 @@ MUTANTS = [
      'fast circle: row cy - x goes the wrong way'),
     ('jp z,.flast                 ; y = x', 'ret z                       ; y = x', 'fast circle skips its last step'),
     ('ld (.fop2),a', 'nop\n        nop\n        nop', 'fast circle keeps an old operation'),
-    ('ld (.fcol+1),a', 'nop\n        nop\n        nop', 'fast circle keeps old colours'),
+    ('ld hl,.fcol\n        ld de,.fpaint\n        call bly_zx_plot.site', 'nop', 'fast circle keeps old colours'),
+    # colours with a mask or a contrast (the PO-ATTR way)
+    ('and d\n        xor e                       ; the square', 'and 0\n        xor e                       ; the square',
+     'paint ignores the mask'),
+    ('xor 38h\n.pa1:', 'xor 30h\n.pa1:', 'PAPER 9 makes the wrong paper'),
+    ('bit 2,a\n        jr nz,.pa1', 'bit 1,a\n        jr nz,.pa1', "PAPER 9 looks at the wrong bit of the ink"),
+    ('bit 4,e                     ; INK 9', 'bit 5,e                     ; INK 9', 'INK 9 reads the permanent bit'),
+    ('bit 5,a\n        jr nz,.pa2', 'bit 4,a\n        jr nz,.pa2', 'INK 9 looks at the wrong bit of the paper'),
+    ('ld a,d\n        and 50h\n        or e', 'ld a,d\n        and 40h\n        or e', 'plot misses INK 9 on its own'),
+    ('and 50h\n        or e\n        jr nz,.paint', 'and 50h\n        nop\n        jr nz,.paint', 'plot ignores the mask'),
+    ('call .fancy\n        jr nz,.sjr', 'xor a\n        jr nz,.sjr', 'line and circle never paint'),
+    ('call .fancy\n        jr nz,.sjr', 'or 1\n        jr nz,.sjr', 'CONTROL: line and circle always paint'),
+    ('scf\n        sbc hl,de                   ; the trampoline', 'or a\n        sbc hl,de                   ; the trampoline',
+     'a patched jump lands a byte late'),
+    ('.hpaint1: push af', '.hpaint1: nop', 'horizontal painting loses A'),
+    ('jr .qr2\n.qpaint:', 'ret\n.qpaint:', "a circle's painted first column skips the second"),
+    ('or 58h\n        ld d,a\n        ld a,(de)\n        ret', 'or 58h\n        ld d,a\n        ld a,(hl)\n        ret',
+     'attr read reads the wrong place'),
     ('cp 176\n        jp c,.fast', 'cp 176\n        jp .gloop', 'CONTROL: never the fast way'),
     ('.masks: db 80h', '        db 0\n.masks: db 80h', 'CONTROL: the mask table a byte further on'),
     ('.masks: db 80h', '        ds {PAD}\n.masks: db 80h', 'CONTROL: the mask table across a page'),

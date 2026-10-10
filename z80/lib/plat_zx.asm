@@ -1,4 +1,4 @@
-;; provides: bly_putc bly_exit bly_start bly_text bly_tlen bly_basic_sp bly_zx_cls bly_zx_ink bly_zx_paper bly_zx_border bly_zx_bright bly_zx_flash bly_zx_inverse bly_zx_over bly_zx_at bly_zx_key bly_zx_ticks bly_zx_pause
+;; provides: bly_putc bly_exit bly_start bly_text bly_tlen bly_basic_sp bly_zx_cls bly_zx_at bly_zx_key bly_zx_ticks bly_zx_pause
 ;; needs: bly_atop bly_alimit bly_fail bly_pr_cstr bly_pr_i16 bly_out bly_col
 ;; uses: bly_program bly_bss bly_bss_end bly_input_at
 ;; targets: zx48
@@ -10,11 +10,9 @@
 ;;            (A5h and up) prints as ?, so nothing is ever interpreted. The scroll prompt is kept quiet.
 ;;            clobbers: AF BC DE HL
 ;; bly_exit   back to BASIC, from anywhere: BASIC's SP, then RET (0 OK)
-;; The screen and sound's platform half (ABI.md section 10; zxgfx.py is their meaning). The colours live in the
-;; ROM's own ATTR_P/ATTR_T (MASK kept 0), OVER and INVERSE in P_FLAG, so the ROM's text and our drawing agree.
+;; The screen and sound's platform half (ABI.md section 10; zxgfx.py is their meaning). The colours (ink, paper,
+;; border, bright, flash, inverse, over) are zxcolour.asm, a fragment of their own, as beep is zxbeep.asm.
 ;; bly_zx_cls                          the ROM's CLS, then print starts at the top left    clobbers: all but IY
-;; bly_zx_ink, _paper, _border  in: HL=n   fails: {name} {n} is not a colour 0..7          clobbers: AF BC DE HL
-;; bly_zx_bright, _flash, _inverse, _over  in: A=0 or 1                                    clobbers: AF HL
 ;; bly_zx_at    in: HL=r DE=c          fails: print at ({r}, {c}) is off the screen        clobbers: AF BC DE HL
 ;; bly_zx_beep is zxbeep.asm, its own fragment: its tables and 32-bit arithmetic are 2K a program doesn't need
 ;;            unless it beeps
@@ -100,95 +98,6 @@ bly_zx_cls:
         call 1601h                  ; and printing to the upper screen again
         ld hl,0
         ld (bly_col),hl
-        ret
-
-.colour:                            ; HL = n, DE = the name: fail unless 0..7; else A = n
-        ld a,h
-        or a
-        jr nz,.bad
-        ld a,l
-        cp 8
-        ret c
-.bad:   push hl
-        ex de,hl
-        call bly_pr_cstr
-        ld a,' '
-        call bly_out
-        pop hl
-        call bly_pr_i16
-        ld hl,.notc
-        jp bly_fail
-.notc:  db " is not a colour 0..7",0
-
-bly_zx_ink:
-        ld de,.name
-        call bly_zx_cls.colour
-        ld c,a
-        ld a,(ATTR_P)
-        and 0F8h
-        or c
-        jr bly_zx_paper.set
-.name:  db "ink",0
-bly_zx_paper:
-        ld de,.name
-        call bly_zx_cls.colour
-        add a,a
-        add a,a
-        add a,a
-        ld c,a
-        ld a,(ATTR_P)
-        and 0C7h
-        or c
-.set:   ld (ATTR_P),a
-        ld (ATTR_T),a
-        xor a
-        ld (MASK_P),a
-        ld (MASK_T),a
-        ret
-.name:  db "paper",0
-bly_zx_border:
-        ld de,.name
-        call bly_zx_cls.colour
-        out (254),a
-        ld c,a
-        add a,a
-        add a,a
-        add a,a
-        bit 2,c                     ; a dark border gets white writing below, as the ROM's BORDER does
-        jr nz,.light
-        or 7
-.light: ld (BORDCR),a
-        ret
-.name:  db "border",0
-
-bly_zx_bright:
-        ld l,40h
-        jr bly_zx_flash.bit
-bly_zx_flash:
-        ld l,80h
-.bit:   ld h,a                      ; A = 0 or 1
-        ld a,(ATTR_P)
-        or l
-        xor l                       ; the bit cleared
-        dec h
-        jr nz,.store
-        or l
-.store: ld (ATTR_P),a
-        ld (ATTR_T),a
-        ret
-bly_zx_inverse:
-        ld l,0Ch                    ; P_FLAG bits 2 and 3
-        jr bly_zx_over.bits
-bly_zx_over:
-        ld l,03h                    ; P_FLAG bits 0 and 1
-.bits:  ld h,a
-        ld a,(P_FLAG)
-        or l
-        xor l
-        dec h
-        jr nz,.store
-        or l
-.store: ld (P_FLAG),a
         ret
 
 bly_zx_at:

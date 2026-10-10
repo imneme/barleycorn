@@ -2303,7 +2303,15 @@ class Gen:
         elif name in ('ink', 'paper', 'border', 'pause'):
             self.load_hl(ints(0))
             self.call(routine)
-        elif name in ('bright', 'flash', 'inverse', 'over'):
+        elif name in ('bright', 'flash'):                # 0, 1 or 8 (true and false are 1 and 0), checked there
+            if args[0].ty in (B.BOOL, B.BIT):
+                self.to_bool_a(args[0])
+                self.emit('ld l,a')
+                self.emit('ld h,0')
+            else:
+                self.load_hl(ints(0))
+            self.call(routine)
+        elif name in ('inverse', 'over'):
             self.to_bool_a(args[0])
             self.call(routine)
         elif name in ('plot', 'point'):
@@ -2323,6 +2331,15 @@ class Gen:
                 self.put(f'{blk}+{2 * i}', v, B.INT)
             self.emit(f'ld hl,{blk}')
             self.call(routine)
+        elif name == 'attr' and len(args) == 2:          # attr(r, c) reads a square back
+            r, c = ints(0), ints(1)
+            self.load_hl(c)
+            self.emit('ex de,hl')
+            self.load_hl(r)
+            self.call('bly_zx_attr_read')
+            t = self.temp(B.BYTE)
+            self.emit(f'ld ({t.val}),a')
+            return t
         elif name == 'attr':
             r, c, a = ints(0), ints(1), self.conv(args[2], B.BYTE)
             self.load_a(a)

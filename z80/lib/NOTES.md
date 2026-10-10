@@ -783,6 +783,34 @@ registers and its words. **Three fragments, not one:**
     exactly one is on) and never test the mode per pixel.
   - Plot reads P_FLAG's permanent bits (1 and 3) on every call, and only
     those: the test randomises the others.
+- **The colours, masks and contrasts** (10 October, for BASIC's INK and
+  PAPER 8 and 9, BRIGHT and FLASH 8):
+  - **The rule is the ROM's PO-ATTR** (0BDBh, read with omse-ai's
+    `zxdis.py`): (old AND MASK_T) OR (ATTR_T AND NOT MASK_T), then PAPER
+    9 (P_FLAG bit 6) and INK 9 (bit 4) make white on dark, black on
+    light. `.paint` repeats its tail (0BE4h on) rather than calling it,
+    so the drawing still runs on the bare Z80, whose ROM is zeros.
+  - **The plain case costs (nearly) nothing.** Plot asks once whether a
+    mask or a contrast is set: MASK_T and P_FLAG are neighbours, so
+    `ld de,(5C90h)` reads both, 42 T a plot. Line and circle ask once
+    per call, and patch each two-byte colour store to `ld (hl),ATTR_T`,
+    or to a `jr` to a trampoline that calls `.paint` and carries on as
+    the store would have. The jumps are patched at run time, so each
+    site has an `assert` that its trampoline is in reach (the first
+    version's `.fcol` wasn't: 240 lines away).
+  - **Measured** (`zxbench.py`): ex-collatz, which plots a pixel at a
+    time, 1.1% slower; the other drawing programs 0.5% or less; drawing
+    programs 3-4% bigger (`.paint`, the patching, and the setters). The
+    setters went to `zxcolour.asm`, out of `plat_zx.asm`, so a program
+    that never sets a colour no longer carries them: the bench's
+    non-drawing programs are 13-18% smaller than before.
+  - **Held to the real thing twice:** `../tests/co_temp_check.py` types
+    the same INK, PAPER, BRIGHT, FLASH and BORDER as BASIC commands on
+    omse-ai's 48K and compares the colours they leave with the model's;
+    `rom_text_check.py` prints with them and compares the screen with
+    the ROM's. The ROM's CLS clears the lower screen's two rows in the
+    border's colours (BORDCR), which the model didn't know until
+    `attr(r, c)` could read them.
 - **plot** works the address out inline (z88dk notes 6.3.2: three
   rotates feeding in 0, 1, 0 make the 010, and two XOR-AND-XOR splices)
   and takes the mask from an 8-byte table.

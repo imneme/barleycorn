@@ -901,16 +901,20 @@ class Gen:
         """a screen or sound builtin: its arguments, already computed in order, as the reference's types; then one
         call into bly_zx.h, which checks them as zxgfx.py does"""
         params, ret = B.SCREEN_FUNCS[name]
+        if name == 'attr' and len(args) == 2:                # attr(r, c) reads a square back
+            name, params, ret = 'attr_read', [B.INT, B.INT], B.BYTE
         cargs = []
         for a, v, p in zip(e.args, args, params):
-            if p == 'flag':                                  # bright(1) and bright(true) both
+            if p == 'level':                                 # bright(true) is bright(1); a number is checked there
+                cargs.append(f'(i16)({v})' if a.ty is B.BOOL else self.conv(v, a.ty, B.INT))
+            elif p == 'flag':                                # inverse(1) and inverse(true) both
                 cargs.append(f'(b8)({v} != 0)')
             elif isinstance(p, B.Gen):                       # udg's rows: a byte[] view, pointer and length
                 view = self.temp(self.arr_view(B.BYTE), v)
                 cargs += [f'{view}.p', f'{view}.n']
             else:
                 cargs.append(self.conv(v, a.ty, p))
-        if name not in ('cls', 'bright', 'flash', 'inverse', 'over', 'ticks', 'key'):
+        if name not in ('cls', 'inverse', 'over', 'ticks', 'key'):
             cargs.append(str(e.line))
         call = f'bly_zx_{name}({", ".join(cargs)})'
         if ret is B.VOID:

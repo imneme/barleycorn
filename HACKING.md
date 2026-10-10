@@ -85,6 +85,43 @@ decide where arithmetic wraps (unsigned) or traps (signed).
   once. `zxbuild.py` makes a tape, and for CP/M the assembly is a
   `.COM`.
 
+## Where printing happens
+
+Every `print` ends in one routine per machine, `bly_putc`, and on the
+Spectrum that is the ROM's own `RST 10h`.
+
+- The generated code calls the library's printers for each item:
+  `bly_pr_cstr` and `bly_pr_str` for text and `bly_pr_i16` for 16-bit
+  numbers (`z80/lib/core.asm`), the other widths in `num.asm`, floats in
+  `fp.asm`. Each byte goes through `bly_out` (`core.asm`), which keeps
+  the column that `print`'s comma needs, then to `bly_putc`.
+- **On the Spectrum**, `bly_putc` is in `z80/lib/plat_zx.asm`. It keeps
+  the scroll counter (SCRCT) at 255 so "scroll?" never asks, turns a
+  newline into ENTER, prints a control code or a keyword token as `?`
+  (so nothing is ever interpreted), and does `RST 10h`. `bly_start`
+  opened stream 2, the upper screen, with the ROM's CHAN-OPEN (1601h).
+  `print at` is `bly_zx_at`: AT and its row and column, straight to
+  `RST 10h`.
+- **On CP/M**, `bly_putc` is in `z80/lib/plat_cpm.asm`: BDOS function 2,
+  a newline as CR LF.
+
+**Why the ROM.** It is the Spectrum's text exactly: the font, the block
+graphics and UDGs, INVERSE and OVER, every colour rule (INK 8 and 9 come
+through its PO-ATTR), wrapping, and its lazy scrolling. The reference
+model, `z80/zxgfx.py`, copies it, and `z80/tests/rom_text_check.py`
+holds the copy to the real ROM. It is also what BASIC programmers know:
+anything the ROM's printing can do, a Barleycorn program's can.
+
+**What it costs**, measured on the 48K: about 1,800 T-states a character
+(half a millisecond), so a full screen of 704 takes 0.36 s, and about
+150,000 for a scroll. Hand-written printing could be perhaps four times
+faster per character, but a scroll costs about the same whichever code
+moves the 5.4K, and it is the scroll that dominates a program printing
+line after line. So the ROM stays, unless a program shows otherwise.
+Reading the keyboard will go through the ROM too (`inkey()`, and input
+of numbers and text through the ROM's editor, in the way of Melissa's
+spectrum-minilib), when it comes.
+
 ## Tests
 
 `./check` runs them all; `./check --quick` the fast ones;

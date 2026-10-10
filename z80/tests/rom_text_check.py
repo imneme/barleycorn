@@ -1,5 +1,6 @@
 """Check the reference's text against the real ROM: random programs of prints (wrapping, scrolling, print at,
-block graphics, UDGs, characters that print as ?) and colour changes, run in the interpreter and on omse-ai's 48K;
+block graphics, UDGs, characters that print as ?) and colour changes (8 and 9 too), run in the interpreter and on
+omse-ai's 48K;
 the upper 22 rows of the screen must be identical. Run it with omse-ai's Python."""
 import argparse
 import os, random, subprocess, sys, tempfile
@@ -27,6 +28,9 @@ def text(rng):
     return ''.join(out)
 
 
+COLOURS = list(range(8)) + [8, 8, 9, 9, 9, 9]      # 8 and 9 often: they're where the rules are
+
+
 def program(rng):
     lines = ['func main()', '  cls()']
     for _ in range(rng.randrange(5, 40)):
@@ -36,12 +40,17 @@ def program(rng):
             lines.append(f'  print "{text(rng)}"{end}')
         elif k < 0.6:
             lines.append(f'  print at {rng.randrange(22)}, {rng.randrange(32)}; "{text(rng)}"{rng.choice(["", ";"])}')
-        elif k < 0.7:
-            lines.append(f'  ink({rng.randrange(8)})')
-        elif k < 0.75:
-            lines.append(f'  paper({rng.randrange(8)})')
+        elif k < 0.67:
+            lines.append(f'  ink({rng.choice(COLOURS)})')                # 8: transparent, 9: contrast
+        elif k < 0.72:
+            lines.append(f'  paper({rng.choice(COLOURS)})')
+        elif k < 0.76:
+            lines.append(f'  {rng.choice(["bright", "flash"])}({rng.choice(["true", "false", "0", "1", "8", "8"])})')
+        elif k < 0.79:                                                   # squares that differ, for masks to keep
+            r, c = rng.randrange(22), rng.randrange(28)
+            lines.append(f'  for c in {c}..{c + 5} do attr({r}, c, byte(c * 37 + {rng.randrange(256)})) end')
         elif k < 0.8:
-            lines.append(f'  bright({rng.choice(["true", "false"])})')
+            lines.append('  cls()')
         elif k < 0.85:
             lines.append(f'  inverse({rng.choice(["true", "false"])})')
         elif k < 0.9:

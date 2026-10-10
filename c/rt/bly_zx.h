@@ -29,7 +29,9 @@ static u8 bly_mem[65536];
 static const u8 bly_zx_rom[0x4000] = BLY_ZX_ROM;
 #endif
 static u8 *const bly_zx_mem = bly_mem + 0x4000;
-static u8 bly_zx_attr_p = 0x38;                 /* paper 7, ink 0: the Spectrum's own start */
+static u8 bly_zx_attr_p = 0x38;                 /* paper 7, ink 0: the Spectrum's own start (ATTR_P, = ATTR_T) */
+static u8 bly_zx_mask;                           /* MASK_P: the bits a square keeps (8: transparent) */
+static b8 bly_zx_ink9, bly_zx_paper9;            /* P_FLAG's INK 9 and PAPER 9: contrast */
 static b8 bly_zx_inv, bly_zx_ovr;
 static u8 bly_zx_border_c = 7;
 static i32 bly_zx_row, bly_zx_col;               /* the print position; row 22 and column 32 are "pending" */
@@ -68,25 +70,66 @@ _Noreturn static void bly_zx_fail1(const char *pre, i64 a, const char *post, int
 
 /* -- colours ------------------------------------------------------------------------------------------------------ */
 
-static u8 bly_zx_colour(const char *name, i16 n, int l) {
-    if (!(0 <= n && n <= 7)) {
+static u8 bly_zx_colour(const char *name, i16 n, i16 top, int l) {
+    if (!(0 <= n && n <= top)) {
         bly_pr_cstr(name);
-        bly_zx_fail1(" ", n, " is not a colour 0..7", l);
+        bly_zx_fail1(" ", n, top == 9 ? " is not a colour 0..9" : " is not a colour 0..7", l);
     }
     return (u8)n;
 }
 
-static void bly_zx_ink(i16 n, int l) { bly_zx_attr_p = (u8)((bly_zx_attr_p & 0xF8) | bly_zx_colour("ink", n, l)); }
-static void bly_zx_paper(i16 n, int l) { bly_zx_attr_p = (u8)((bly_zx_attr_p & 0xC7) | (bly_zx_colour("paper", n, l) << 3)); }
-static void bly_zx_bright(b8 b) { bly_zx_attr_p = (u8)((bly_zx_attr_p & 0xBF) | (b ? 0x40 : 0)); }
-static void bly_zx_flash(b8 b) { bly_zx_attr_p = (u8)((bly_zx_attr_p & 0x7F) | (b ? 0x80 : 0)); }
+/* ink or paper, as the ROM's CO-TEMP sets them: 0..7 a colour; 8 transparent (the mask's bits set); 9 the contrast
+ * (the mask's bits set too, the colour white if the other is dark, else black, and P_FLAG's bit set) */
+static b8 bly_zx_set_colour(const char *name, i16 n, u8 bits, int shift, int l) {
+    u8 v = bly_zx_colour(name, n, 9, l);
+    if (v < 8) bly_zx_attr_p = (u8)((bly_zx_attr_p & ~bits) | (v << shift));
+    else if (v == 9) {
+        b8 other_dark = !(bly_zx_attr_p & (shift == 0 ? 0x20 : 0x04));
+        bly_zx_attr_p = (u8)((bly_zx_attr_p & ~bits) | (other_dark ? bits : 0));
+    }
+    bly_zx_mask = (u8)((bly_zx_mask & ~bits) | (v >= 8 ? bits : 0));
+    return v == 9;
+}
+
+static void bly_zx_ink(i16 n, int l) { bly_zx_ink9 = bly_zx_set_colour("ink", n, 0x07, 0, l); }
+static void bly_zx_paper(i16 n, int l) { bly_zx_paper9 = bly_zx_set_colour("paper", n, 0x38, 3, l); }
+
+/* bright and flash, as CO-TEMP sets them: 0 off, 1 on, 8 transparent (the bit off, the mask's on) */
+static void bly_zx_level(const char *name, i16 n, u8 bit, int l) {
+    if (!(n == 0 || n == 1 || n == 8)) {
+        bly_pr_cstr(name);
+        bly_zx_fail1(" ", n, " is not 0, 1 or 8", l);
+    }
+    bly_zx_attr_p = (u8)((bly_zx_attr_p & ~bit) | (n == 1 ? bit : 0));
+    bly_zx_mask = (u8)((bly_zx_mask & ~bit) | (n == 8 ? bit : 0));
+}
+
+static void bly_zx_bright(i16 n, int l) { bly_zx_level("bright", n, 0x40, l); }
+static void bly_zx_flash(i16 n, int l) { bly_zx_level("flash", n, 0x80, l); }
+
+/* a square printed or plotted on gets the colours, as the ROM's PO-ATTR gives them (0BDBh) */
+static void bly_zx_paint(i32 cell) {
+    u8 a = (u8)(((bly_zx_mem[6144 + cell] ^ bly_zx_attr_p) & bly_zx_mask) ^ bly_zx_attr_p);
+    if (bly_zx_paper9) {
+        a &= 0xC7;
+        if (!(a & 0x04)) a ^= 0x38;                /* a dark ink gets a white paper */
+    }
+    if (bly_zx_ink9) {
+        a &= 0xF8;
+        if (!(a & 0x20)) a ^= 0x07;                /* a dark paper gets a white ink */
+    }
+    bly_zx_mem[6144 + cell] = a;
+}
 static void bly_zx_inverse(b8 b) { bly_zx_inv = b ? 1 : 0; }
 static void bly_zx_over(b8 b) { bly_zx_ovr = b ? 1 : 0; }
-static void bly_zx_border(i16 n, int l) { bly_zx_border_c = bly_zx_colour("border", n, l); }
+static void bly_zx_border(i16 n, int l) { bly_zx_border_c = bly_zx_colour("border", n, 7, l); }
 
+/* the ROM's CLS: the upper 22 rows in the colours as they are, the lower screen's 2 in the border's (BORDCR: the border
+ * as paper, a white ink on a dark one) */
 static void bly_zx_cls(void) {
     memset(bly_zx_mem, 0, 6144);
-    memset(bly_zx_mem + 6144, bly_zx_attr_p, 768);
+    memset(bly_zx_mem + 6144, bly_zx_attr_p, 704);
+    memset(bly_zx_mem + 6144 + 704, (bly_zx_border_c << 3) | ((bly_zx_border_c & 4) ? 0 : 7), 64);
     bly_zx_row = bly_zx_col = 0;
 }
 
@@ -106,7 +149,7 @@ static void bly_zx_put(i32 x, i32 y) {
     u8 value = bly_zx_inv ? 0 : bit;
     if (bly_zx_ovr) bly_zx_mem[off] ^= value;
     else bly_zx_mem[off] = (u8)((bly_zx_mem[off] & ~bit & 0xFF) | value);
-    bly_zx_mem[6144 + (ys >> 3) * 32 + (x >> 3)] = bly_zx_attr_p;
+    bly_zx_paint((ys >> 3) * 32 + (x >> 3));
 }
 
 static void bly_zx_plot(i16 x, i16 y, int l) {
@@ -162,6 +205,12 @@ static void bly_zx_circle(i16 icx, i16 icy, i16 r, int l) {
 static void bly_zx_attr(i16 r, i16 c, u8 a, int l) {
     if (!(0 <= r && r <= 23 && 0 <= c && c <= 31)) bly_zx_off("attr ", r, c, " is off the screen", l);
     bly_zx_mem[6144 + r * 32 + c] = a;
+}
+
+/* attr(r, c): a square's attribute byte, as BASIC's ATTR */
+static u8 bly_zx_attr_read(i16 r, i16 c, int l) {
+    if (!(0 <= r && r <= 23 && 0 <= c && c <= 31)) bly_zx_off("attr ", r, c, " is off the screen", l);
+    return bly_zx_mem[6144 + r * 32 + c];
 }
 
 static void bly_zx_udg(i16 n, const u8 *rows, u16 len, int l) {
@@ -228,7 +277,7 @@ static void bly_zx_out(u8 ch) {
         i32 k = bly_zx_cell(bly_zx_row, i, bly_zx_col);
         bly_zx_mem[k] = bly_zx_ovr ? (u8)(bly_zx_mem[k] ^ v) : v;
     }
-    bly_zx_mem[6144 + bly_zx_row * 32 + bly_zx_col] = bly_zx_attr_p;
+    bly_zx_paint(bly_zx_row * 32 + bly_zx_col);
     bly_zx_col += 1;
 }
 

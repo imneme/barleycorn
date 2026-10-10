@@ -1,20 +1,26 @@
-;; provides: bly_zx_plot bly_zx_point bly_zx_attr bly_zx_udg
+;; provides: bly_zx_plot bly_zx_point bly_zx_attr bly_zx_attr_read bly_zx_udg
 ;; needs: bly_out bly_pr_cstr bly_pr_i16 bly_pr_u16 bly_fail bly_fail_end
 ;; targets: zx48 test
 ;; The Spectrum's drawing (ABI.md section 10; the meaning is ../zxgfx.py), in three fragments so a program links only
 ;; what it draws with: zxgfx.asm (plot, point, attr, udg, and the pieces the others share), zxline.asm, zxcircle.asm.
-;; The screen is memory: bitmap at 4000h, attributes at 5800h. Colours come from ATTR_P (5C8Dh), OVER and INVERSE from
-;; P_FLAG's permanent bits 1 and 3 (5C91h), and the UDGs' address from UDG (5C7Bh). Coordinates are BASIC's: x 0..255,
-;; y 0..175 from the bottom.
+;; The screen is memory: bitmap at 4000h, attributes at 5800h. A square drawn on gets the colours as the ROM's PO-ATTR
+;; gives them: (old AND MASK_T) OR (ATTR_T AND NOT MASK_T), then P_FLAG's PAPER 9 and INK 9 contrasts (bits 6 and 4);
+;; when no mask or contrast is set (nearly always), that's simply ATTR_T, stored. OVER and INVERSE come from P_FLAG's
+;; permanent bits 1 and 3 (5C91h), and the UDGs' address from UDG (5C7Bh). The runtime keeps ATTR_T, MASK_T and
+;; P_FLAG's temporary bits the same as the permanent ones. Coordinates are BASIC's: x 0..255, y 0..175 from the bottom.
 ;; bly_zx_plot    in: HL=x DE=y (ints)               fails: ({x}, {y}) is off the screen               clobbers: AF BC DE HL
 ;; bly_zx_point   in: HL=x DE=y                      out: A=0/1   fails: as plot                        clobbers: AF BC DE HL
 ;; bly_zx_attr    in: HL=r DE=c C=a                  fails: attr ({r}, {c}) is off the screen           clobbers: AF BC DE HL
+;; bly_zx_attr_read in: HL=r DE=c                    out: A = the square's attribute; fails: as attr   clobbers: AF BC DE HL
 ;; bly_zx_udg     in: HL=n DE=&view (byte[]: address, length)
 ;;                fails: udg {n} is not one of 0..20 (A to U); a udg is 8 rows, not {len}           clobbers: AF BC DE HL
 ;; For zxline and zxcircle: bly_zx_plot.chk (the check and its message), .addr (a pixel's byte and mask), .ops and
-;; .opsd (the pixel's operation, for patching), .masks.
+;; .opsd (the pixel's operation, for patching), .masks, .paint (a square's colours, the PO-ATTR way), .site (patching
+;; a colour store to ATTR_T, or to a jump to .paint's trampoline when a mask or contrast is set).
 
 ZXG_ATTR_P equ 5C8Dh
+ZXG_ATTR_T equ 5C8Fh
+ZXG_MASK_T equ 5C90h
 ZXG_P_FLAG equ 5C91h
 ZXG_UDG    equ 5C7Bh
 
@@ -67,7 +73,7 @@ bly_zx_plot:                        ; HL = x, DE = y
         ld a,d
         or (hl)
 .store: ld (hl),a
-.colour:                            ; HL = a bitmap byte: its cell gets ATTR_P
+.colour:                            ; HL = a bitmap byte: its cell gets the colours
         ld a,h
         rrca
         rrca
@@ -75,8 +81,69 @@ bly_zx_plot:                        ; HL = x, DE = y
         and 3
         or 58h
         ld h,a
-        ld a,(ZXG_ATTR_P)
+        ld de,(ZXG_MASK_T)          ; E = MASK_T, D = P_FLAG (they're neighbours)
+        ld a,d
+        and 50h
+        or e
+        jr nz,.paint                ; a mask or a contrast
+        ld a,(ZXG_ATTR_T)
         ld (hl),a
+        ret
+
+.paint: ; HL = an attribute: it gets the colours as the ROM's PO-ATTR gives them (0BE4h on).  keeps BC, DE, HL
+        push de
+        ld de,(ZXG_ATTR_T)          ; E = ATTR_T, D = MASK_T
+        ld a,(hl)
+        xor e
+        and d
+        xor e                       ; the square's own bits where the mask is set, the colours' elsewhere
+        ld d,a
+        ld a,(ZXG_P_FLAG)
+        ld e,a
+        ld a,d
+        bit 6,e                     ; PAPER 9: a white paper on a dark ink, black on a light one
+        jr z,.pa1
+        and 0C7h
+        bit 2,a
+        jr nz,.pa1
+        xor 38h
+.pa1:   bit 4,e                     ; INK 9: a white ink on a dark paper, black on a light one
+        jr z,.pa2
+        and 0F8h
+        bit 5,a
+        jr nz,.pa2
+        xor 07h
+.pa2:   ld (hl),a
+        pop de
+        ret
+
+.fancy: ; Z if the colours are plain (no mask, no contrast): a square drawn on simply gets ATTR_T.  clobbers AF
+        push bc
+        ld a,(ZXG_MASK_T)
+        ld b,a
+        ld a,(ZXG_P_FLAG)
+        and 50h
+        or b
+        pop bc
+        ret
+
+.site:  ; HL = a colour store "ld (hl),n" to patch, DE = its trampoline (which calls .paint, then carries on as the
+        ; store would have): the store with n = ATTR_T when the colours are plain, else "jr" to the trampoline.
+        ; clobbers AF DE HL
+        call .fancy
+        jr nz,.sjr
+        ld (hl),36h                 ; ld (hl),n
+        inc hl
+        ld a,(ZXG_ATTR_T)
+        ld (hl),a
+        ret
+.sjr:   ld (hl),18h                 ; jr
+        inc hl
+        ex de,hl
+        scf
+        sbc hl,de                   ; the trampoline - (the store + 2)
+        ld a,l
+        ld (de),a
         ret
 .modes: cp 2
         jr z,.over
@@ -227,6 +294,31 @@ bly_zx_attr:                        ; HL = r, DE = c (ints), C = a
         ld hl,bly_zx_plot.offmsg
         jp bly_fail
 .msg:   db "attr (",0
+
+bly_zx_attr_read:                   ; HL = r, DE = c (ints) -> A = the square's attribute, as BASIC's ATTR
+        ld a,h
+        or d
+        jr nz,bly_zx_attr.off
+        ld a,l
+        cp 24
+        jr nc,bly_zx_attr.off
+        ld a,e
+        cp 32
+        jr nc,bly_zx_attr.off
+        ld a,l
+        rrca
+        rrca
+        rrca
+        ld l,a
+        and 0E0h
+        or e
+        ld e,a
+        ld a,l
+        and 3
+        or 58h
+        ld d,a
+        ld a,(de)
+        ret
 
 ; ---- udg ------------------------------------------------------------------------------------------------------
 

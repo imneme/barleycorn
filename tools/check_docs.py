@@ -59,7 +59,7 @@ OMSE_COMMANDS = {'z80/zxrun.py': ['x.tap'], 'z80/zxbench.py': [], 'z80/zxsize.py
                  'z80/zxprof.py': ['x.bly'], 'z80/tests/test_containers.py': [], 'z80/tests/test_fp.py': [],
                  'z80/tests/test_num.py': [], 'z80/tests/test_text.py': [], 'z80/tests/test_zxgfx.py': [],
                  'z80/tests/test_int.py': [], 'z80/tests/test_int_mutants.py': [],
-                 'z80/tests/rom_text_check.py': []}
+                 'z80/tests/rom_text_check.py': [], 'z80/tests/co_temp_check.py': []}
 
 
 def commands():

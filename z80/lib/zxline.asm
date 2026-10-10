@@ -29,8 +29,9 @@ bly_zx_line:                        ; HL = &block: x0, y0, x1, y1
         ld a,(.blk+6)
         cp b
         jp z,.horiz
-        ld a,(ZXG_ATTR_P)
-        ld (.lcol+1),a
+        ld hl,.lcol                 ; the colours: a plain store, or through .paint
+        ld de,.lpaint
+        call bly_zx_plot.site
         ; x's direction
         ld a,(.blk+4)
         ld c,a
@@ -158,9 +159,13 @@ bly_zx_line:                        ; HL = &block: x0, y0, x1, y1
         and 3
         or 58h
         ld h,a
-.lcol:  ld (hl),0                   ; patched: ATTR_P
+.lcol:  ld (hl),0                   ; patched: ld (hl),ATTR_T, or jr .lpaint
         pop hl
         ret
+.lpaint: call bly_zx_plot.paint     ; a mask or a contrast: the colours the PO-ATTR way
+        pop hl
+        ret
+        assert .lpaint - (.lcol + 2) < 128
 
 .xloop: ld a,e
 .xmin:  add a,0                     ; patched: the minor
@@ -310,9 +315,12 @@ bly_zx_line:                        ; HL = &block: x0, y0, x1, y1
         ld a,e
         ld (.hop2),a
         ld (.hop4),a
-        ld a,(ZXG_ATTR_P)
-        ld (.hcol1+1),a
-        ld (.hcol2+1),a
+        ld hl,.hcol1                ; the colours: plain stores, or through .paint
+        ld de,.hpaint1
+        call bly_zx_plot.site
+        ld hl,.hcol2
+        ld de,.hpaint2
+        call bly_zx_plot.site
         ld a,(.blk+2)
         ld b,a
         call bly_zx_plot.addr       ; HL at the left end, A = its mask
@@ -336,7 +344,7 @@ bly_zx_line:                        ; HL = &block: x0, y0, x1, y1
         ld (hl),a
         ld a,h
         ld h,e
-.hcol1: ld (hl),0                   ; patched: ATTR_P
+.hcol1: ld (hl),0                   ; patched: ld (hl),ATTR_T, or jr .hpaint1
         ld h,a
         inc l
         ld d,0FFh
@@ -349,8 +357,14 @@ bly_zx_line:                        ; HL = &block: x0, y0, x1, y1
 .hop4:  xor d                       ; patched
         ld (hl),a
         ld h,e
-.hcol2: ld (hl),0                   ; patched
+.hcol2: ld (hl),0                   ; patched: ld (hl),ATTR_T, or jr .hpaint2
         ret
+.hpaint1: push af                   ; a mask or a contrast: the colours the PO-ATTR way, keeping A
+        call bly_zx_plot.paint
+        pop af
+        jr .hcol1+2
+.hpaint2: jp bly_zx_plot.paint
+        assert .hpaint1 - (.hcol1 + 2) < 128 && .hpaint2 - (.hcol2 + 2) < 128
 
 .blk:   ds 8
 .xd:    dw 0
