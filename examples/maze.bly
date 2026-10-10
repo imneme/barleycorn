@@ -1,0 +1,152 @@
+-- A maze, carved by a randomised depth-first search and then solved by a breadth-first one. Each square of the
+-- screen is a room. The carving is a yellow snake that pushes on into the dark and draws back when it's boxed in,
+-- its note rising as it grows. The solving is a flood from the top left, changing colour every few steps, round
+-- the colour wheel. Then the way through is traced in white, start to finish, a rising note at every step.
+
+const W = 32
+const H = 21                               -- the 22nd row is for the answer
+const SEED = 1982                          -- change it for another maze
+const BAND = 10                            -- steps of the flood to each colour
+
+const BRIGHT = 64                          -- attributes: BRIGHT, PAPER times 8, and INK, which is always black
+const YELLOW = 6
+const WHITE = 7
+
+var open = grid[byte](H, W)                -- the passages out of each room: bit d is the way dirs4[d] (N E S W)
+var dist = grid[int](H, W, -1)             -- each room's distance from the start, once the flood has been
+var x: word = SEED                         -- a small LCG: there is no random number generator
+
+func rnd(n: int): int                      -- 0 to n - 1, from the LCG's high byte (its low bits are poor)
+  x = x * 25173 + 13849
+  return int(x >> 8) % n
+end
+
+func paint(p: pos, a: byte)
+  if ZX then attr(p.r, p.c, a) end
+end
+
+func passage(p: pos, d: int): bool         -- is there a way out of p towards dirs4[d]?
+  return open[p] & byte(1 << d) != 0
+end
+
+func knock(p: pos, d: int)                 -- carve a passage from p towards dirs4[d], and rub out the wall
+  var q = p + dirs4[d]
+  open[p] |= byte(1 << d)
+  open[q] |= byte(1 << mod(d + 2, 4))      -- and back again: the opposite way is two turns round
+  if ZX then                               -- each room owns its right and bottom walls, as lines of pixels
+    var o = p
+    if d == 0 or d == 3 then o = q end
+    inverse(true)
+    if d == 1 or d == 3 then
+      line(8 * o.c + 7, 175 - 8 * o.r, 8 * o.c + 7, 169 - 8 * o.r)
+    else
+      line(8 * o.c, 168 - 8 * o.r, 8 * o.c + 6, 168 - 8 * o.r)
+    end
+    inverse(false)
+  end
+end
+
+func carve(start: pos)                     -- depth first, on an explicit stack: the yellow snake
+  var stack = list[pos](W * H)
+  var ways: int[4]
+  stack.push(start)
+  paint(start, BRIGHT + YELLOW * 8)
+  while stack.len > 0 do
+    var p = stack[stack.len - 1]
+    var n = 0
+    for d in 0..4 do                       -- the ways on from p, into rooms not carved yet
+      if open.has(p + dirs4[d]) and open[p + dirs4[d]] == 0 then
+        ways[n] = d
+        n += 1
+      end
+    end
+    if n == 0 then                         -- boxed in: draw back, and this room is finished
+      stack.pop()
+      paint(p, WHITE * 8)
+    else
+      var d = ways[rnd(n)]
+      knock(p, d)
+      stack.push(p + dirs4[d])
+      paint(p, BRIGHT + YELLOW * 8)        -- again: drawing gives a square the current colours, as in BASIC
+      paint(p + dirs4[d], BRIGHT + YELLOW * 8)
+      if ZX then beep(8, int(stack.len / 8) - 12) end
+    end
+  end
+end
+
+func hue(k: int): byte                     -- the Spectrum's colours, in order round the colour wheel
+  case k % 6
+    when 0 then return 1                   -- blue
+    when 1 then return 3                   -- magenta
+    when 2 then return 2                   -- red
+    when 3 then return 6                   -- yellow
+    when 4 then return 4                   -- green
+  end
+  return 5                                 -- cyan
+end
+
+func flood(start: pos)                     -- breadth first: every room's distance from the start
+  var q = queue[pos](W * H)
+  var layer = 0
+  dist[start] = 0
+  q.put(start)
+  while q.len > 0 do
+    var p = q.get()
+    paint(p, hue(dist[p] / BAND) * 8)
+    if ZX then
+      if dist[p] > layer then              -- a tick for each step the flood takes
+        layer = dist[p]
+        beep(8, layer / 8 - 24)
+      end
+    end
+    for d in 0..4 do
+      if passage(p, d) and dist[p + dirs4[d]] < 0 then
+        dist[p + dirs4[d]] = dist[p] + 1
+        q.put(p + dirs4[d])
+      end
+    end
+  end
+end
+
+func trace(start: pos, goal: pos)          -- back from the goal, always into a room one step nearer the start
+  var way = list[pos](W * H)
+  var p = goal
+  way.push(p)
+  while p != start do
+    for d in 0..4 do
+      if passage(p, d) and dist[p + dirs4[d]] == dist[p] - 1 then
+        p = p + dirs4[d]
+        break
+      end
+    end
+    way.push(p)
+  end
+  if ZX then                               -- and forwards again, from the start: the list popped is the list reversed
+    var n = int(way.len)
+    for i in 0..n do
+      paint(way.pop(), BRIGHT + WHITE * 8)
+      beep(12, i * 36 / n - 12)            -- three octaves, start to finish
+    end
+  end
+end
+
+func main()
+  if ZX then
+    border(0)
+    paper(0)
+    ink(0)
+    cls()
+    for r in 0..H do line(0, 168 - 8 * r, 255, 168 - 8 * r) end      -- every wall to begin with, black on black
+    for c in 0..W do line(8 * c + 7, 175, 8 * c + 7, 8) end
+  end
+  var start = pos(0, 0)
+  var goal = pos(H - 1, W - 1)
+  carve(start)
+  flood(start)
+  trace(start, goal)
+  if ZX then
+    ink(WHITE)
+    print at H, 0;
+  end
+  print "The way through: "; dist[goal]; " steps"
+end

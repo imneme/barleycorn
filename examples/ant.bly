@@ -1,0 +1,90 @@
+-- Langton's ant. On a white square it turns right, on a black one left; either way it flips the square and steps
+-- forward. From an empty board it scribbles for about ten thousand steps with no sign of order, and then it starts
+-- to build a highway: 104 steps that repeat forever, each time two squares further along a diagonal. This finds the
+-- step the highway starts at: the first of the first 104 turns that the ant goes on repeating.
+-- Each square is 2 x 2 pixels, and the ink changes every thousand steps, so the colours say when the ant was last
+-- there. The speaker marks each thousand, sounds a chord when the highway is found, and then keeps time along it.
+
+const W = 128
+const H = 84                               -- 168 pixels: the bottom row of text is kept for the answer
+const ERA = 1000                           -- steps to each colour
+const LOOP = 104                           -- the highway's period
+
+var board = grid[bit](H, W)                -- true for black
+var turns: bit[LOOP]                       -- the last 104 turns (true for right), round a ring
+
+func flip(p: pos)                          -- the square's four pixels, flipped by OVER
+  if ZX then
+    var x = 2 * p.c
+    var y = 175 - 2 * p.r
+    plot(x, y)
+    plot(x + 1, y)
+    plot(x, y - 1)
+    plot(x + 1, y - 1)
+  end
+end
+
+func era(n: int)                           -- a new colour, round the inks that show well on black
+  if ZX then
+    case n % 6
+      when 0 then ink(5)                   -- cyan
+      when 1 then ink(4)                   -- green
+      when 2 then ink(6)                   -- yellow
+      when 3 then ink(2)                   -- red
+      when 4 then ink(3)                   -- magenta
+      when 5 then ink(7)                   -- white
+    end
+    beep(40, n * 2 - 12)
+  end
+end
+
+func found(at: word)                       -- the highway: a chord, and the answer in the bottom row
+  if ZX then
+    beep(80, 0)
+    beep(80, 4)
+    beep(80, 7)
+    beep(80, 12)
+    beep(240, 16)
+    over(false)
+    print at 21, 0;
+  end
+  print "Highway from step "; at
+  if ZX then over(true) end
+end
+
+func main()
+  if ZX then
+    border(0)
+    paper(0)
+    bright(true)
+    cls()
+    over(true)
+  end
+  era(0)
+  var p = pos(54, 70)
+  var d = 1                                -- facing east (dirs4 is north, east, south, west)
+  var step: word = 0
+  var k = 0                                -- where this step's turn goes in the ring
+  var same = 0                             -- how many turns in a row have repeated the one 104 before
+  var highway: word = 0
+  while board.has(p) do
+    var right = not board[p]               -- right on white, left on black
+    if right then d = mod(d + 1, 4) else d = mod(d - 1, 4) end
+    board[p] = not board[p]
+    flip(p)
+    p = p + dirs4[d]
+    if step >= LOOP and turns[k] == right then same += 1 else same = 0 end
+    turns[k] = right
+    k = mod(k + 1, LOOP)
+    step += 1
+    if step % ERA == 0 then era(int(step / ERA)) end
+    if highway == 0 and same == 2 * LOOP then     -- two whole loops repeated: well past any chance run
+      highway = step - word(same) - LOOP
+      found(highway)
+    end
+    if ZX then
+      if highway > 0 and k == 0 then beep(10, -5) end     -- a tick for every loop along the highway
+    end
+  end
+  if ZX then beep(400, -12) end
+end

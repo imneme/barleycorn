@@ -1,0 +1,143 @@
+-- Conway's Life on the Spectrum's colour squares: one cell to a square, 32 across and 21 down, with the bottom row
+-- kept for a bar that shows the population and, at the end, the answer. A random soup boils until it settles into a cycle.
+-- Every generation's fingerprint goes into a map, so the first one seen twice says when the cycle began and how long
+-- it is. On a Spectrum the speaker plays the population as it goes, on a pentatonic scale, so no note is wrong.
+
+const W = 32
+const H = 21
+const P = W + 2                            -- a row of the board, with a dead cell at each end, and there's a dead
+const N = P * (H + 2)                      -- row above and below too, so no cell is a special case
+const SEED = 38                            -- change it for another soup
+
+const BRIGHT = 64                          -- an attribute is FLASH, BRIGHT, PAPER (times 8) and INK; only PAPER
+const BLUE = 1                             -- shows here, since nothing is drawn in ink
+const GREEN = 4
+const YELLOW = 6
+const WHITE = 7
+
+var age: byte[N]                           -- 0 for dead, or how many generations it has been alive
+var near: byte[N]                          -- live neighbours, all counted before anything changes
+var lived: bit[N]                          -- where life has ever been: it leaves a blue ghost behind
+var around: int[8]                         -- how far away, in the board, each of a cell's neighbours is
+var live = list[int](W * H)                -- where the live cells are, in order
+
+func colour(i: int): byte                  -- newborn cells are bright yellow, and they settle to green
+  case age[i]
+    when 0 then
+      if lived[i] then return BLUE * 8 end
+      return 0
+    when 1 then return BRIGHT + YELLOW * 8
+    when 2, 3 then return BRIGHT + GREEN * 8
+  end
+  return GREEN * 8
+end
+
+func step()                                -- one generation
+  for i in live do                         -- each live cell tells its neighbours
+    for d in around do near[i + d] += 1 end
+  end
+  live.clear()
+  var i = P + 1                            -- the first cell inside the border
+  for r in 0..H do
+    for c in 0..W do
+      var was = age[i]
+      if near[i] == 3 or (near[i] == 2 and was > 0) then
+        age[i] = min(was, 254) + 1
+        lived[i] = true
+        live.push(i)
+      else
+        age[i] = 0
+      end
+      if ZX then
+        if age[i] != was and age[i] <= 4 then attr(r, c, colour(i)) end   -- colour() is the same past 4
+      end
+      i += 1
+    end
+    i += 2                                 -- over the border, from the end of this row to the start of the next
+  end
+  for j in 0..N do near[j] = 0 end
+end
+
+func fingerprint(): quad                   -- two 16-bit hashes of where the live cells are (words wrap, by design).
+                                           -- Two boards could share one, at odds of about one in 100,000 here
+  var h1: word = 0
+  var h2: word = 0
+  for i in live do
+    h1 = h1 * 31 + word(i)
+    h2 = (h2 + word(i)) * 40503
+  end
+  return quad(h1) << 16 | h2
+end
+
+func note(k: int): int                     -- the k-th note of a pentatonic scale, in semitones from middle C
+  var octave = k / 5 * 12
+  case k % 5
+    when 0 then return octave
+    when 1 then return octave + 2
+    when 2 then return octave + 4
+    when 3 then return octave + 7
+  end
+  return octave + 9
+end
+
+func sing(ms: int)                         -- the population as a note, and as a bar along the bottom row with a
+  if ZX then                               -- square for every four cells
+    var alive = int(live.len)
+    for c in 0..W do
+      if c < alive / 4 then attr(H, c, WHITE * 8) else attr(H, c, 0) end
+    end
+    beep(ms, note(alive / 8) - 12)
+  end
+end
+
+func main()
+  var k = 0
+  for dr in -1..2 do
+    for dc in -1..2 do
+      if dr != 0 or dc != 0 then
+        around[k] = dr * P + dc
+        k += 1
+      end
+    end
+  end
+  if ZX then
+    border(0)
+    paper(0)
+    cls()
+  end
+  var x: word = SEED                       -- a small LCG, since there's no random number generator, fills a
+  for r in 5..15 do                        -- 16 x 10 soup in the middle, about half alive
+    for c in 8..24 do
+      x = x * 25173 + 13849
+      if x < 32768 then
+        var i = (r + 1) * P + c + 1
+        age[i] = 1
+        lived[i] = true
+        live.push(i)
+        if ZX then attr(r, c, colour(i)) end
+      end
+    end
+  end
+  var seen = map[quad, word](1024)         -- fingerprint -> the generation it was seen in
+  var gen: word = 0
+  var f = fingerprint()
+  while not (f in seen) do
+    seen[f] = gen
+    step()
+    gen += 1
+    sing(20)
+    f = fingerprint()
+  end
+  var start = seen[f]
+  var period = gen - start
+  for i in 0..2 * period do                -- the cycle it settled into, slowly, twice over
+    step()
+    sing(150)
+  end
+  if ZX then
+    for c in 0..W do attr(H, c, 0) end
+    ink(WHITE)
+    print at H, 0;
+  end
+  print "Gen "; start; ": period "; period; ", "; live.len; " alive"
+end
