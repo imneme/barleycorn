@@ -4,7 +4,7 @@ saying what it needs (paths.py says where each tool is looked for).
 
     ./check            everything
     ./check --quick    the suite on every backend, and the fragments' quick tests
-    ./check interp c   only those stages: interp, c, cpm, zx, fragments, screen, fuzz
+    ./check interp c   only those stages: interp, c, cpm, zx, fragments, screen, docs, wrap, fuzz
 """
 import os
 import shutil
@@ -50,6 +50,11 @@ STAGES = [
                                            [OPY, os.path.join(ROOT, 'z80', 'tests', 'rom_text_check.py')]])),
     ('screen', 'the C screen against the reference', lambda: None if have(paths.CC) and omse_ready() else
      'needs a C compiler and the 48K ROM', [[PY, os.path.join(ROOT, 'c', 'tests', 'test_screen.py')]]),
+    ('docs', 'the programs the docs quote are the programs as they are', lambda: None,
+     [[PY, os.path.join(ROOT, 'tools', 'check_docs.py')]]),
+    ('wrap', 'the Markdown wrapped at 72 columns, as mdwrap does it',
+     lambda: None if have(paths.MDWRAP) else 'needs mdwrap (MDWRAP in paths.py)',
+     [[PY, os.path.join(ROOT, 'tools', 'check_docs.py'), '--wrap', paths.MDWRAP]]),
     ('fuzz', 'random programs: the interpreter against C and CP/M',
      lambda: None if have(paths.CC) and have(paths.SJASMPLUS) and have(paths.TNYLPO) else 'needs a C compiler, sjasmplus and tnylpo',
      [[PY, os.path.join(ROOT, 'z80', 'fuzz.py'), '100' if quick else '400']]),

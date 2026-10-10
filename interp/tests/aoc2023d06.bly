@@ -1,6 +1,6 @@
 -- AoC 2023 day 6, part 2: aim with floats, land with quads.
 
-func digits(s: str): quad                  -- part 2 reads each line as one number, spaces and all
+func digits(s: str): quad    -- part 2: a line is one number, spaces and all
   var n: quad = 0
   for ch in s do
     if ch >= '0' and ch <= '9' then n = n * 10 + (ch - '0') end
@@ -8,12 +8,12 @@ func digits(s: str): quad                  -- part 2 reads each line as one numb
   return n
 end
 
-func ways(t: quad, d: quad): quad          -- holds h with h * (t - h) > d
+func ways(t: quad, d: quad): quad           -- holds h with h * (t - h) > d
   var root = (float(t) - sqrt(float(t) * float(t) - 4.0 * float(d))) / 2.0
-  var lo = quad(floor(root))               -- the ROM's floats are good to about 9 digits: a guess
-  while lo * (t - lo) <= d do lo += 1 end                   -- up to the first winning hold
-  while lo > 0 and (lo - 1) * (t - lo + 1) > d do lo -= 1 end  -- or down to it
-  return t - 2 * lo + 1                    -- the winners are symmetric about t / 2
+  var lo = quad(floor(root))      -- the ROM's floats hold 9 digits: a guess,
+  while lo * (t - lo) <= d do lo += 1 end        -- then up to the first win
+  while lo > 0 and (lo - 1) * (t - lo + 1) > d do lo -= 1 end   -- or down
+  return t - 2 * lo + 1           -- the winners are symmetric about t / 2
 end
 
 func main()

@@ -7,6 +7,7 @@ this one (NAME=value lines, not tracked by git); otherwise it's looked for on PA
     OMSE_AI_ROMS    the Spectrum ROMs (48.rom); default OMSE_AI/roms. Bring your own: see omse-ai's roms/README.md
     OMSE_AI_PYTHON  a Python that can import omse-ai (it needs Pillow); default OMSE_AI/.venv/bin/python3 if present
     CC              the C compiler for the C backend's tests; default clang
+    MDWRAP          mdwrap, which keeps the Markdown wrapped at 72 columns (./check's wrap stage)
     BARLEY_BUILD    where builds go; default build/ in this checkout
 """
 import os
@@ -33,6 +34,7 @@ OMSE_AI_ROMS = setting('OMSE_AI_ROMS', os.path.join(OMSE_AI, 'roms'))
 _venv = os.path.join(OMSE_AI, '.venv', 'bin', 'python3')
 OMSE_AI_PYTHON = setting('OMSE_AI_PYTHON', _venv if os.path.exists(_venv) else sys.executable)
 CC = setting('CC', 'clang')
+MDWRAP = setting('MDWRAP', shutil.which('mdwrap') or 'mdwrap')
 BUILD = setting('BARLEY_BUILD', os.path.join(ROOT, 'build'))
 os.environ.setdefault('OMSE_AI_ROMS', OMSE_AI_ROMS)     # omse-ai reads this too
 

@@ -12,7 +12,11 @@ end
 func walk(node: word, ghost: bool): long
   var n: long = 0
   while not arrived(node, ghost) do
-    if turns[n % turns.len] == 'L' then node = left[node] else node = right[node] end
+    if turns[n % turns.len] == 'L' then
+      node = left[node]
+    else
+      node = right[node]
+    end
     n += 1
   end
   return n

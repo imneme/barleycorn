@@ -1,4 +1,5 @@
--- AoC 2022 day 12: fewest steps up the hill. Search down from E, and both parts fall out.
+-- AoC 2022 day 12: fewest steps up the hill. Search down from E, and both
+-- parts fall out.
 
 func height(ch: byte): byte
   case ch
@@ -9,7 +10,8 @@ func height(ch: byte): byte
 end
 
 func main()
-  var g = grid()                                    -- the input, as rows and columns of bytes
+  var g = grid()                               -- the input: rows and columns
+                                               -- of bytes
   var start = g.find('S')
   var goal = g.find('E')
   var dist = grid[word](g.rows, g.cols, 65535)      -- 65535: not reached yet

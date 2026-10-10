@@ -1,4 +1,5 @@
--- AoC 2022 day 1: the elf carrying the most calories, and the top three together.
+-- AoC 2022 day 1: the elf carrying the most calories, and the top three
+-- together.
 
 func keep(top: long[], sum: long)          -- top is kept sorted, smallest first
   if sum > top[0] then
@@ -18,7 +19,7 @@ func main()
       sum += line.int()
     end
   end
-  keep(top, sum)                           -- the last elf has no blank line after it
+  keep(top, sum)                 -- the last elf has no blank line after it
   print "Part 1: "; top[2]
   print "Part 2: "; top[0] + top[1] + top[2]
 end

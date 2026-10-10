@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+"""Checks that the docs still say what the code does.
+
+A code block in any Markdown file here whose first line is the first line
+of a program in interp/tests or examples is a quotation of that program,
+and must be the whole of it, exactly. (DESIGN.md quotes several; when a
+program changes, copy it back in.)
+
+With --wrap MDWRAP, also checks that every Markdown file is wrapped as
+mdwrap would wrap it: prose at 72 columns, for readers in a terminal.
+"""
+import argparse
+import glob
+import os
+import re
+import subprocess
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def markdown_files():
+    out = subprocess.run(['git', 'ls-files', '*.md'], cwd=ROOT, capture_output=True, text=True)
+    files = out.stdout.split() if out.returncode == 0 else []
+    return files or sorted(os.path.relpath(p, ROOT) for p in glob.glob(os.path.join(ROOT, '**', '*.md'),
+                                                                     recursive=True) if '/build/' not in p)
+
+
+def quotations():
+    """failures: blocks that start like a program and don't match it"""
+    programs = {}
+    for p in glob.glob(os.path.join(ROOT, 'interp', 'tests', '*.bly')) + glob.glob(os.path.join(ROOT, 'examples', '*.bly')):
+        text = open(p).read()
+        programs.setdefault(text.split('\n')[0], []).append((os.path.relpath(p, ROOT), text.rstrip('\n')))
+    bad, seen = [], 0
+    for md in markdown_files():
+        for m in re.finditer(r'^```[^\n]*\n(.*?)^```', open(os.path.join(ROOT, md)).read(), re.S | re.M):
+            block = m.group(1).rstrip('\n')
+            first = block.split('\n')[0]
+            if first not in programs:
+                continue
+            seen += 1
+            if not any(text == block for _, text in programs[first]):
+                names = ', '.join(name for name, _ in programs[first])
+                bad.append(f'{md} quotes {names}, and the two differ')
+    return seen, bad
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
+    ap.add_argument('--wrap', metavar='MDWRAP', help='check the wrapping too, with this mdwrap')
+    a = ap.parse_args(argv)
+    seen, bad = quotations()
+    for b in bad:
+        print('FAIL: ' + b)
+    print(f'{seen} quoted programs, {len(bad)} out of date')
+    if a.wrap:
+        files = markdown_files()
+        r = subprocess.run([a.wrap, '--check'] + files, cwd=ROOT, capture_output=True, text=True)
+        for f in r.stdout.split():
+            print(f'FAIL: {f} is not wrapped (run: mdwrap -i {f})')
+        if r.returncode not in (0, 1):
+            print('FAIL: mdwrap: ' + r.stderr.strip())
+        print(f'{len(files)} Markdown files, {len(r.stdout.split())} not wrapped')
+        bad += r.stdout.split() or ([] if r.returncode in (0, 1) else ['mdwrap'])
+    return 1 if bad else 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
