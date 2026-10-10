@@ -23,6 +23,7 @@ import paths                                           # noqa: E402
 
 SJASM = paths.SJASMPLUS
 TOP = 0xFF58                                           # the UDGs start here, and stay
+FRAMES_TOP = 0xFDFD                                    # with a frame: its vector's jump, then its table to FF00h
 INPUT = 0x8000
 STACKROOM = 1024
 ARENA_MIN = 512                                        # the least arena worth running with
@@ -75,7 +76,7 @@ def build(src, text=b''):
     code1, sym1 = assemble(asm1)
     size = sym1['bly_code_end'] - 0x8000
     bss = sym1['bly_bss_end'] - sym1['bly_bss']
-    org = TOP - size
+    org = (FRAMES_TOP if 'zxr_isr' in sym1 else TOP) - size     # frame do ... end's table and vector: zxframes.asm
     bss_at = org - bss
     # the input goes at 8000h when it fits up there; otherwise lower, into contended RAM, which a text read once in
     # order minds least (DESIGN.md section 6). The arena keeps at least ARENA_MIN between it and the stack.

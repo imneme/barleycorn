@@ -38,6 +38,7 @@ static u8 bly_zx_shown = 7, bly_zx_ear;          /* what the ULA was last told: 
 static i32 bly_zx_row, bly_zx_col;               /* the print position; row 22 and column 32 are "pending" */
 static i32 bly_zx_lrow = 23, bly_zx_lcol;        /* the lower screen's (print #0, #1): its bottom line at first */
 static u8 *const bly_zx_udgs = bly_mem + 0xFF58;  /* A..U, as at power-on: the font's capitals */
+static b8 bly_frames_on;                         /* frames(true): frame do ... end runs as frames pass */
 static u32 bly_zx_frames;                        /* ticks(): the frames that have passed, as far as the model knows;
                                                     24 bits, as the Spectrum's FRAMES, so it wraps at 16,777,216 */
 #define BLY_ZX_FRAMES(x) ((u32)(x) & 0xFFFFFFu)

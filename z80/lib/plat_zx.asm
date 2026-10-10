@@ -79,6 +79,8 @@ bly_putc:
         ret
 
 bly_exit:
+        im 1                        ; IM 1, interrupts on: as BASIC needs them, even from a failure inside frame's
+        ei                          ; interrupt (zxframes.asm)
         ld sp,(bly_basic_sp)
         ret
 

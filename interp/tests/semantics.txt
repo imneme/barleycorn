@@ -1247,6 +1247,188 @@ end
 --- expect
 fzx() is Spectrum-only: put it inside if ZX then ... end at line 5
 
+=== frame do ... end runs once a frame while frames(true) has it on: pause(n) is n frames
+const SPIN = byte['/', '-', '\\', '|']
+var tick: word = 0
+var spun: byte = 0
+
+frame do
+  tick += 1
+  border(int(tick >> 3) & 7)
+  var g: word = 0x3D00 + (word(SPIN[tick >> 2 & 3]) - 32) * 8
+  for i: word in 0..8 do
+    poke(0x401F + i * 256, peek(g + i))
+  end
+  spun = peek(0x401F + 4 * 256)
+end
+
+func main()
+  cls()
+  print tick
+  frames(true)
+  pause(6)
+  frames(false)
+  print tick; " "; spun
+  pause(5)
+  print tick
+  frames(true)
+  pause(2)
+  print tick
+end
+--- screen
+--- expect
+0
+6 62
+6
+8
+
+=== a failure inside frame ends the program, as any failure does
+var tick: word = 0
+var a: byte[4]
+
+frame do
+  a[tick] = 1
+  tick += 1
+end
+
+func main()
+  frames(true)
+  pause(10)
+  print "never"
+end
+--- expect
+index 4 is outside 0..4 at line 5
+
+=== a failure in the program after frame has run is at the program's own line
+var tick: word = 0
+var a: byte[2]
+
+frame do
+  if tick < 100 then
+    tick += 1
+  end
+  var b = peek(0)
+end
+
+func main()
+  var k: long = tick + 7
+  frames(true)
+  pause(3); a[k] = 1
+end
+--- expect
+index 7 is outside 0..2 at line 14
+
+=== frame hands every frame on to the ROM, so its clock keeps counting
+var tick: word = 0
+
+frame do
+  tick += 1
+end
+
+func main()
+  var t0 = ticks()
+  frames(true)
+  pause(5)
+  frames(false)
+  var t1 = ticks()
+  print tick; " "; t1 - t0 >= 5
+end
+--- expect
+5 true
+
+=== frame can't print: print is the ROM's RST 10, which the program may be in the middle of
+var t: word = 0
+
+frame do
+  print t
+end
+
+func main()
+  frames(true)
+end
+--- expect
+frame can't print: print is the ROM's RST 10, which the program may be in the middle of at line 4
+
+=== frame can't call a function: its slots are the program's too
+func helper()
+end
+
+frame do
+  helper()
+end
+
+func main()
+end
+--- expect
+frame can't call helper(): a function's slots are the program's too, and it may be in the middle of it at line 5
+
+=== frame is 16-bit: no long, quad, dword, float or str
+var big: long = 0
+
+frame do
+  big += 1
+end
+
+func main()
+end
+--- expect
+frame can't use a long: only byte, word, int and bool, whose arithmetic keeps nothing in memory at line 4
+
+=== frame can't pause, beep, draw or read the clock
+frame do
+  pause(1)
+end
+
+func main()
+end
+--- expect
+frame can't use pause(): a frame waiting for frames would wait for ever at line 2
+
+=== frame runs by itself: it isn't called, and frames needs one to run
+frame do
+end
+
+func main()
+  frame()
+end
+--- expect
+frame runs by itself, every frame, once frames(true) starts it: it isn't called at line 5
+
+=== frames(true) needs a frame do ... end
+func main()
+  frames(true)
+end
+--- expect
+frames turns frame do ... end on and off, and there isn't one at line 2
+
+=== on CP/M, frame do ... end is Spectrum-only
+var t: word = 0
+
+frame do
+  t += 1
+end
+
+func main()
+  print t
+end
+--- as cpm
+--- expect
+frame do ... end is Spectrum-only: CP/M has no frames to run it in at line 3
+
+=== a typed for's literal range takes the loop variable's type
+func main()
+  var s: word = 0
+  for i: word in 0..5 do
+    s += i * 1000
+  end
+  for b: byte in 250..255 do
+    print b; " ";
+  end
+  print s
+end
+--- expect
+250 251 252 253 254 10000
+
 === dword: unsigned 32 bits, which wrap (+ - * / % >> << - ~, min, max, a hash), and its widenings and casts
 func hash(s: str): dword
   var h: dword = 2166136261

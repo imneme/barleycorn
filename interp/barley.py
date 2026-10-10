@@ -316,8 +316,14 @@ class Parser:
                 decls.append(self.func())
             elif self.at('record', 'kw'):
                 decls.append(self.record())
+            elif self.t.kind == 'name' and self.t.val == 'frame' and self.peek().val == 'do':
+                self.next()                         # frame do ... end: run every frame, in the interrupt (IM 2)
+                self.expect('do')
+                body = self.block()
+                self.expect('end')
+                decls.append(N('func', line, name='frame', params=[], retx=None, body=body, asm=None, frame=True))
             else:
-                raise BarleyError(f'expected const, var, func or record but found {self.describe()}', line)
+                raise BarleyError(f'expected const, var, func, record or frame but found {self.describe()}', line)
             self.end_stmt()
             self.skip_nl()
         return decls
@@ -704,7 +710,7 @@ SCREEN_FUNCS = {                                   # the Spectrum's screen and s
     'bright': (['level'], VOID), 'flash': (['level'], VOID), 'inverse': (['flag'], VOID), 'over': (['flag'], VOID),
     'plot': ([INT, INT], VOID), 'line': ([INT] * 4, VOID), 'circle': ([INT] * 3, VOID),
     'point': ([INT, INT], BOOL), 'attr': ([INT, INT, BYTE], VOID), 'udg': ([INT, Gen('array', BYTE, n=None)], VOID),
-    'fzx': ([Gen('array', BYTE, n=None)], VOID),
+    'fzx': ([Gen('array', BYTE, n=None)], VOID), 'frames': (['flag'], VOID),
     'key': ([], BYTE), 'inkey': ([], BYTE), 'ticks': ([], LONG), 'pause': ([INT], VOID), 'beep': ([INT, INT], VOID)}
 MACHINE_FUNCS = {                                  # the machine's 64K: an address is any whole number, as an index is
     'peek': (['addr'], BYTE), 'poke': (['addr', BYTE], VOID),
@@ -827,7 +833,10 @@ class Checker:
                 self.records[d.name].set_fields([(f, self.ty(tx)) for f, tx in d.fields])
             elif d.k == 'func':
                 if d.name in self.funcs:
-                    raise BarleyError(f'func {d.name} is defined twice', d.line)
+                    raise BarleyError('there can be one frame do ... end' if d.name == 'frame' and
+                                      getattr(d, 'frame', False) else f'func {d.name} is defined twice', d.line)
+                if d.name == 'frame' and not getattr(d, 'frame', False):
+                    raise BarleyError('frame is the block run every frame: frame do ... end, not a func', d.line)
                 d.ptys = [self.ty(tx) for _, tx in d.params]
                 d.rty = self.ty(d.retx) if d.retx else VOID
                 self.funcs[d.name] = d
@@ -877,6 +886,8 @@ class Checker:
                 self.block(d.body)
                 self.scopes = []
         self.tables_unchanged()
+        if 'frame' in self.funcs:
+            self.frame_rules(self.funcs['frame'])
         self.reachable = self.reach()
         if self.target == 'cpm':
             self.spectrum_only()
@@ -1041,9 +1052,47 @@ class Checker:
             if k not in ('func', 'var', 'ty', 'record', 'cast', 'opnode', 'cval'):
                 self.walk_live(v, visit)
 
+    def frame_rules(self, f):
+        """frame do ... end runs inside the interrupt, between any two instructions of the rest, so it may only do
+        what can't be in the middle of being done: 16-bit Barley, whose arithmetic (int16.asm) keeps nothing
+        in memory. Each refusal says why."""
+        ok_ty = lambda t: t in (BYTE, WORD, INT, BOOL, FLEX, VOID, None) or \
+            isinstance(t, Gen) and t.kind in ('array', 'range') and all(ok_ty(a) for a in t.args)
+        calls = {'peek', 'poke', 'inp', 'outp', 'border', 'inkey', 'attr', 'min', 'max', 'abs', 'sign'}
+        def visit(x):
+            if isinstance(x, (list, tuple)):
+                for v in x:
+                    visit(v)
+                return
+            if not isinstance(x, N):
+                return
+            if x.k == 'print':
+                raise BarleyError("frame can't print: print is the ROM's RST 10, which the program may be in the "
+                                  "middle of", x.line)
+            if x.k == 'call' and getattr(x, 'func', None) is not None:
+                raise BarleyError(f"frame can't call {x.name}(): a function's slots are the program's too, and it "
+                                  "may be in the middle of it", x.line)
+            if x.k == 'call' and getattr(x, 'cast', None) is None and getattr(x, 'builtin', x.name) not in calls:
+                why = {'pause': 'a frame waiting for frames would wait for ever',
+                       'ticks': 'it turns interrupts back on, from inside the interrupt',
+                       'beep': "the ROM's BEEPER keeps interrupts off for as long as it sounds",
+                       'key': "it's the program's (frame has inkey())", 'ask': "it's the program's",
+                       'frames': "it's the program's"}.get(x.name)
+                if why is None and x.name in SCREEN_FUNCS:
+                    why = 'drawing keeps its place, and patches its own code, which the program may be in the middle of'
+                raise BarleyError(f"frame can't use {x.name}(): " + (why or "it isn't safe in the middle of the "
+                                  "program (frame has peek, poke, inp, outp, border, inkey and attr)"), x.line)
+            if not ok_ty(x.ty) or x.k == 'var' and not ok_ty(getattr(x, 'ty', None)):
+                raise BarleyError(f"frame can't use {article(x.ty)}: only byte, word, int and bool, whose "
+                                  "arithmetic keeps nothing in memory", x.line)
+            for k, v in x.__dict__.items():
+                if k not in ('func', 'var', 'ty', 'record', 'cast', 'opnode', 'cval'):
+                    visit(v)
+        visit(f.body)
+
     def reach(self):
-        """the functions a run can reach on this target, from main and the globals' first values"""
-        seen, todo = set(), ['main']
+        """the functions a run can reach on this target, from main (and frame) and the globals' first values"""
+        seen, todo = set(), ['main'] + (['frame'] if 'frame' in self.funcs else [])
         def calls(node):
             if node.k == 'call' and getattr(node, 'func', None) is not None and node.func.name not in seen:
                 todo.append(node.func.name)
@@ -1062,6 +1111,8 @@ class Checker:
         """on CP/M, the screen and sound are an error wherever a run can reach them: the same rule in the interpreter
         (--as cpm) and every compiler, said at the line"""
         found = []
+        if 'frame' in self.funcs:
+            found.append((self.funcs['frame'].line, 'frame do ... end'))
         def visit(node):
             if node.k == 'call' and (getattr(node, 'name', None) in SCREEN_FUNCS or getattr(node, 'name', None)
                                      in MACHINE_FUNCS) and not hasattr(node, 'func'):
@@ -1077,6 +1128,8 @@ class Checker:
             self.walk_live(self.funcs[name].body, visit)
         if found:
             line, what = min(found)
+            if what == 'frame do ... end':
+                raise BarleyError('frame do ... end is Spectrum-only: CP/M has no frames to run it in', line)
             raise BarleyError(f'{what} is Spectrum-only: put it inside if ZX then ... end', line)
 
     def var_type(self, d):
@@ -1225,8 +1278,10 @@ class Checker:
         raise BarleyError("that can't be assigned to", e.line)
 
     def for_(self, s):
-        t = self.expr(s.it)
         decl = self.ty(s.tyx) if s.tyx else None
+        if decl is not None and s.it.k == 'range' and is_int(decl):
+            s.it.want = decl                                # its literals take the loop variable's type
+        t = self.expr(s.it)
         names = s.names
         if isinstance(t, Gen) and t.kind == 'map':
             vts = [t.args[0], t.args[1]][:len(names)]
@@ -1363,6 +1418,10 @@ class Checker:
     def x_range(self, e):
         ta, tb = self.expr(e.a), self.expr(e.b)
         t = self.arith_type(e.a, e.b, ta, tb, e.line)
+        if t is FLEX and getattr(e, 'want', None):          # for i: word in 0..8: the literals are words
+            self.coerce(e.a, e.want)
+            self.coerce(e.b, e.want)
+            t = e.want
         if t is FLEX:
             t = self.unify(self.settle_default(e.a), self.settle_default(e.b), e.line)
         if not is_int(t):
@@ -1604,6 +1663,9 @@ class Checker:
         name, args = e.name, e.args
         f = self.funcs.get(name)
         if f is not None and not any(name in s for s in self.scopes):
+            if getattr(f, 'frame', False):
+                raise BarleyError('frame runs by itself, every frame, once frames(true) starts it: it isn\'t called',
+                                  e.line)
             if len(args) != len(f.params):
                 raise BarleyError(f'{name} takes {len(f.params)} argument{"s" * (len(f.params) != 1)}', e.line)
             for a, pt in zip(args, f.ptys):
@@ -1659,6 +1721,8 @@ class Checker:
                         self.settle_default(a)
                 else:
                     self.coerce(a, p)
+            if name == 'frames' and 'frame' not in self.funcs:
+                raise BarleyError('frames turns frame do ... end on and off, and there isn\'t one', e.line)
             if name == 'fzx':                                     # a font, read when the program's compiled
                 a = args[0]
                 var = getattr(a, 'var', None) if a.k == 'name' else None
@@ -1911,6 +1975,7 @@ class Interp:
             if len(ln) > 65535:
                 raise BarleyError(f'input line {n + 1} is longer than 65535')
         self.globals = {}
+        self.frames_on = False                              # frames(true): frame do ... end runs as frames pass
         self.interned, self.names = {}, []
         self.col = 0
         sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'z80'))
@@ -2474,10 +2539,17 @@ class Interp:
             elif a >= 0x4000:                                # poke: the ROM can't be written
                 self.memory[a] = args[1]
             return None
+        if name == 'frames':                                 # frame do ... end, on or off (IM 2 on the 48K)
+            self.frames_on = bool(args[0])
+            return None
         if name in SCREEN_FUNCS:
             sc = self.screen
             f = {'inverse': sc.set_inverse, 'over': sc.set_over}.get(name) or getattr(sc, name)
-            return self.screen_call(lambda: f(*args), e.line)
+            got = self.screen_call(lambda: f(*args), e.line)
+            if name in ('pause', 'ticks') and self.frames_on:   # the frames the model counts are frame's frames:
+                for _ in range(args[0] if name == 'pause' else 1):   # pause(n) runs it n times, ticks() once
+                    self.call(self.ck.funcs['frame'], [])
+            return got
         if name == 'lines':
             return BLines(self.input_lines)
         if name == 'ask':

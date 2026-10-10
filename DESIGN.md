@@ -227,6 +227,8 @@ SCREEN      cls  ink(0..9)  paper(0..9)  bright(0, 1, 8)  flash(0, 1, 8)
             print at r, c; ...           a place on the screen (not output)
             print #1; ...  (or #0)       the lower screen's two lines
             fzx(F)  print #4; at y, x; ...   text in an FZX font, in pixels
+            frame do ... end   runs every frame, once frames(true)
+            starts it: 16-bit Barley, safe inside the interrupt
 SOUND       beep(ms, semitone)
             (on a 128, later: ay(reg, v)  tone(voice, hz, vol)  quiet())
             On the Spectrum, the real thing; in the interpreter and C, a
@@ -527,6 +529,26 @@ the driver reports Out of screen, `print #4` fails:
 `print #4 would go below the screen`. The fonts themselves are their
 makers', and none ship here. The tests use `interp/tests/sprig.fzx`,
 which `tools/make_fzx.py` draws.
+
+**Every frame.** A top-level `frame do ... end` runs once a frame, 50
+times a second, while `frames(true)` has it on, whatever the program is
+in the middle of: a spinner while a solve runs, a border that cycles, a
+tune on a 128's AY. On the 48K that's IM 2, done the way Melissa's
+`im2.asm` does it, and every frame ends at the ROM's own handler, so
+`key()`, `inkey()`, `ask()`, `ticks()` and `pause()` all carry on. It
+runs in the middle of anything, so **it's 16-bit Barley**. byte, word,
+int and bool, their arrays and tables, if, while, for, peek, poke, inp,
+outp, border, inkey and attr are all there. The 16-bit arithmetic keeps
+nothing in memory, so it can't trip over the program it interrupts. What
+does keep something in memory is refused, each with its reason. That's
+calls to functions (their slots are the program's too), print, longs and
+wider, floats, str, containers, drawing, beep and pause. A failure
+inside `frame` ends the program as any failure does. Off the Spectrum,
+the frames are the ones the model already counts: `pause(n)` runs
+`frame` n times, and `ticks()` once. So programs paced by frames agree
+everywhere, and what races the clock can differ, as `ticks()` already
+does. A program wanting to print from a frame counts in `frame`, and
+prints from the main program when it sees the count change.
 
 **Compile-time work is marked with @.** `@embed("file")`, a const's
 value, is a file's bytes as a byte table, read from beside the program

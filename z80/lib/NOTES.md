@@ -1252,6 +1252,73 @@ second `@`.)
   string held a control code, which the driver would take as AT or
   ENTER.
 
+## frame: every frame, in the interrupt (IM 2)
+
+Saturday 10 October. Melissa: "We should also be able to support IM2
+stuff if we want to be extra cool." Then, when I asked how it should
+look: "make a few prototype programs that you can't run yet and see how
+you *want* to code things and let that guide your hand." So I wrote four
+(`drafts/barley-lang/im2-prototypes/`, beside the design note): a
+spinner and a cycling border while a long solve runs, a tune on a 128's
+AY, a game's heartbeat that prints the score, and a clock on the bottom
+line. Three needed nothing that isn't safe inside the interrupt itself.
+The fourth wanted to print, and is better written the third's way:
+`frame` counts, and `main` prints. So there's one kind of `frame`, in
+the interrupt, and the deferred kind, and her `atomic` functions, wait
+for a program that needs them.
+
+**Why it's 16-bit.** The interrupt comes between any two instructions,
+so `frame` can't share anything the program might be in the middle of.
+Function slots are fixed addresses. The 32- and 64-bit routines keep
+scratch in memory (`intdiv.asm`'s `.q`, `.r` and `.n`). Drawing patches
+its own code. Printing is RST 10, allocation moves `bly_atop`, and
+`ticks()` does DI and EI. `int16.asm` keeps nothing in memory at all. So
+`frame` is byte, word, int and bool, their arrays and constant tables,
+control flow, and the ports and memory. The checker refuses the rest,
+each with a reason (`frame_rules`).
+
+**The table and vector.** I is FEh, and FE00h–FF00h holds 257 FDh, so
+every vector is FDFDh, wherever the data bus floats. FDFDh holds a jump
+to the handler, just under the table, and the UDGs at FF58h are left
+alone. A program with a `frame` is built under FDFDh, which costs it 260
+bytes. Melissa remembered a trick, and it's real. The 48K ROM's pages
+39h–3Bh are FFh throughout, so with I = 39h every vector is FFFFh. A JR
+there takes its displacement from 0000h, which is DI (F3h), and so lands
+at FFF4h. It saves the table, but takes the tails of UDGs T and U, and
+it's 48K only, so I left it.
+
+**The handler** saves AF, BC, DE, HL and IX. It also saves `bly_line`,
+since `frame`'s lines mustn't be the program's if it fails later. Then
+it calls `f_frame`, restores all that, and jumps to 0038h, so FRAMES and
+the keyboard carry on. A failure inside `frame` ends the program from
+inside the interrupt, and `bly_exit` now puts IM 1 back and interrupts
+on, always. That's three bytes in every program, and the only change to
+the bench.
+
+**Off the Spectrum**, `frame` runs as the model's frames pass: n times
+in `pause(n)`, once in each `ticks()`. On the 48K, `pause(6)` with
+`frame` on is exactly six frames too, so a program paced by pauses
+agrees everywhere, and the suite's cases are written that way. A frame
+during a long computation, or during `ask()`, happens only on the
+machine.
+
+On the way, the prototypes asked for `for i: word in 0..8`, which was
+refused (the literals settled to int before the loop variable's type was
+seen), so a typed `for` over a literal range now takes its type.
+
+**How it's tested.** Twelve suite cases. The spinner one has its picture
+compared on the 48K, which ran six frames in `pause(6)` as the model
+does. Then a failure inside `frame`, and a failure in the program after
+frames have run, which must still name its own line (the case puts
+`pause(3)` and a failing long index on one line, so the line is set
+once, before the frames). The ROM's clock still counting through
+`frame`, each kind of refusal, CP/M, and the typed range. **15 mutants:
+14 caught, and one equivalent, kept on purpose.** Taking out the
+handler's saving of IX survives, since frame's 16-bit code never touches
+IX today. It's kept as insurance (four bytes, and 29 T a frame). My
+first try at that mutant took out the push but not the pop, and was
+"caught" for the wrong reason, by the stack it unbalanced.
+
 ## Floats on the Spectrum: the ROM's calculator, and the plumbing to it
 
 *Files: `fp.asm` (target `zx48`), the float parts of `../z80gen.py`

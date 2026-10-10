@@ -964,11 +964,20 @@ class Gen:
                 cargs.append(self.conv(v, a.ty, p))
         if name not in ('cls', 'inverse', 'over', 'ticks', 'key', 'inkey'):
             cargs.append(str(e.line))
+        if name == 'frames':                                 # frame do ... end on or off: it runs as the
+            self.emit(f'bly_frames_on = {cargs[0]};')        # model's frames pass (pause, ticks)
+            return None
         call = f'bly_zx_{name}({", ".join(cargs)})'
+        frames = name in ('pause', 'ticks') and 'frame' in self.ck.funcs
         if ret is B.VOID:
             self.emit(call + ';')
+            if frames:
+                self.emit(f'if (bly_frames_on) for (i16 k = 0; k < {cargs[0]}; k++) f_frame();')
             return None
-        return self.temp(self.ctype(ret), call)
+        r = self.temp(self.ctype(ret), call)
+        if frames:
+            self.emit('if (bly_frames_on) f_frame();')
+        return r
 
     def x_range(self, e):
         raise CGenError('a range is walked by for, or slices a str')

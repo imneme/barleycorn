@@ -567,6 +567,17 @@ and `bly_putc` patched to send bytes on, a control code as `?`).
 the driver happens inside RST 10, whose PRINT-A-2 has EXX'd and saved
 BASIC's HL', so `zxf_below` puts those back before failing.
 
+**Every frame.** `zxframes.asm`'s `bly_zx_frames` takes A = 0 (IM 1,
+frame off) or not (IM 2, frame on). It fills FE00h–FF00h with FDh, puts
+a `jp zxr_isr` at FDFDh, and sets I to FEh. So whatever the data bus
+holds, the vector is FDFDh. A program with a frame is built below FDFDh,
+not FF58h (`zxbuild.py`, `FRAMES_TOP`). `zxr_isr` saves AF, BC, DE, HL,
+IX and `bly_line` around `f_frame` (frame's code, generated as a
+function of no arguments), then goes on to the ROM's 0038h. `bly_exit`
+puts IM 1 back and interrupts on, always, so a failure from inside
+frame's interrupt, or a program that ends with frame still on, goes back
+to BASIC as BASIC needs.
+
 ## 11. Floats: the ROM's, on the Spectrum only
 
 **A `float` is the ROM's own 5 bytes** (`lib/fp.asm`, target `zx48`), so

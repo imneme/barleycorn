@@ -2517,6 +2517,9 @@ class Gen:
             self.load_hl(ints(0))
             self.emit(f'ld de,{view}')
             self.call(routine)
+        elif name == 'frames':                           # frame do ... end on or off (zxframes.asm)
+            self.to_bool_a(args[0])
+            self.call(routine)
         elif name in ('key', 'inkey'):
             self.call(routine)
             r = self.temp(B.BYTE)
