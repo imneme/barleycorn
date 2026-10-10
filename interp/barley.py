@@ -144,7 +144,7 @@ KEYWORDS = {'const', 'var', 'func', 'record', 'end', 'if', 'then', 'elif', 'else
             'break', 'continue', 'return', 'case', 'when', 'and', 'or', 'not', 'print', 'assert',
             'true', 'false', 'asm'}
 OPS = ['<<=', '>>=', '..', '**', '<<', '>>', '==', '!=', '<=', '>=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=',
-       '+', '-', '*', '/', '%', '&', '|', '^', '~', '<', '>', '=', '(', ')', '[', ']', '{', '}', ',', ':', ';', '.']
+       '+', '-', '*', '/', '%', '&', '|', '^', '~', '<', '>', '=', '(', ')', '[', ']', '{', '}', ',', ':', ';', '.', '#']
 CONTINUES = {'<<', '>>', '==', '!=', '<=', '>=', '+', '-', '*', '/', '%', '&', '|', '^', '~', '<', '>', '=',
              '..', 'and', 'or', 'not', '(', '[', '{', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<=', '>>='}
 OPERAND_END = ('num', 'float', 'name', 'str', 'char')
@@ -505,12 +505,25 @@ class Parser:
 
     def print_(self):
         """BASIC's PRINT: ; joins, , moves to the next 16-column zone, a trailing ; or , keeps the line open.
-        A print takes the rest of its line."""
+        A print takes the rest of its line. print #n; ... prints to stream n: #2 is the screen, as print alone,
+        and #0 and #1 the lower screen's two lines, as BASIC's."""
         line = self.expect('print').line
-        items, newline = [], True
+        items, newline, stream = [], True, 2
 
         def ends():
             return self.t.kind in ('nl', 'eof') or (self.t.kind == 'kw' and self.t.val in BLOCK_END)
+
+        if self.at('#', 'op'):
+            self.next()
+            if self.t.kind != 'num' or self.t.val not in (0, 1, 2):
+                raise BarleyError('print # takes a stream: #0 or #1 (the lower screen) or #2 (the screen)', line)
+            stream = self.next().val
+            if not ends():
+                if not self.at(';', 'op'):
+                    raise BarleyError(f'print #{stream} needs a ; before what it prints', line)
+                self.next()
+                if ends():
+                    newline = False
 
         while not ends():
             if self.t.kind == 'name' and self.t.val == 'at' and self.peek().kind not in ('nl', 'eof') \
@@ -535,7 +548,7 @@ class Parser:
                 break
         if self.t.kind == 'nl':
             self.next()
-        return N('print', line, items=items, newline=newline)
+        return N('print', line, items=items, newline=newline, stream=stream)
 
     # -- expressions, loosest first
     def expr(self):
@@ -989,6 +1002,8 @@ class Checker:
             if node.k == 'call' and (getattr(node, 'name', None) in SCREEN_FUNCS or getattr(node, 'name', None)
                                      in MACHINE_FUNCS) and not hasattr(node, 'func'):
                 found.append((node.line, f'{node.name}()'))
+            elif node.k == 'print' and getattr(node, 'stream', 2) != 2:
+                found.append((node.line, f'print #{node.stream}'))
             elif node.k == 'print' and any(kind == 'at' for kind, _ in node.items):
                 found.append((node.line, 'print at'))
         for d in self.decls:
@@ -1972,6 +1987,19 @@ class Interp:
         elif k == 'assert':
             if not self.ev(s.e, env):
                 raise BarleyError('assertion failed', s.line)
+        elif k == 'print' and getattr(s, 'stream', 2) != 2:     # #0, #1: the lower screen's, and not output
+            sc = self.screen
+            put = lambda text: self.screen_call(lambda: [sc.lout(b) for b in text.encode('latin-1')], s.line)
+            for kind, e in s.items:
+                if kind == 'item':
+                    put(self.show(self.ev(e, env), e.ty))
+                elif kind == 'at':
+                    r, c = self.ev(e[0], env), self.ev(e[1], env)
+                    self.screen_call(lambda: sc.lat(r, c), s.line)
+                else:
+                    put(' ' * (16 - sc.lcol % 16))
+            if s.newline:
+                put('\n')
         elif k == 'print':
             placed = False                                  # from the first at on, the text is the screen's alone
             for kind, e in s.items:
@@ -2439,7 +2467,7 @@ def uses_machine(decls):
         if isinstance(x, N):
             if x.k == 'call' and (getattr(x, 'name', None) in SCREEN_FUNCS or getattr(x, 'name', None) in MACHINE_FUNCS):
                 return True
-            if x.k == 'print' and any(kind == 'at' for kind, _ in x.items):
+            if x.k == 'print' and (any(kind == 'at' for kind, _ in x.items) or getattr(x, 'stream', 2) != 2):
                 return True
             return any(walk(v) for k, v in x.__dict__.items() if k not in ('func', 'var', 'ty', 'record', 'cast'))
         if isinstance(x, (list, tuple)):

@@ -355,6 +355,18 @@ class Gen:
         elif k == 'assert':
             c = self.ex(s.e)
             self.emit(f'if (!{c}) bly_fail("assertion failed", {line});')
+        elif k == 'print' and getattr(s, 'stream', 2) != 2:     # #0, #1: the lower screen's alone
+            for kind, e in s.items:
+                if kind == 'zone':
+                    self.emit(f'BLY_LOWER(bly_zone(), {line});')
+                elif kind == 'at':
+                    r, c = (self.conv(self.ex(x), x.ty, B.INT) for x in e)
+                    self.emit(f'bly_zx_lat({r}, {c}, {line});')
+                else:
+                    v = self.ex(e)
+                    self.emit(f'BLY_LOWER(' + self.pr(v, e.ty) + f', {line});')
+            if s.newline:
+                self.emit(f'BLY_LOWER(bly_nl(), {line});')
         elif k == 'print':                    # what print itself writes also lands on the screen: BLY_SHOW, or
             show = 'BLY_SHOW'                 # from the first at on, the screen's alone: BLY_ATTEXT
             for kind, e in s.items:

@@ -1115,6 +1115,66 @@ opens the K channel itself. INPUT does both, and so does `ask()`. An
 earlier mutant, taking out my own clearing of FLAGS bit 5, survived
 because CHAN-K does that too, so mine went.
 
+## The lower screen: print #0 and #1
+
+Saturday 10 October, from Melissa: "I think we may also need to support
+print# to write to the bottom two lines (maybe we do? I haven't checked
+closely...)". We didn't: `print` was always stream 2.
+
+**What BASIC does, asked on omse-ai and read in the ROM:**
+- PRINT #1 starts on the **bottom** line, row 23, not row 22. CLS-LOWER
+  ends with CL-SET at line 23 (`ld bc,1721h`), and a program starts with
+  S_POSNL at (33, 23) too. `AT 0` is row 22 and `AT 1` row 23.
+- In channel K the line numbers count down from 24, the top of the lower
+  screen: with two lines, 24 is row 22, 23 row 23, and 22 is pending
+  below the bottom, where a newline from there leaves it (lazy, as
+  upstairs).
+- **When it fills, the lower screen grows upwards** (PO-SCR's lower
+  path, 0D02h). DF_SZ goes up one, and the bottom DF_SZ lines scroll up,
+  or the whole screen if the lower screen has reached the upper print
+  position, which then moves up. That path has no "scroll?", and AT 2
+  grows it too. Upper printing then scrolls at the new DF_SZ, so the
+  screen above shrinks.
+- The text is in BORDCR's colours: TEMPS (0D4D) gives the lower screen
+  ATTR_T = BORDCR and MASK_T = 0, and clears P_FLAG's temporary bits, so
+  no INVERSE, OVER or 9s.
+
+**Barley keeps it two lines**, which is what "write to the bottom two
+lines" asks for. It also keeps the upper screen's 22 rows what they are
+everywhere else. Where the ROM would grow the lower screen, `print`
+fails: `print would grow the lower screen past its two lines`, and
+`print at (2, 0) is off the lower screen`. Everything else is the ROM's.
+
+**On the 48K** (`zxlower.asm`), each piece of a `print #1` (an item, a
+zone, the newline) is bracketed by `bly_zx_lower` and `bly_zx_upper`,
+after the item is worked out, so a failure working one out is printed
+upstairs as output, like any other. `bly_zx_lower` opens channel K,
+gives print's column the lower screen's own (from S_POSNL, for the
+zones), and patches a jump to `zxl_putc` over `bly_putc`'s first three
+bytes, so a program that never prints to the lower screen pays nothing.
+`zxl_putc` reads the ROM's own position before each byte and fails
+before the ROM would grow anything, so `cls` and `ask()`, which move
+that position, need no word to it. One thing had to change elsewhere:
+`bly_pr_f` borrowed stream 3 for PRINT-FP and then reopened stream 2,
+which would have sent a float in a `print #1` upstairs. It now reopens
+the stream it came from: 1 if TV_FLAG says the lower screen's channel
+was open, else 2.
+
+**How it's tested.** `z80/tests/lower_check.py` (in `./check fragments`)
+types random BORDER, INK, PAPER, INVERSE and OVER, a CLS, and random
+PRINT #0 and #1 statements (AT, text, `;`, `'`) as one line on omse-ai's
+48K, ends it with PAUSE 0, and compares rows 22 and 23, pixels and
+attributes, with the model's. A statement the model says would grow the
+lower screen is left out. Four model mutants were caught: the colours,
+AT's rows, starting on row 22, and INVERSE. Eleven suite cases cover the
+rest. BASIC's report overwrites rows 22 and 23 at the end, so the cases
+peek them into checksums. **18 mutants, all caught**, across the
+interpreter, the model, C, `zxlower.asm` and `fp.asm`. Four survived at
+first, and each one showed a case leaning on its own trailing newline: a
+newline from below the bottom fails with the same words a character
+there would, so a case that ended with one couldn't tell which check had
+fired. Those cases now end with `;`, and one tests the newline alone.
+
 ## Floats on the Spectrum: the ROM's calculator, and the plumbing to it
 
 *Files: `fp.asm` (target `zx48`), the float parts of `../z80gen.py`

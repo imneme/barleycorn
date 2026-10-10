@@ -892,13 +892,18 @@ bly_pr_f:
         call bly_fp.push
         ld hl,.buf
         ld (.at),hl
+        ld a,2                      ; the stream to come back to: the screen's, or the lower screen's (print #1,
+        bit 0,(iy+2)                ; whose channel K sets TV_FLAG bit 0)
+        jr z,.s2
+        dec a
+.s2:    ld (.back),a
         ld a,3
         call fp_CHAN_OPEN           ; off the screen's stream while PRINT-FP runs (omse-ai's text log follows
         ld hl,.chan                 ; CHAN-OPEN, not CURCHL; on a real 48K this is just tidy)
         ld (fp_CURCHL),hl           ; and its characters come to .take, not the printer
         call fp_PRINT_FP
-        ld a,2
-        call fp_CHAN_OPEN           ; the upper screen again, as bly_start opened it
+        ld a,(.back)
+        call fp_CHAN_OPEN           ; that stream again
         ld hl,(.stk)
         ld (fp_STKEND),hl
         ld hl,(.at)
@@ -906,6 +911,7 @@ bly_pr_f:
         ld hl,.buf
         jp bly_pr_cstr
 .stk:   dw 0
+.back:  db 2
 .take:  ld hl,(.at)                 ; A = a character (RST 10 runs this in the alternate set, and saved HL')
         ld (hl),a
         inc hl

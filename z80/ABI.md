@@ -548,6 +548,16 @@ prompt and typing in the lower screen (stream 1), clobbering all but IY.
 On CP/M it's `cpmask.asm`, a key at a time through BDOS 6, with the
 prompt and echo as output, which leaves print's column at 0.
 
+**The lower screen.** `zxlower.asm`'s `bly_zx_lower` and `bly_zx_upper`
+(no arguments, clobbering AF BC DE HL) bracket each piece of a
+`print #0` or `#1`. The first opens channel K, gives `bly_col` the lower
+screen's column and patches `bly_putc` to check the ROM's position
+first; the second undoes all three and opens stream 2. `bly_zx_lat`
+takes HL = r and DE = c (ints) and fails with
+`print at ({r}, {c}) is off the lower screen`. A byte that would grow
+the lower screen fails with
+`print would grow the lower screen past its two lines`.
+
 ## 11. Floats: the ROM's, on the Spectrum only
 
 **A `float` is the ROM's own 5 bytes** (`lib/fp.asm`, target `zx48`), so

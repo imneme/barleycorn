@@ -222,6 +222,8 @@ IN AND OUT  lines() (for line in lines(), or .next())   grid()   input()
 SCREEN      cls  ink(0..9)  paper(0..9)  bright(0, 1, 8)  flash(0, 1, 8)
             (8: a square keeps its own; 9: the contrast)  inverse over border
             print at r, c; ...    plot(x, y)  line(x0, y0, x1, y1)
+            print #1; ...  print #0; at r, c; ...   the lower screen's
+            two lines (#2: the screen, as print alone)
             circle(x, y, r)  point(x, y)  attr(r, c[, a])  udg(n, bytes)
             key()  inkey()  ticks()  pause(frames)
 SOUND       beep(ms, semitone)
@@ -527,6 +529,20 @@ the next line, and the output is the same everywhere. (The 48K's runtime
 marks each piece of placed text with two control codes that change
 nothing on the screen, so the transcript the tests read can leave it
 out; HACKING.md says how.)
+
+**The lower screen is display too.** `print #1; ...` (or `#0`) prints on
+the Spectrum's bottom two lines, as BASIC's PRINT #1 does, through the
+ROM's own channel K: it starts on the bottom line, `at 0, c` is the
+upper of the two, newlines and wrapping are lazy as they are upstairs,
+and the text takes the lower screen's colours (the border's, as BORDCR
+keeps them), with no INVERSE or OVER. **Barley keeps it two lines.**
+BASIC grows the lower screen upwards when it fills, which shrinks the
+screen above; a `print #1` that would do that fails instead, with
+`print would grow the lower screen past its two lines`. So the bottom
+two lines are a place for a status line, and the 22 above stay the
+program's. `cls` and `ask()` put it back on the bottom line. `print #2`
+is `print`. `z80/tests/lower_check.py` holds the model to BASIC itself,
+typed on omse-ai's 48K.
 
 **Off the Spectrum, they still run.** The interpreter and the C backend
 give `peek` and `poke` a 64K memory, and the screen library's twins draw

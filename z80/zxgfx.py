@@ -20,6 +20,11 @@ Every algorithm here is written to be followed exactly:
            block graphics; 90h-A4h the UDGs; anything else prints as '?'. Past column 31, a line wraps; past row 21,
            the 22 upper rows scroll up one and the new bottom row is cleared in the permanent colours. Both are
            lazy, as the ROM's are: they happen when the next character is printed, not at the newline.
+  lower    print #0 and #1: the lower screen, rows 22 and 23, as the ROM's channel K prints there. It starts on
+           the bottom line (CLS-LOWER leaves it there, and so does loading), at 0 is row 22, newlines and wrapping
+           are lazy, and the text is in BORDCR's colours with no INVERSE or OVER (TEMPS gives the lower screen
+           those). Barley keeps it two lines: where the ROM would grow it upwards (a character after a newline
+           from the bottom line, say), it fails instead. cls and ask() (CLS-LOWER) put it back on the bottom line.
   ports    as omse-ai's 48K answers them. An even port is the ULA's: reading it gives BFh with no key held, and bit
            6 is the EAR line, which echoes bit 4 of the last thing written there; writing it shows the border in
            bits 0-2 (BORDCR, which cls and the lower screen use, is border()'s alone). An odd port with bits 5-7
@@ -130,6 +135,7 @@ class Screen:
         self.shown_border, self.ear = 7, 0            # what the ULA was last told: the border showing, and bit 4
         self.keys = None                              # the keyboard (Keys), if anything's been typed
         self.row = self.col = 0
+        self.lrow, self.lcol = 23, 0                  # the lower screen's print position: its bottom line
         self.font = font() if glyphs is None else glyphs
         self.udgs = bytearray(self.font[(ord('A') - 32) * 8:(ord('U') - 31) * 8])     # A..U, as at power-on
         self.sound = []                       # (ms, semitone), in order
@@ -221,6 +227,7 @@ class Screen:
         for i in range(704, 768):
             self.mem[6144 + i] = self.bordcr()
         self.row = self.col = 0
+        self.lrow, self.lcol = 23, 0
 
     # -- pixels ------------------------------------------------------------------------------------------------
     @staticmethod
@@ -311,6 +318,29 @@ class Screen:
         self.udgs[n * 8:n * 8 + 8] = bytes(rows)
 
     # -- text --------------------------------------------------------------------------------------------------
+    def lat(self, r, c):
+        """at, in a print to the lower screen: its two rows"""
+        if not (0 <= r <= 1 and 0 <= c <= 31):
+            raise ScreenError(f'print at ({r}, {c}) is off the lower screen')
+        self.lrow, self.lcol = 22 + r, c
+
+    def lout(self, ch):
+        """one byte printed to the lower screen (print #0 or #1). Row 24 is pending, below the bottom line"""
+        if ch == 10:
+            if self.lrow == 24:
+                raise ScreenError('print would grow the lower screen past its two lines')
+            self.lrow, self.lcol = self.lrow + 1, 0
+            return
+        if self.lcol == 32:
+            self.lrow, self.lcol = self.lrow + 1, 0
+        if self.lrow == 24:
+            raise ScreenError('print would grow the lower screen past its two lines')
+        g = self.glyph(ch)
+        for i in range(8):
+            self.mem[self.cell(self.lrow, i, self.lcol)] = g[i]
+        self.mem[6144 + self.lrow * 32 + self.lcol] = self.bordcr()
+        self.lcol += 1
+
     def at(self, r, c):
         if not (0 <= r <= 21 and 0 <= c <= 31):
             raise ScreenError(f'print at ({r}, {c}) is off the screen')
@@ -409,6 +439,7 @@ class Screen:
                 start = ((row & 0x18) << 8) | (line << 8) | ((row & 7) << 5)
                 self.mem[start:start + 32] = bytes(32)
             self.mem[6144 + 32 * row:6144 + 32 * row + 32] = bytes([self.bordcr()]) * 32
+        self.lrow, self.lcol = 23, 0
 
     # -- saving ------------------------------------------------------------------------------------------------
     def scr(self):

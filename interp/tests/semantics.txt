@@ -956,6 +956,147 @@ Fern]
 c]
 [> xySTOP in ask at line 4
 
+=== print #1 and #0 print on the lower screen's two lines, in its colours, and aren't output (the rows' checksums are)
+func row(r: int): long
+  var h: long = 0
+  for line in 0..8 do
+    for c in 0..32 do
+      h = (h * 31 + peek(0x4000 + ((r & 0x18) << 8) + (line << 8) + ((r & 7) << 5) + c)) % 1000003
+    end
+  end
+  for c in 0..32 do
+    h = (h * 31 + peek(0x5800 + r * 32 + c)) % 1000003
+  end
+  return h
+end
+
+func main()
+  cls()
+  border(5)
+  ink(2)
+  inverse(true)
+  print "upstairs"
+  print #1; "Score "; 120, 3.5; " x"
+  print #0; at 0, 30; "wrap"; at 1, 0; true;
+  inverse(false)
+  print #2; "still", row(21); " "; row(22); " "; row(23)
+end
+--- screen
+--- expect
+upstairs
+still           114403 894899 904645
+
+=== the lower screen starts on its bottom line, and cls puts it back there
+func row(r: int): long
+  var h: long = 0
+  for line in 0..8 do
+    for c in 0..32 do
+      h = (h * 31 + peek(0x4000 + ((r & 0x18) << 8) + (line << 8) + ((r & 7) << 5) + c)) % 1000003
+    end
+  end
+  for c in 0..32 do
+    h = (h * 31 + peek(0x5800 + r * 32 + c)) % 1000003
+  end
+  return h
+end
+
+func main()
+  print #1; "first"
+  print row(22); " "; row(23)
+  cls()
+  print #1; "again";
+  print row(22); " "; row(23)
+end
+--- expect
+114403 875301
+114403 341537
+
+=== print #1 that would grow the lower screen past its two lines fails, as BASIC would grow it
+func main()
+  print #1; "one"
+  print "here"
+  print #1; "two";
+  print "not here"
+end
+--- expect
+here
+print would grow the lower screen past its two lines at line 4
+
+=== and so would a newline, from below the bottom line
+func main()
+  print #1; "one"
+  print "here"
+  print #1
+end
+--- expect
+here
+print would grow the lower screen past its two lines at line 4
+
+=== print at on the lower screen has its two rows
+func main()
+  print #0; at 1, 31; "x";
+  print "fine"
+  print #0; at 2, 0; "y"
+end
+--- expect
+fine
+print at (2, 0) is off the lower screen at line 4
+
+=== a failure working out an item of print #1 is output, as any other
+func main()
+  var a: int[3]
+  var k = 4
+  print #1; "item "; a[k]
+end
+--- expect
+index 4 is outside 0..3 at line 4
+
+=== on CP/M, print #1 is Spectrum-only; print #2 is print, everywhere
+func main()
+  print #2; "two"
+  print #1; "one"
+end
+--- as cpm
+--- expect
+print #1 is Spectrum-only: put it inside if ZX then ... end at line 3
+
+=== print # takes a stream: #0, #1 or #2
+func main()
+  print #3; "printer"
+end
+--- expect
+print # takes a stream: #0 or #1 (the lower screen) or #2 (the screen) at line 2
+
+=== print #n needs a ; before what it prints
+func main()
+  print #1 "x"
+end
+--- expect
+print #1 needs a ; before what it prints at line 2
+
+=== print #1 wrapping past the end of the bottom line would grow the lower screen too
+func main()
+  print #1; at 1, 29; "ab";
+  print "fine"
+  print #1; "cd";
+  print "not here"
+end
+--- expect
+fine
+print would grow the lower screen past its two lines at line 4
+
+=== ask() puts the lower screen back on its bottom line, as cls does (INPUT's CLS-LOWER)
+func main()
+  print #1; "first"
+  var a = ask("? ")
+  print #1; "again";
+  print "["; a; "]"
+end
+--- keys
+yes
+--- expect
+[yes]
+
 === dword: unsigned 32 bits, which wrap (+ - * / % >> << - ~, min, max, a hash), and its widenings and casts
 func hash(s: str): dword
   var h: dword = 2166136261

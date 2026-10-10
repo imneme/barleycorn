@@ -49,7 +49,8 @@ def stages(quick):
                                                [OPY, os.path.join(ROOT, 'z80', 'tests', 'test_fp_mutants.py')],
                                                [OPY, os.path.join(ROOT, 'z80', 'tests', 'rom_text_check.py')],
                                                [OPY, os.path.join(ROOT, 'z80', 'tests', 'co_temp_check.py')],
-                                               [OPY, os.path.join(ROOT, 'z80', 'tests', 'ula_check.py')]])),
+                                               [OPY, os.path.join(ROOT, 'z80', 'tests', 'ula_check.py')],
+                                               [OPY, os.path.join(ROOT, 'z80', 'tests', 'lower_check.py')]])),
         ('screen', 'the C screen against the reference', lambda: None if have(paths.CC) and omse_ready() else
          'needs a C compiler and the 48K ROM', [[PY, os.path.join(ROOT, 'c', 'tests', 'test_screen.py')]]),
         ('docs', 'the programs the docs quote are the programs as they are', lambda: None,

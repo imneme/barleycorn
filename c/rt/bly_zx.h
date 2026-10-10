@@ -36,6 +36,7 @@ static b8 bly_zx_inv, bly_zx_ovr;
 static u8 bly_zx_border_c = 7;                   /* BORDCR's */
 static u8 bly_zx_shown = 7, bly_zx_ear;          /* what the ULA was last told: the border showing, and bit 4 */
 static i32 bly_zx_row, bly_zx_col;               /* the print position; row 22 and column 32 are "pending" */
+static i32 bly_zx_lrow = 23, bly_zx_lcol;        /* the lower screen's (print #0, #1): its bottom line at first */
 static u8 *const bly_zx_udgs = bly_mem + 0xFF58;  /* A..U, as at power-on: the font's capitals */
 static u32 bly_zx_frames;                        /* ticks(): the frames that have passed, as far as the model knows;
                                                     24 bits, as the Spectrum's FRAMES, so it wraps at 16,777,216 */
@@ -135,6 +136,8 @@ static void bly_zx_cls(void) {
     memset(bly_zx_mem + 6144, bly_zx_attr_p, 704);
     memset(bly_zx_mem + 6144 + 704, (bly_zx_border_c << 3) | ((bly_zx_border_c & 4) ? 0 : 7), 64);
     bly_zx_row = bly_zx_col = 0;
+    bly_zx_lrow = 23;
+    bly_zx_lcol = 0;
 }
 
 /* -- pixels ------------------------------------------------------------------------------------------------------- */
@@ -224,6 +227,49 @@ static void bly_zx_udg(i16 n, const u8 *rows, u16 len, int l) {
 }
 
 /* -- text --------------------------------------------------------------------------------------------------------- */
+
+/* the lower screen, print #0 and #1: its two rows, as zxgfx.py's lat and lout say. Row 24 is pending below */
+static long bly_zx_saved_col;
+static int bly_zx_lline;
+static void bly_zx_lower(int l) {
+    bly_zx_saved_col = bly_col;
+    bly_col = bly_zx_lcol;
+    bly_zx_lline = l;
+    bly_showing = 3;
+}
+static void bly_zx_upper(void) {
+    bly_showing = 0;
+    bly_col = bly_zx_saved_col;
+}
+static void bly_zx_lat(i16 r, i16 c, int l) {
+    if (!(0 <= r && r <= 1 && 0 <= c && c <= 31)) bly_zx_off("print at ", r, c, " is off the lower screen", l);
+    bly_zx_lrow = 22 + r;
+    bly_zx_lcol = c;
+}
+static void bly_zx_glyph(u8 ch, u8 g[8]);
+static inline i32 bly_zx_cell(i32 r, i32 i, i32 c);
+static void bly_zx_lout(u8 ch) {
+    if (ch == 10) {
+        if (bly_zx_lrow == 24) goto grow;
+        bly_zx_lrow++;
+        bly_zx_lcol = 0;
+        return;
+    }
+    if (bly_zx_lcol == 32) {
+        bly_zx_lrow++;
+        bly_zx_lcol = 0;
+    }
+    if (bly_zx_lrow == 24) goto grow;
+    u8 g[8];
+    bly_zx_glyph(ch, g);
+    for (int i = 0; i < 8; i++) bly_zx_mem[bly_zx_cell(bly_zx_lrow, i, bly_zx_lcol)] = g[i];
+    bly_zx_mem[6144 + bly_zx_lrow * 32 + bly_zx_lcol] = (u8)((bly_zx_border_c << 3) | ((bly_zx_border_c & 4) ? 0 : 7));
+    bly_zx_lcol++;
+    return;
+grow:
+    bly_zx_upper();                                          /* the failure's words are output, not the lower screen's */
+    bly_fail("print would grow the lower screen past its two lines", bly_zx_lline);
+}
 
 static void bly_zx_at(i16 r, i16 c, int l) {
     if (!(0 <= r && r <= 21 && 0 <= c && c <= 31)) bly_zx_off("print at ", r, c, " is off the screen", l);
@@ -361,6 +407,8 @@ static void bly_zx_asked(void) {
         for (int line = 0; line < 8; line++) memset(bly_zx_mem + (((row & 0x18) << 8) | (line << 8) | ((row & 7) << 5)), 0, 32);
         memset(bly_zx_mem + 6144 + 32 * row, (bly_zx_border_c << 3) | ((bly_zx_border_c & 4) ? 0 : 7), 32);
     }
+    bly_zx_lrow = 23;
+    bly_zx_lcol = 0;
 }
 
 /* -- the machine's memory: an address is any whole number, checked as an index is ------------------------------- */

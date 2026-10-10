@@ -704,6 +704,30 @@ class Gen:
             self.line(s.line)
             self.jp('bly_assert')
             self.place(ok)
+        elif k == 'print' and getattr(s, 'stream', 2) != 2:    # #0, #1: the lower screen's (zxlower.asm)
+            if self.target != 'zx48':
+                raise GenError(f'print #{s.stream} is Spectrum-only: put it inside if ZX then ... end')
+
+            def piece(f):                                    # each piece on channel K, worked out before
+                self.line(s.line)
+                self.call('bly_zx_lower')
+                f()
+                self.call('bly_zx_upper')
+            for kind, e in s.items:
+                if kind == 'zone':
+                    piece(lambda: self.call('bly_zone'))
+                elif kind == 'at':
+                    r, c = self.conv(self.ex(e[0]), B.INT), self.conv(self.ex(e[1]), B.INT)
+                    self.line(s.line)
+                    self.load_hl(c)
+                    self.emit('ex de,hl')
+                    self.load_hl(r)
+                    self.call('bly_zx_lat')
+                else:
+                    v = self.ex(e)
+                    piece(lambda: self.pr(v, e.ty))
+            if s.newline:
+                piece(lambda: self.call('bly_nl'))
         elif k == 'print':
             placed = False                                   # from the first at on: the screen's alone (bracketed)
             on = lambda: placed and self.call('bly_zx_scr_on')
