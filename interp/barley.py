@@ -785,6 +785,11 @@ class Checker:
                 d.rty = self.ty(d.retx) if d.retx else VOID
                 self.funcs[d.name] = d
         for d in self.decls:
+            if d.k == 'const' and self.is_table(d.e):
+                if d.name in self.globals:
+                    raise BarleyError(f'{d.name} is defined twice', d.line)
+                self.globals[d.name] = self.table(d)
+                continue
             if d.k == 'const':
                 t = self.expr(d.e)
                 if d.e.k == 'str':                    # a string constant: each use becomes the literal itself
@@ -815,9 +820,102 @@ class Checker:
                         self.declare(Var(pname, pty, 'local'), d.line)
                 self.block(d.body)
                 self.scopes = []
+        self.tables_unchanged()
         self.reachable = self.reach()
         if self.target == 'cpm':
             self.spectrum_only()
+
+    # -- constant tables
+    def is_table(self, e):
+        """int[0, 2, 4], pos[pos(0, 1), ...], Step[Step(1, p), ...]: a type's name, indexed"""
+        return (e.k == 'index' and e.obj.k == 'name' and not any(e.obj.name in sc for sc in self.scopes)
+                and (e.obj.name in INTS or e.obj.name in ('bool', 'float', 'str', 'pos', 'bit')
+                     or e.obj.name in self.records))
+
+    def table(self, d):
+        """const NAME = T[e1, e2, ...]: a constant array, its elements constants of type T"""
+        et = self.ty(('name', d.e.obj.name, d.line))
+        if et is BIT:
+            raise BarleyError(f'{d.name}: a table of bits is a table of bools: bool[...]', d.line)
+        if len(d.e.idx) > 65535:
+            raise BarleyError(f'{d.name}: a table holds at most 65535', d.line)
+        vals = [self.table_elem(el, et, d.name) for el in d.e.idx]
+        d.table, d.ty = True, Gen('array', et, n=len(vals))
+        return Var(d.name, d.ty, 'const', const=True, cval=vals)
+
+    def table_elem(self, el, t, name):
+        """a table element's value, as the interpreter holds it (a record is a tuple); it has to be a constant"""
+        if isinstance(t, RecordT):
+            rname = 'pos' if t is POS else t.name
+            if el.k != 'call' or el.name != rname:
+                raise BarleyError(f'{name}: each element of a {rname} table is {rname}(...)', el.line)
+            if len(el.args) != len(t.fields):
+                raise BarleyError(f'{rname}(...) takes {len(t.fields)} values', el.line)
+            return tuple(self.table_elem(a, ft, name) for a, (_, ft) in zip(el.args, t.fields))
+        self.expr(el)
+        if t is STR:
+            if el.k != 'str':
+                raise BarleyError(f"{name}: a table's elements have to be constants", el.line)
+            return el.v
+        if not (is_int(t) or t in (BOOL, FLOAT)):
+            raise BarleyError(f"a table's elements are numbers, bools, floats, text or records, not {article(t)}",
+                              el.line)
+        self.coerce(el, t)
+        if el.cval is None:
+            raise BarleyError(f"{name}: a table's elements have to be constants", el.line)
+        return float(el.cval) if t is FLOAT else el.cval
+
+    def tables_unchanged(self):
+        """a constant array (a table, dirs4, dirs8) passed to a function that may change that parameter is an error.
+        A function may change an array parameter if it assigns into it, sorts it, or passes it on to a function
+        that may change it (worked out to a fixed point)"""
+        def nodes(x):
+            if isinstance(x, (list, tuple)):
+                for v in x:
+                    yield from nodes(v)
+            elif isinstance(x, N):
+                yield x
+                for k, v in x.__dict__.items():
+                    if k not in ('func', 'var', 'ty', 'record', 'cast', 'opnode', 'cval'):
+                        yield from nodes(v)
+
+        def root(e):
+            while e.k in ('index', 'dot'):
+                e = e.obj
+            return e
+
+        writes, passes, calls = {n: set() for n in self.funcs}, [], []
+        for name, f in self.funcs.items():
+            arrays = {p: i for i, ((p, _), t) in enumerate(zip(f.params, f.ptys))
+                      if isinstance(t, Gen) and t.kind == 'array'}
+            for x in nodes(f.body):
+                if x.k == 'assign' and x.target.k != 'name':
+                    r = root(x.target)
+                    if r.k == 'name' and r.name in arrays:
+                        writes[name].add(arrays[r.name])
+                elif x.k == 'dot' and x.name == 'sort' and x.obj.k == 'name' and x.obj.name in arrays:
+                    writes[name].add(arrays[x.obj.name])
+                elif x.k == 'call' and getattr(x, 'func', None) is not None:
+                    calls.append(x)
+                    for j, a in enumerate(x.args):
+                        if a.k == 'name' and a.name in arrays:
+                            passes.append((name, arrays[a.name], x.func.name, j))
+        changed = True
+        while changed:
+            changed = False
+            for f, i, g, j in passes:
+                if j in writes[g] and i not in writes[f]:
+                    writes[f].add(i)
+                    changed = True
+        for d in self.decls:
+            if d.k == 'var' and d.e is not None:
+                calls += [x for x in nodes(d.e) if x.k == 'call' and getattr(x, 'func', None) is not None]
+        for c in calls:
+            for j, a in enumerate(c.args):
+                if a.k == 'name' and getattr(a, 'var', None) is not None and a.var.const and j in writes[c.func.name]:
+                    pname = c.func.params[j][0]
+                    raise BarleyError(f"{a.name} is a constant table, and {c.func.name}() may change its {pname}",
+                                      c.line)
 
     # -- what this target can reach
     def walk_live(self, x, visit):
@@ -1014,6 +1112,9 @@ class Checker:
             ot = e.obj.ty
             if ot is STR:
                 raise BarleyError("a str can't be changed; it's a view of the text", e.line)
+            r = e.obj                                     # (a field inside a table comes here through .lvalue)
+            if r.k == 'name' and getattr(r, 'var', None) is not None and r.var.const:
+                raise BarleyError(f"{r.name} is a constant table and can't be changed", e.line)
             if e.slice:
                 raise BarleyError("a slice can't be assigned", e.line)
             return t
@@ -1276,12 +1377,17 @@ class Checker:
             e.cval = -e.a.cval if e.op == '-' else ~e.a.cval
             return FLEX
         if t is FLOAT and e.op == '-':
+            if e.a.cval is not None:                  # a negative float literal is a constant too
+                e.cval = -e.a.cval
             return t
         if not is_int(t):
             raise BarleyError(f'{e.op} is for numbers', e.line)
         return t
 
     def x_index(self, e):
+        if self.is_table(e):
+            raise BarleyError(f'{e.obj.name}[...] is a table, and a table is a const: const NAME = {e.obj.name}[...]',
+                              e.line)
         ot = self.expr(e.obj)
         e.slice = False
         if ot is STR and len(e.idx) == 1 and e.idx[0].k == 'range':
@@ -1334,6 +1440,8 @@ class Checker:
         sig = self.method_sig(ot, name, e)
         if sig is None:
             raise BarleyError(f'{article(ot)} has no .{name}()', e.line)
+        if name == 'sort' and e.obj.k == 'name' and getattr(e.obj, 'var', None) is not None and e.obj.var.const:
+            raise BarleyError(f"{e.obj.name} is a constant table and can't be changed", e.line)
         params, ret = sig
         if len(args) != len(params) and not (name in ('int', 'split', 'find', 'starts', 'get') and len(args) <= len(params)):
             raise BarleyError(f'.{name}() takes {len(params)} argument{"s" * (len(params) != 1)}', e.line)

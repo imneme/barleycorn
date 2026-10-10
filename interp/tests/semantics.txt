@@ -508,6 +508,163 @@ end
 56
 bright 2 is not 0, 1 or 8 at line 8
 
+=== constant tables: every kind of element, indexed, .len, for, and passed to a function that only reads them
+record Step
+  risk: word
+  at: pos
+end
+
+const SCALE = int[0, 2, 4, 5, 7, 9, 11]
+const NAMES = str["one", "two", "three", "", "five"]
+const KNIGHT = pos[pos(-2, -1), pos(-2, 1), pos(-1, -2), pos(-1, 2), pos(1, -2), pos(1, 2), pos(2, -1), pos(2, 1)]
+const STEPS = Step[Step(3, pos(0, 1)), Step(65535, pos(-1, 0))]
+const SMALL = byte[1, 2, 255]
+const BIG = quad[-9223372036854775807, 0, 1099511627776]
+const LONGS = long[-2147483648, 2147483647]
+const WORDS = word[0, 65535, 'A']
+const YES = bool[true, false, true]
+
+func total(t: int[]): long
+  var s: long = 0
+  for x in t do s += long(x) end
+  return s
+end
+
+func first(t: pos[]): int
+  return t[0].r * 10 + t[0].c
+end
+
+func reads(t: int[]): bool
+  return total(t) > 10 and t[1] == 2
+end
+
+func main()
+  print SCALE.len; " "; SCALE[3]; " "; total(SCALE); " "; reads(SCALE)
+  for n in NAMES do print "["; n; "]"; end
+  print
+  var p = pos(4, 4)
+  for d in KNIGHT do print p.r + d.r; ","; p.c + d.c; " "; end
+  print
+  print STEPS[1].risk; " "; STEPS[0].at.c; " "; STEPS.len; " "; first(KNIGHT); " "; first(dirs4); " "; first(dirs8)
+  print SMALL[2]; " "; BIG[0]; " "; BIG[2]; " "; LONGS[0]; " "; LONGS[1]; " "; WORDS[1]; " "; WORDS[2]; " "; YES[1]
+  var i: byte = 6
+  print SCALE[i]; " "; NAMES[1][2]; " "; NAMES[2].len
+end
+--- expect
+7 5 38 true
+[one][two][three][][five]
+2,3 2,5 3,2 3,6 5,2 5,6 6,3 6,5 
+65535 1 2 -21 -10 -10
+255 -9223372036854775807 1099511627776 -2147483648 2147483647 65535 65 false
+11 111 5
+
+=== a table's index is checked, in the same words as an array's
+const SCALE = int[0, 2, 4]
+func main()
+  var i = 2
+  print SCALE[i]
+  i += 1
+  print SCALE[i]
+end
+--- expect
+4
+index 3 is outside 0..3 at line 6
+
+=== a table of floats (the machine's own, so not on CP/M)
+const F = float[1.5, 2, -0.25, -1e10]
+func main()
+  print F[0] + F[1]; " "; F[2]; " "; F[3]; " "; F.len
+end
+--- expect
+3.5 -0.25 -1e+10 4
+
+=== a constant table can't be changed: assigning into it
+const T = int[1, 2, 3]
+func main()
+  T[1] += 1
+end
+--- expect
+T is a constant table and can't be changed at line 3
+
+=== a constant table can't be changed: a record field inside it
+record R
+  a: int
+end
+const RS = R[R(1), R(2)]
+func main()
+  RS[0].a = 3
+end
+--- expect
+RS is a constant table and can't be changed at line 6
+
+=== a constant table can't be changed: sorting it
+const T = int[3, 2, 1]
+func main()
+  T.sort()
+end
+--- expect
+T is a constant table and can't be changed at line 3
+
+=== a constant table can't be changed: passing it to a function that may change it, however far down
+const T = int[3, 2, 1]
+func f(t: int[])
+  t.sort()
+end
+func g(u: int[], k: int)
+  if k > 0 then f(u) end
+end
+func main()
+  g(T, 0)
+end
+--- expect
+T is a constant table, and g() may change its u at line 9
+
+=== a constant table can't be changed: a function writing a field of one of its elements
+record R
+  a: int
+end
+const RS = R[R(1), R(2)]
+func f(t: R[], k: int)
+  t[k].a = 5
+end
+func main()
+  f(RS, 1)
+end
+--- expect
+RS is a constant table, and f() may change its t at line 9
+
+=== dirs4 and dirs8 are constant tables too
+func f(a: pos[])
+  a[0] = pos(1, 1)
+end
+func main()
+  f(dirs8)
+end
+--- expect
+dirs8 is a constant table, and f() may change its a at line 5
+
+=== a table's elements are constants, of its type
+var x: int = 3
+const U = int[1, x]
+func main()
+end
+--- expect
+U: a table's elements have to be constants at line 2
+
+=== a table's elements fit its type
+const U = byte[1, 300]
+func main()
+end
+--- expect
+300 doesn't fit in a byte at line 1
+
+=== a table is a const's value, not an expression anywhere
+func main()
+  var a = int[1, 2]
+end
+--- expect
+int[...] is a table, and a table is a const: const NAME = int[...] at line 2
+
 === a trailing comma in print keeps the line open, and ends the statement
 func main()
   print "a",

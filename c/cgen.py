@@ -144,6 +144,18 @@ class Gen:
             self.strings[b] = f'S{len(self.strings)}'
         return f'bly_s({self.strings[b]}, {len(b)})'
 
+    def c_init(self, v, t):
+        """a constant value as a C initializer (a record's fields in order, a str as its bytes and length)"""
+        if isinstance(t, B.RecordT):
+            return '{' + ', '.join(self.c_init(x, ft) for x, (_, ft) in zip(v, t.fields)) + '}'
+        if t is B.STR:
+            if not v:
+                return '{bly_nothing, 0}'
+            if v not in self.strings:
+                self.strings[v] = f'S{len(self.strings)}'
+            return f'{{{self.strings[v]}, {len(v)}}}'
+        return self.lit(v, t)
+
     def lit(self, v, t):
         if t is B.FLEX:
             t = next(x for x in (B.INT, B.LONG, B.QUAD) if x.lo <= v <= x.hi)
@@ -190,6 +202,11 @@ class Gen:
         self.out, self.depth, self.ntemp, self.func = [], 1, 0, None
         ginit = []
         gdecls = []
+        for d in self.ck.decls:                                      # the tables: not const in C, as views take
+            if getattr(d, 'table', False):                           # them, but the checker lets nothing write
+                et, vals = d.ty.args[0], self.ck.globals[d.name].cval
+                gdecls.append(f'static {self.ctype(et)} k_{d.name}[{len(vals)}] = '
+                              f'{{{", ".join(self.c_init(v, et) for v in vals)}}};')
         for d in globals_:
             t = d.ty
             if isinstance(t, B.Gen) and t.kind == 'array':
@@ -592,6 +609,8 @@ class Gen:
         if e.k == 'name':
             if e.name in ('dirs4', 'dirs8') and e.var.const:
                 return f'bly_{e.name}', e.name[-1]
+            if e.var.const:                                          # a table
+                return f'k_{e.name}', str(len(e.var.cval))
             name = ('g_' if e.var.where == 'global' else 'v_') + e.name
             n = e.var.ty.n
             if n is None:                                            # a parameter: a view
@@ -618,8 +637,9 @@ class Gen:
     def ex(self, e, discard=False):
         """emit what computing e takes; return a C expression for its value (a temporary, a literal or a name)"""
         if e.k == 'name' and e.var.const:
-            if isinstance(e.var.ty, B.Gen):
-                raise CGenError('a constant array is used by indexing or for')
+            if isinstance(e.var.ty, B.Gen):                          # a table, dirs4 or dirs8, passed: a view
+                base, n = self.array(e)
+                return f'(({self.ctype(e.ty)}){{{base}, (u16)({n})}})'
             return self.lit(e.cval, e.ty)
         if e.cval is not None and e.k != 'name':
             return self.lit(e.cval, e.ty)

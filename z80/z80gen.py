@@ -859,7 +859,7 @@ class Gen:
     def ex(self, e):
         if e.k == 'name' and e.var.const:
             if isinstance(e.var.ty, B.Gen):
-                return Op('mem', self.const_array(e.name), e.ty)
+                return Op('mem', self.const_array(e.name, e.var), e.ty)
             if e.ty is B.FLOAT:
                 size(B.FLOAT)                            # (on CP/M: floats aren't here)
                 return Op('imm', float(e.cval), B.FLOAT)
@@ -875,13 +875,37 @@ class Gen:
             return Op('imm', int(e.cval), t)
         return getattr(self, 'x_' + e.k)(e)
 
-    def const_array(self, name):
-        lab = 'bly_' + name
+    def const_array(self, name, var):
+        """a constant array (dirs4, dirs8, or a table): its elements laid out in the code, as ABI.md section 1 lays
+        values out in memory; returns its label"""
+        lab = ('bly_' if name in ('dirs4', 'dirs8') else 'k_') + name
         if lab not in self.helpers:
-            vals = {'dirs4': [(-1, 0), (0, 1), (1, 0), (0, -1)],
-                    'dirs8': [(-1, 0), (-1, 1), (0, 1), (1, 1), (1, 0), (1, -1), (0, -1), (-1, -1)]}[name]
-            self.helpers[lab] = [f'{lab}: dw ' + ', '.join(f'{r & 0xFFFF}, {c & 0xFFFF}' for r, c in vals)]
+            et = var.ty.args[0]
+            lines = [f'{lab}:']
+            for v in var.cval:
+                lines += ['        ' + x for x in self.const_data(v, et)]
+            self.helpers[lab] = lines
         return lab
+
+    def const_data(self, v, t):
+        """a constant value's bytes, as data lines"""
+        if isinstance(t, B.RecordT):
+            out = []
+            for x, (_, ft) in zip(v, t.fields):
+                out += self.const_data(x, ft)
+            return out
+        if t is B.STR:
+            if not v:
+                return ['dw 0, 0']
+            return [f'dw {self.string(v).val}d, {len(v)}']
+        if t is B.FLOAT:
+            size(B.FLOAT)                                # (on CP/M: floats aren't here)
+            return ['db ' + ', '.join(str(b) for b in rom5(float(v)))]
+        if t is B.BOOL:
+            return [f'db {1 if v else 0}']
+        n = size(t)
+        u = v & ((1 << (8 * n)) - 1)
+        return ['db ' + ', '.join(str((u >> (8 * k)) & 0xFF) for k in range(n))]
 
     def x_str(self, e):
         return self.string(e.v)
@@ -1580,7 +1604,7 @@ class Gen:
     def array_base(self, e):
         """an array expression: (address of the first element, the length as an Op)"""
         if e.k == 'name' and e.var.const:
-            lab = self.const_array(e.name)
+            lab = self.const_array(e.name, e.var)
             return ('imm_addr', lab), Op('imm', len(e.var.cval), B.WORD)
         a = self.var_addr(e)
         if e.var.ty.n is not None:

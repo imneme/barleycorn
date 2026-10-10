@@ -40,6 +40,12 @@ behaviour, they win, and this gets fixed.*
 | a record | sum of its fields | fields in declaration order, packed, no padding |
 | a container, `lines` | 2 | the address of its header (section 6) |
 
+A **constant table** (`const T = int[...]`, and `dirs4`, `dirs8`) is
+laid out in the program's code as a fixed array of its type, element
+after element as above (a `str` element's `p` points at its bytes, also
+in the code), so the generated code reads it as it reads any fixed
+array, and passes it as a view.
+
 Every variable and every temporary of the generated code lives at a
 **fixed address** (a slot). Recursion saves the slots it must around
 calls into its own cycle (the code generator's business, not the

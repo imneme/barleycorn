@@ -8,6 +8,7 @@ the generator's next steps change:
   (reads in place)
 - self-calls that permute their own arguments (the parallel-move hazard)
 - loops whose bounds the body changes, break and continue
+- constant tables of every width, read at random indices
 """
 import argparse
 import os, random, re, subprocess, sys, multiprocessing as mp
@@ -84,6 +85,8 @@ class Gen:
             return f'(~{self.expr(t, scope, d - 1, fname)})'
         if r < 0.76:
             return f'{self.pick(["min", "max"])}({self.expr(t, scope, d - 1, fname)}, {self.expr(t, scope, d - 1, fname)})'
+        if r < 0.79:                                     # a constant table, laid out in the program
+            return f'T_{t}[{self.expr("int", scope, d - 1, fname)} & 7]'
         if r < 0.82 and t in UP['int']:
             return f'arr[{self.expr("int", scope, d - 1, fname)} & 7]'
         if r < 0.92:
@@ -195,6 +198,11 @@ class Gen:
     def program(self):
         gl = [(f'g_{t}', t) for t in INTS] + [('g_bool', 'bool')]
         src = ['var arr: int[8]'] + [f'var {n}: {t} = {self.lit(t) if t != "bool" else "true"}' for n, t in gl]
+        for t in INTS:                                   # a table of each width: edges, and anywhere in range
+            lo, hi = {'byte': (0, 255), 'word': (0, 65535), 'int': (-32768, 32767), 'long': (-2 ** 31, 2 ** 31 - 1),
+                      'quad': (-2 ** 63, 2 ** 63 - 1)}[t]
+            vals = [self.pick(EDGE[t]) if self.r.random() < 0.4 else self.r.randint(lo, hi) for _ in range(8)]
+            src.append(f'const T_{t} = {t}[{", ".join(map(str, vals))}]')
         for k in range(self.r.randint(1, 3)):
             name = f'f{k}'
             params = [('d', 'int')] + [(f'p{j}', self.pick(INTS)) for j in range(self.r.randint(1, 4))]

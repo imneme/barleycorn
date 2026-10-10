@@ -164,6 +164,7 @@ program made to sing.
 
 ```
 -- a comment       const N = 140       const NOTES = "\x00\x02\x04"
+const SCALE = int[0, 2, 4, 7, 9]       a table: any element type, read-only
 var total: long = 0                    (every variable has a value)
 func f(a: int, xs: list[word]): long ... end
                    recursion anywhere; call before define; main() runs first
@@ -375,6 +376,21 @@ an error that suggests a `list` instead.
 something clever with memory without being asked, and it's visible in
 the type. A bit costs about twice a byte to read, and on 48K that trade
 is usually right.
+
+**A constant table** is an array made once, in the program itself:
+`const SCALE = int[0, 2, 4, 7, 9]`, `const NAMES = str["one", "two"]`,
+`const MOVES = pos[pos(-2, -1), pos(-1, -2)]`, or a record's
+(`Step[Step(3, pos(0, 1)), ...]`). Its type is in its brackets, and each
+element is a constant of that type, so `byte[1, 300]` says 300 doesn't
+fit. It's read as any array is (`SCALE[i]`, `SCALE.len`,
+`for x in SCALE`), and it can be passed to a function that takes
+`int[]`, but nothing may change it. Assigning into it, or sorting it, is
+an error, and so is passing it to a function that may change that
+parameter, directly or by passing it on: the checker works out which
+functions can, over the whole program. `dirs4` and `dirs8` are tables
+too, and the same rule holds them (it didn't, until tables came). On the
+Z80 a table is laid out in the code exactly as an array is in memory, so
+reading one costs what reading an array costs.
 
 ### Positions and grids
 
@@ -932,10 +948,9 @@ Barleycorn (HISTORY.md says why).
    routine that uses them. Leaf routines could use EXX freely.
 3. **How fast can the Z80 backend get?** HISTORY.md has the measured
    steps so far, and the next ones.
-4. **Constant tables of any type.** A string constant is a table of
-   bytes; a table of words or records still has to be a `case` or
-   assignments. Array literals (`const SCALE = int[0, 2, 4, 7, 9]`) are
-   the obvious shape.
+4. *Answered (10 October):* constant tables, `const SCALE = int[...]`,
+   of any element type (section 5, "Arrays"). An array literal anywhere
+   else (a `var`'s first value, an argument) is a later question.
 5. **Should `print at` text go to the output?** Everything printed goes
    there today, so the output can be compared between backends, but a
    counter shown live with `print at` floods it. Text printed at a place
