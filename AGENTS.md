@@ -40,6 +40,8 @@ just check the interpreter against itself.
 - **Missing pieces say so.** No sjasmplus, no tnylpo, no omse-ai or no ROM each give a one-line message saying what
   to install or where to put it, and `./check` skips what it can't run. A traceback instead is a bug worth fixing.
 - **Only programs that touch the Spectrum's screen, sound or memory need the ROM**, even in the interpreter.
+- **macOS has no `timeout` command.** `./bly zx --minutes N` limits a Spectrum run, and the scripts here use Python's
+  own timeouts.
 - **The Spectrum's ROM keeps its own rules.** IY must stay 5C3Ah and HL' must survive for the return to BASIC. The
   ROM's BEEPER turns interrupts off, so the frame counter stands still while it plays. Its PRINT wraps and scrolls
   lazily, when the next character is printed rather than at the newline. When the model and the machine disagree, run
