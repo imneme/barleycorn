@@ -1,0 +1,47 @@
+-- (phase one's benchmark suite, in today's Barley: HISTORY.md) Conway's Life on a 16x16 torus, 20 generations.  No recursion, many locals.
+
+const W = 16
+const H = 16
+var cells: byte[W * H]
+var next: byte[W * H]
+
+func step()
+  for y in byte(0)..H do
+    var up = (y + H - 1) % H
+    var down = (y + 1) % H
+    for x in byte(0)..W do
+      var lf = (x + W - 1) % W
+      var rt = (x + 1) % W
+      var n = cells[up * W + lf] + cells[up * W + x] + cells[up * W + rt] +
+              cells[y * W + lf] + cells[y * W + rt] +
+              cells[down * W + lf] + cells[down * W + x] + cells[down * W + rt]
+      if n == 3 or (n == 2 and cells[y * W + x] == 1) then
+        next[y * W + x] = 1
+      else
+        next[y * W + x] = 0
+      end
+    end
+  end
+  for i in word(0)..W * H do cells[i] = next[i] end
+end
+
+func population(): word
+  var p: word = 0
+  for i in word(0)..W * H do p = p + cells[i] end
+  return p
+end
+
+func main()
+  var x: word = 2718
+  for i in word(0)..W * H do
+    x = x * 25173 + 13849
+    if x > 40000 then cells[i] = 1 end
+  end
+  for g in byte(1)..20 + 1 do
+    step()
+    if g % 5 == 0 then print population() end
+  end
+  var s: word = 0
+  for i in word(0)..W * H do s = s * 3 + cells[i] end
+  print s
+end

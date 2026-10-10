@@ -1,0 +1,29 @@
+-- (phase one's benchmark suite, in today's Barley: HISTORY.md) Argument shuffles: gcd swaps its two arguments in a tail call, and rot
+-- rotates six of them (three in registers, three not) a hundred times.
+
+func gcd(a: word, b: word): word
+  if b == 0 then return a end
+  return gcd(b, a % b)
+end
+
+func rot(a: word, b: word, c: word, d: word, e: word, n: word): word
+  if n == 0 then return a + 2 * b + 3 * c + 4 * d + 5 * e end
+  return rot(e, a, b, c, d + n, n - 1)
+end
+
+func spin(a: word, b: word, c: word, d: word, n: word): word
+  if n == 0 then return a * 1000 + b * 100 + c * 10 + d end
+  var r = spin(d, c, b, a, n - 1)
+  return r + a
+end
+
+func main()
+  var s: word = 0
+  for i in word(1)..200 + 1 do
+    s = s + gcd(i * 7919, 65521 - i)
+  end
+  print s
+  print gcd(46368, 28657)
+  print rot(1, 2, 3, 4, 5, 100)
+  print spin(1, 2, 3, 4, 9)
+end

@@ -1,0 +1,12 @@
+-- (phase one's benchmark suite, in today's Barley: HISTORY.md) Takeuchi's function: deep recursion, three arguments, most calls leaves.
+
+func tak(x: word, y: word, z: word): word
+  if y < x then
+    return tak(tak(x - 1, y, z), tak(y - 1, z, x), tak(z - 1, x, y))
+  end
+  return z
+end
+
+func main()
+  print tak(18, 12, 6)
+end

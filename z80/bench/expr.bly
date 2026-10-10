@@ -1,0 +1,71 @@
+-- (phase one's benchmark suite, in today's Barley: HISTORY.md) A recursive-descent calculator: expr, term and factor call each other.
+
+var src: str = "(1+2)*(3+4*(5-2));((7*8)-(9+10*2))*3;100/(2+3)-7*-2;2*(3*(4*(5*(6+1))));12345/5/7-(8-9)*(10-11)\x00"
+var pos: word
+
+func peek(): byte
+  return src[pos]
+end
+
+func advance()
+  pos = pos + 1
+end
+
+func number(): int
+  var v: int = 0
+  while peek() >= '0' and peek() <= '9' do
+    v = v * 10 + (peek() - '0')
+    advance()
+  end
+  return v
+end
+
+func factor(): int
+  if peek() == '(' then
+    advance()
+    var v = expr()
+    advance()
+    return v
+  end
+  if peek() == '-' then
+    advance()
+    return -factor()
+  end
+  return number()
+end
+
+func term(): int
+  var v = factor()
+  while peek() == '*' or peek() == '/' do
+    var op = peek()
+    advance()
+    var r = factor()
+    if op == '*' then v = v * r else v = v / r end
+  end
+  return v
+end
+
+func expr(): int
+  var v = term()
+  while peek() == '+' or peek() == '-' do
+    var op = peek()
+    advance()
+    var r = term()
+    if op == '+' then v = v + r else v = v - r end
+  end
+  return v
+end
+
+func main()
+  var sum: int = 0
+  for rep in word(1)..20 + 1 do
+    pos = 0
+    while peek() != 0 do
+      var v = expr()
+      if rep == 1 then print v end
+      sum = sum + v
+      if peek() == ';' then advance() end
+    end
+  end
+  print sum
+end

@@ -1,0 +1,36 @@
+-- AoC 2023 day 8: follow the turns through the network.
+
+var turns: str
+var left = map[word, word](1024)
+var right = map[word, word](1024)
+
+func arrived(node: word, ghost: bool): bool
+  if ghost then return name(node)[2] == 'Z' end
+  return name(node) == "ZZZ"
+end
+
+func walk(node: word, ghost: bool): long
+  var n: long = 0
+  while not arrived(node, ghost) do
+    if turns[n % turns.len] == 'L' then node = left[node] else node = right[node] end
+    n += 1
+  end
+  return n
+end
+
+func main()
+  var input = lines()
+  turns = input.next()
+  input.next()                             -- the blank line
+  for line in input do                     -- AAA = (BBB, CCC)
+    var node = intern(line[0..3])
+    left[node] = intern(line[7..10])
+    right[node] = intern(line[12..15])
+  end
+  -- (its input, aoc2023d08b.in, has no AAA, so this variant skips part 1)
+  var all: quad = 1
+  for node in left do
+    if name(node)[2] == 'A' then all = lcm(all, walk(node, true)) end
+  end
+  print "Part 2: "; all
+end

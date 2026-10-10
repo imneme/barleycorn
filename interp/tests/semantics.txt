@@ -1,0 +1,740 @@
+Small programs that pin the language's meaning down, each with the output it must print exactly.
+
+=== unsigned types wrap, even in a checked build
+func main()
+  var b: byte = 250
+  b += 10
+  var w: word = 3
+  w -= 5
+  print b; " "; w
+end
+--- expect
+4 65534
+
+=== signed overflow traps
+func main()
+  var i: int = 32767
+  i += 1
+  print i
+end
+--- expect
+int overflow at line 3
+
+=== division truncates; mod is never negative
+func main()
+  print -7 / 2; " "; -7 % 2; " "; mod(-7, 2); " "; 7 / -2; " "; mod(-1, 5)
+end
+--- expect
+-3 -1 1 -3 4
+
+=== a literal too big for its type is an error
+func main()
+  var b: byte = 300
+end
+--- expect
+300 doesn't fit in a byte at line 2
+
+=== word and int need a cast
+func main()
+  var w: word = 5
+  var i: int = 3
+  print w + i
+end
+--- expect
+mixing word and int needs a cast, such as int(x) at line 4
+
+=== a literal widens what it meets
+func main()
+  var i: int = 1000
+  print i * 100000
+end
+--- expect
+100000000
+
+=== ints: a minus is a sign unless it follows a digit
+func main()
+  for n in "2-4,6-8 x=-3 y=+5, -12".ints() do print n; " "; end
+  print
+end
+--- expect
+2 4 6 8 -3 5 -12 
+
+=== s.int(k) is the k-th integer
+func main()
+  var line = "move 3 from 1 to 2"
+  print line.int(0) + line.int(1) * 10 + line.int(2) * 100
+end
+--- expect
+213
+
+=== records compare field by field
+record Hand
+  kind: byte
+  name: str
+end
+func main()
+  var hs = list[Hand](8)
+  hs.push(Hand(2, "b")); hs.push(Hand(1, "z")); hs.push(Hand(2, "a"))
+  hs.sort()
+  for h in hs do print h.kind; h.name; " "; end
+  print
+  print Hand(1, "a") < Hand(1, "b")
+end
+--- expect
+1z 2a 2b 
+true
+
+=== maps walk in insertion order
+func main()
+  var m = map[word, word](16)
+  m[30] = 1; m[10] = 2; m[20] = 3
+  m[10] = 4
+  for k, v in m do print k; "="; v; " "; end
+  print
+end
+--- expect
+30=1 10=4 20=3 
+
+=== a full queue says so
+func main()
+  var q = queue[word](2)
+  q.put(1); q.put(2); q.put(3)
+end
+--- expect
+queue full (2) at line 3
+
+=== print's comma moves to the next 16-column zone
+func main()
+  print "a", "bc", 7
+  print "x";
+  print "y"
+end
+--- expect
+a               bc              7
+xy
+
+=== ranges are half-open; rev walks down; slices use the same notation
+func main()
+  for i in 0..4 do print i; end
+  print
+  for i in rev(0..4) do print i; end
+  print
+  var s = "hello"
+  print s[1..3]; " "; s.len
+end
+--- expect
+0123
+3210
+el 5
+
+=== indexing past the end
+func main()
+  var a: int[3]
+  print a[3]
+end
+--- expect
+index 3 is outside 0..3 at line 3
+
+=== intern makes names into small numbers
+func main()
+  print intern("AAA"); intern("BBB"); intern("AAA"); " "; name(1)
+end
+--- expect
+010 BBB
+
+=== case and when
+func f(c: byte): int
+  case c
+    when 'U', 'u' then return 1
+    when 'D' then return 2
+    else return 0
+  end
+  return 9
+end
+func main()
+  print f('u'); f('D'); f('x')
+end
+--- expect
+120
+
+=== grids, pos and dirs4
+func main()
+  var g = grid[byte](2, 3, 46)
+  g[1, 2] = 35
+  var p = g.find(35)
+  print p; " "; p + dirs4[0]; " "; g.has(p + dirs4[1])
+end
+--- expect
+(1, 2) (0, 2) false
+
+=== a missing key says which
+func main()
+  var m = map[int, int](4)
+  print m[-5]
+end
+--- expect
+no key -5 in the map at line 3
+
+=== quad arithmetic and lcm
+func main()
+  var a: quad = 1
+  for n in 1..25 do a = lcm(a, n) end
+  print a
+end
+--- expect
+5354228880
+
+=== the loop owns its variable
+func main()
+  for i in 0..3 do i = 5 end
+end
+--- expect
+i is the loop variable; the loop owns it at line 2
+
+=== string literals are ASCII
+func main()
+  print "caf\xE9 is fine with an escape"
+  print "café"
+end
+--- expect
+string literals are ASCII: U+00E9 needs an escape such as \xE9 at line 3
+
+=== a record field can be assigned, and records are values
+record P
+  x: int
+  y: int
+end
+func main()
+  var a = P(1, 2)
+  var b = a
+  b.x = 10
+  var ps: P[2]
+  ps[1].y = 7
+  print a.x; " "; b.x; " "; ps[1].y; " "; ps[0].y
+end
+--- expect
+1 10 7 0
+
+=== recursion and fixed arrays as references
+func fill(a: int[], v: int)
+  for i in 0..a.len do a[i] = v end
+end
+func fib(n: int): long
+  if n < 2 then return n end
+  return fib(n - 1) + fib(n - 2)
+end
+func main()
+  var a: int[4]
+  fill(a, 7)
+  print a[3]; " "; fib(20)
+end
+--- expect
+7 6765
+
+=== a heap gives the smallest first
+func main()
+  var h = heap[pos](8)
+  h.push(pos(2, 1)); h.push(pos(1, 9)); h.push(pos(1, 3))
+  print h.pop(); h.pop(); h.len
+end
+--- expect
+(1, 3)(1, 9)1
+
+=== sets, and in
+func main()
+  var s = set[word](4)
+  s.add(5); s.add(3); s.add(5)
+  print s.len; " "; 3 in s; " "; 4 in s
+  for x in s do print x; end
+  print
+end
+--- expect
+2 true false
+53
+
+=== floats: literals adapt, conversions are explicit, casts truncate
+func main()
+  var x = 1.5
+  print x * 2; " "; float(7) / 2; " "; int(-2.7); " "; sqrt(16.0); " "; floor(-0.5); " "; -2.0 ** 2
+end
+--- expect
+3 3.5 -2 4 -1 -4
+
+=== a float and an integer don't mix without saying so
+func main()
+  var i: int = 3
+  var f = 1.5
+  print f * i
+end
+--- expect
+mixing float and int needs a conversion: float(x), or a cast such as int(x) at line 4
+
+=== a float too big for its cast stops
+func main()
+  print byte(300.0)
+end
+--- expect
+300 doesn't fit in a byte at line 2
+
+=== changing a list while for walks it stops
+func main()
+  var xs = list[int](8)
+  xs.push(1); xs.push(2)
+  for x in xs do
+    if x == 1 then xs.push(3) end
+  end
+end
+--- expect
+the list changed while for was walking it at line 4
+
+=== a for sees element changes as it walks
+func main()
+  var xs = list[int](8)
+  xs.push(1); xs.push(2); xs.push(3)
+  for x in xs do
+    if x == 1 then xs[2] = 30 end
+    print x; " ";
+  end
+  print
+end
+--- expect
+1 2 30 
+
+=== .next() inside a for over lines takes the following line
+func main()
+  var input = lines()
+  for a in input do
+    var b = input.next()
+    print a; "+"; b
+  end
+end
+--- input
+1
+2
+3
+4
+--- expect
+1+2
+3+4
+
+=== split and ints are walked by for, directly
+func main()
+  var parts = "a,b".split(',')
+end
+--- expect
+split(), ints() and ranges are walked by for, directly at line 2
+
+=== division truncates at run time too, in every width
+func main()
+  var a: int = -7
+  var b: int = 2
+  print a / b; " "; a % b; " "; mod(a, b); " "; (0 - a) / (0 - b); " "; a / -b
+  var q: quad = -7000000000
+  var l: long = -100000
+  print q / 3; " "; l % 7; " "; mod(l, 7)
+end
+--- expect
+-3 -1 1 -3 3
+-2333333333 -5 2
+
+=== a negative shift count stops
+func main()
+  var n: int = -1
+  print 1 << n
+end
+--- expect
+negative shift count at line 3
+
+=== split needs a separator
+func main()
+  for p in "abc".split("") do print p end
+end
+--- expect
+split needs a separator at line 2
+
+=== a container holds at most 65535
+func main()
+  var n: long = 70000
+  var xs = list[byte](n)
+end
+--- expect
+a list holds at most 65535 at line 3
+
+=== shifts wrap; right shifts of negatives keep the sign
+func main()
+  var a: int = -20
+  var b: byte = 200
+  var s: int = 3
+  print a >> s; " "; b << s; " "; a << s; " "; ~b; " "; a & 15
+end
+--- expect
+-3 64 -160 55 12
+
+=== the most negative number % -1 is 0, in every width
+func main()
+  var a: int = -32768
+  var l: long = -2147483648
+  var q: quad = -9223372036854775807 - 1
+  var m: int = -1
+  print a % m; " "; l % long(m); " "; q % quad(m)
+end
+--- expect
+0 0 0
+
+=== shift counts past the width
+func main()
+  var c: word = 100
+  var x: long = -5
+  var y: int = 3
+  print x << c; " "; x >> c; " "; y << c; " "; y >> c
+end
+--- expect
+0 -1 0 0
+
+=== the screen: colours, text, print at, cls (the picture is compared too)
+func main()
+  border(1)
+  paper(0)
+  ink(6)
+  cls()
+  print at 0, 0; "Barley on a 48K"
+  bright(true)
+  ink(2)
+  print at 2, 4; "red and bright"
+  bright(false)
+  inverse(true)
+  print at 4, 0; "inverse"
+  inverse(false)
+  over(true)
+  print at 4, 0; "OVER"
+  over(false)
+  print at 21, 31; "!"
+end
+--- screen
+--- expect
+Barley on a 48K
+red and bright
+inverse
+OVER
+!
+
+=== the screen: drawing (plot, line, circle, point, attr)
+func main()
+  paper(7)
+  ink(0)
+  cls()
+  for r in 0..6 do circle(128, 88, r * 12) end
+  ink(2)
+  line(0, 0, 255, 175)
+  line(255, 0, 0, 175)
+  over(true)
+  for x in 0..256 do plot(x, 88) end
+  over(false)
+  attr(0, 0, 0x17)
+  print point(128, 100); " "; point(0, 0); " "; point(1, 1)
+end
+--- screen
+--- expect
+true true true
+
+=== a trailing comma in print keeps the line open, and ends the statement
+func main()
+  print "a",
+  print "b"
+end
+--- expect
+a               b
+
+=== floats: printed as the machine prints them (on the Spectrum, the ROM's 8 digits, within 1e-7)
+func main()
+  var third = 1.0 / 3.0
+  print third; " "; sqrt(2.0); " "; 0.1 + 0.2; " "; 1e10; " "; exp(1.0); " "; -0.25; " "; 1.5e-7
+  print atan(1.0) * 4.0; " "; ln(10.0); " "; asin(0.5); " "; acos(0.5); " "; tan(0.5); " "; sin(0.5); " "; cos(0.5)
+  print 2.0 ** 10; " "; 2.0 ** 0.5; " "; (-2.0) ** 3; " "; abs(-1.5); " "; sign(-0.5); " "; sign(0.0); " "; -third
+  print trunc(-2.5); " "; floor(-2.5); " "; round(-2.5); " "; round(2.5); " "; round(-2.75); " "; floor(7.0)
+end
+--- expect
+0.3333333333 1.414213562 0.3 1e+10 2.718281828 -0.25 1.5e-07
+3.141592654 2.302585093 0.5235987756 1.047197551 0.5463024898 0.4794255386 0.8775825619
+1024 1.414213562 -8 1.5 -1 0 -0.3333333333
+-2 -3 -2 3 -3 7
+
+=== floats: conversions from every integer type, and back, truncating
+func main()
+  var b: byte = 200
+  var w: word = 65535
+  var i: int = -32768
+  var l: long = -2000000000
+  var q: quad = 123456789012345
+  print float(b); " "; float(w); " "; float(i); " "; float(l); " "; float(q); " "; float(true)
+  print int(-3.99); " "; word(65535.9); " "; long(-1000000000.5); " "; quad(4e9); " "; byte(0.9); " "; int(-0.5)
+end
+--- expect
+200 65535 -32768 -2000000000 1.23456789e+14 1
+-3 65535 -1000000000 4000000000 0 0
+
+=== floats: in records, lists, heaps, globals, and recursion
+record P
+  x: float
+  n: int
+end
+var scale: float = 0.5
+func hyp(p: P): float
+  return sqrt(p.x * p.x + float(p.n) * float(p.n))
+end
+func pw(p: P): float
+  if p.n == 0 then return 1.0 end
+  return p.x * pw(P(p.x, p.n - 1))
+end
+func main()
+  var xs = list[float](8)
+  xs.push(2.5); xs.push(-1.25); xs.push(0.5); xs.push(10.0)
+  xs.sort()
+  for x in xs do
+    print x; " ";
+  end
+  print
+  var p = P(1.5, 2)
+  print p; " "; min(3.5, 2.25); " "; max(-1.0, -2.0); " "; p.x < 2.0; " "; p.x == 1.5; " "; p.x != 1.5
+  var h = heap[float](4)
+  h.push(3.0); h.push(1.0); h.push(2.0)
+  print h.pop(); " "; h.pop(); " "; hyp(P(3.0, 4)) * scale; " "; pw(P(1.5, 10))
+end
+--- expect
+-1.25 0.5 2.5 10 
+P(1.5, 2) 2.25 -1 true true false
+1 2 2.5 57.66503906
+
+=== floats: a function with no answer says so
+func main()
+  var x = -1.0
+  print sqrt(x)
+end
+--- expect
+sqrt(-1) has no answer at line 3
+
+=== floats: dividing by zero
+func main()
+  var z = 0.0
+  print 1.0 / z
+end
+--- expect
+division by zero at line 3
+
+=== floats: too big for ** and exp
+func main()
+  print exp(1.0); " ";
+  print 2.0 ** 2000.0
+end
+--- expect
+2.718281828 float overflow at line 3
+
+=== sound: beep plays, and the program carries on (the short, the long, the lowest and highest, and zero length)
+func main()
+  beep(20, 0)
+  beep(5, 69)
+  beep(30, -60)
+  beep(0, 12)
+  print "after"
+end
+--- expect
+after
+
+=== sound: a beep's pitch is checked
+func main()
+  beep(10, 69)
+  beep(10, 70)
+  print "not reached"
+end
+--- expect
+beep pitch 70 is outside -60..69 at line 3
+
+=== sound: a beep's length is checked
+func main()
+  var ms = -1
+  beep(ms, 0)
+end
+--- expect
+beep length -1 is negative at line 3
+
+=== assignment is left to right: the target's parts once, then the value; += reads the target first
+var log: int = 0
+var a: int[4]
+var g: int = 10
+func idx(): int
+  log = log * 10 + 1
+  return 1
+end
+func val(): int
+  log = log * 10 + 2
+  return 5
+end
+func bump(): int
+  g = 100
+  return 1
+end
+func main()
+  a[idx()] = val()
+  print log; " "; a[1]
+  log = 0
+  a[idx()] += val()
+  print log; " "; a[1]
+  g += bump()
+  print g
+end
+--- expect
+12 5
+12 10
+11
+
+=== a for evaluates what it walks once: the body can't move a range's ends, or swap the str or list being walked
+func main()
+  var n = 3
+  var c = 0
+  for i in 0..n do
+    n = 0
+    c += 1
+  end
+  var lo = 0
+  for i in rev(lo..4) do
+    lo = 3
+    c += 10
+  end
+  var s = "abc"
+  for ch in s do
+    s = "z"
+    c += 100
+  end
+  var xs = list[int](4)
+  xs.push(1)
+  xs.push(2)
+  var ys = list[int](4)
+  for x in xs do
+    xs = ys
+    c += 1000
+  end
+  print c
+end
+--- expect
+2343
+
+=== slices: every bound type, the edges, and slices of slices
+func main()
+  var s = "hello"
+  var a = 1
+  var b = 4
+  var w: word = 2
+  var x: byte = 3
+  var n = int(s.len)
+  print s[a..b]; "|"; s[w..word(5)]; "|"; s[x..byte(5)]; "|"; s[0..0]; "|"; s[n..n]; "|"; s[0..n]
+  var t = s[1..5]
+  print t[1..3]; "|"; t[0..t.len]; "|"; t.len
+  var q: quad = 2
+  print s[q..q + 2]
+end
+--- expect
+ell|llo|lo|||hello
+ll|ello|4
+ll
+
+=== a slice that ends before it starts fails, with both ends
+func main()
+  var s = "hello"
+  var a = 2
+  var b = 1
+  print s[a..b]
+end
+--- expect
+slice 2..1 is outside 0..5 at line 5
+
+=== a slice can't start below 0
+func main()
+  var s = "hello"
+  var a = -1
+  print s[a..2]
+end
+--- expect
+slice -1..2 is outside 0..5 at line 4
+
+=== a slice can't end past the str, with word bounds too
+func main()
+  var s = "hello"
+  var w: word = 3
+  print s[w..w + 3]
+end
+--- expect
+slice 3..6 is outside 0..5 at line 4
+
+=== a field assigned through the record's address is read back new (no register keeps the old one)
+record P  x: int; b: byte; c: byte  end
+func main()
+  var p = P(1, 2, 3)
+  var a = p.b
+  p.b = 7
+  var z = p.b
+  print z; " "; a
+  if p.b == 7 then
+    p.b = 9
+    print p.b
+  end
+  var k = p.c
+  p.c = k + 1
+  print p.b; " "; a; " "; p.c
+  var q = p.x
+  p.x = q + 40
+  print p.x; " "; q
+end
+--- expect
+7 2
+9
+9 2 4
+41 1
+
+=== a local read earlier in a loop survives a recursive call later in the loop (and in mutual recursion)
+func f(d: int): int
+  var acc = 0
+  var x = 10 * d + 1
+  for i in 0..2 do
+    acc += x
+    if d > 0 then
+      acc += f(d - 1)
+    end
+  end
+  return acc
+end
+func g(d: int): int
+  var acc = 0
+  var y = 100 * d + 3
+  var w = 0
+  while w < 2 do
+    acc += y
+    if d > 0 then
+      acc += h(d - 1)
+    end
+    w += 1
+  end
+  return acc
+end
+func h(d: int): int
+  return g(d) + 1
+end
+func main()
+  print f(2); " "; g(2)
+end
+--- expect
+94 848
+
+=== unsigned arithmetic by constants: powers of two, other multipliers, and the big ones
+func main()
+  var w: word = 65535
+  var v: word = 40000
+  var b: byte = 200
+  var c: byte = 255
+  print w / 256; " "; v / 1024; " "; w / 32768; " "; v / 2; " "; w % 256; " "; v % 1024; " "; v % 1
+  print b / 4; " "; c / 128; " "; c % 16; " "; b % 64; " "; b * 2; " "; c * 3; " "; b * 5; " "; c * 128
+  print v * 3; " "; w * 10; " "; v * 256; " "; v * 0; " "; b * 0; " "; v + 1; " "; w + 1; " "; b - 3; " "; w - 65535
+end
+--- expect
+255 39 1 20000 255 64 0
+50 1 15 8 144 253 232 128
+54464 65526 16384 0 0 40001 0 197 0

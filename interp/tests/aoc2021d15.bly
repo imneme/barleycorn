@@ -1,0 +1,29 @@
+-- AoC 2021 day 15, part 1: the safest path through the cave.
+
+record Step
+  risk: word                               -- first, so the heap orders by it
+  at: pos
+end
+
+func main()
+  var g = grid()
+  var done = grid[bit](g.rows, g.cols)     -- 1.25K for 100 x 100
+  var h = heap[Step](2048)
+  var goal = pos(g.rows - 1, g.cols - 1)
+  h.push(Step(0, pos(0, 0)))
+  while true do
+    var s = h.pop()
+    if s.at == goal then
+      print "Part 1: "; s.risk
+      return
+    end
+    if done[s.at] then continue end
+    done[s.at] = true
+    for d in dirs4 do
+      var n = s.at + d
+      if g.has(n) and not done[n] then
+        h.push(Step(s.risk + (g[n] - '0'), n))
+      end
+    end
+  end
+end

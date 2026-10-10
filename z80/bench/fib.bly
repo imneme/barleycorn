@@ -1,0 +1,10 @@
+-- (phase one's benchmark suite, in today's Barley: HISTORY.md) Fibonacci the slow way: fib(20) takes 21,891 calls.
+
+func fib(n: word): word
+  if n < 2 then return n end
+  return fib(n - 1) + fib(n - 2)
+end
+
+func main()
+  print fib(20)
+end

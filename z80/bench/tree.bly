@@ -1,0 +1,47 @@
+-- (phase one's benchmark suite, in today's Barley: HISTORY.md) A binary search tree kept in arrays: insert 300 keys, then walk it.
+
+const MAX = 300
+var key: word[MAX + 1]
+var left: word[MAX + 1]       -- node numbers; 0 means no child
+var right: word[MAX + 1]
+var count: word
+var visited: word
+var total: word
+
+func insert(n: word, k: word)
+  if k < key[n] then
+    if left[n] == 0 then left[n] = count else insert(left[n], k) end
+  else
+    if right[n] == 0 then right[n] = count else insert(right[n], k) end
+  end
+end
+
+func walk(n: word)
+  if n == 0 then return end
+  walk(left[n])
+  visited = visited + 1
+  total = total * 31 + key[n]
+  walk(right[n])
+end
+
+func height(n: word): word
+  if n == 0 then return 0 end
+  var l = height(left[n])
+  var r = height(right[n])
+  if l > r then return l + 1 end
+  return r + 1
+end
+
+func main()
+  var x: word = 999
+  for i in word(1)..MAX + 1 do
+    x = x * 25173 + 13849
+    count = i
+    key[i] = x
+    if i > 1 then insert(1, x) end
+  end
+  walk(1)
+  print visited
+  print total
+  print height(1)
+end

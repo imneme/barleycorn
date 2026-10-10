@@ -1,0 +1,411 @@
+/* bly_zx.h: the Spectrum's screen and sound, off the Spectrum. Included by barley.h, at its end.
+ *
+ * The meaning is ../../z80/zxgfx.py, and this follows it line for line: the same 6,912 bytes (bitmap at 0,
+ * attributes at 6144, the layout at 4000h), the same algorithms step for step, the same checks in the same order with
+ * the same words. Coordinates are BASIC's: x 0..255 from the left, y 0..175 from the bottom; text rows 0..21 and
+ * columns 0..31 from the top left.
+ *
+ * Only print's own output lands on the screen (bly_showing, set by the generated code around each item), never a
+ * failure's message, as in the interpreter, where only write() draws. At exit, and on failure too (the interpreter
+ * saves in a finally), BARLEY_SCREEN=path.scr gets the 6,912 bytes and a PNG beside it, and BARLEY_SOUND=path.txt the
+ * beep log, one "ms semitone" a line.
+ *
+ * The font is the ROM's (48.rom at 3D00h, 96 characters): cgen.py reads it at compile time and defines BLY_ZX_FONT
+ * before including barley.h, so a program carries its own copy.
+ */
+#ifndef BLY_ZX_H
+#define BLY_ZX_H
+
+#ifndef BLY_ZX_FONT
+#error "BLY_ZX_FONT: the ROM's font, which cgen.py defines before including barley.h"
+#endif
+static const u8 bly_zx_font[96 * 8] = BLY_ZX_FONT;
+
+/* the machine's 64K, which peek and poke see: the 48K's ROM at 0000h (poke there does nothing; its bytes are here
+ * only when the program peeks, since nothing else can see them: cgen.py defines BLY_ZX_ROM then), the screen's 6,912
+ * bytes at 4000h and the 21 UDGs at FF58h, which the screen draws into and reads from */
+static u8 bly_mem[65536];
+#ifdef BLY_ZX_ROM
+static const u8 bly_zx_rom[0x4000] = BLY_ZX_ROM;
+#endif
+static u8 *const bly_zx_mem = bly_mem + 0x4000;
+static u8 bly_zx_attr_p = 0x38;                 /* paper 7, ink 0: the Spectrum's own start */
+static b8 bly_zx_inv, bly_zx_ovr;
+static u8 bly_zx_border_c = 7;
+static i32 bly_zx_row, bly_zx_col;               /* the print position; row 22 and column 32 are "pending" */
+static u8 *const bly_zx_udgs = bly_mem + 0xFF58;  /* A..U, as at power-on: the font's capitals */
+static u32 bly_zx_frames;                        /* ticks(): the frames that have passed, as far as the model knows;
+                                                    24 bits, as the Spectrum's FRAMES, so it wraps at 16,777,216 */
+#define BLY_ZX_FRAMES(x) ((u32)(x) & 0xFFFFFFu)
+static i16 *bly_zx_snd;                          /* the beep log: ms, semitone, ms, semitone... */
+static size_t bly_zx_nsnd, bly_zx_capsnd;
+
+static void bly_zx_init(void) {
+    for (int i = 0; i < 768; i++) bly_zx_mem[6144 + i] = bly_zx_attr_p;
+    memcpy(bly_zx_udgs, bly_zx_font + ('A' - 32) * 8, 21 * 8);
+#ifdef BLY_ZX_ROM
+    memcpy(bly_mem, bly_zx_rom, 0x4000);
+#endif
+}
+
+/* -- failing: the reference's words, then " at line N" ---------------------------------------------------------- */
+
+_Noreturn static void bly_zx_off(const char *pre, i64 a, i64 b, const char *post, int l) {
+    bly_pr_cstr(pre);
+    bly_pr_cstr("(");
+    bly_pr_int(a);
+    bly_pr_cstr(", ");
+    bly_pr_int(b);
+    bly_pr_cstr(")");
+    bly_fail(post, l);
+}
+
+_Noreturn static void bly_zx_fail1(const char *pre, i64 a, const char *post, int l) {
+    bly_pr_cstr(pre);
+    bly_pr_int(a);
+    bly_fail(post, l);
+}
+
+/* -- colours ------------------------------------------------------------------------------------------------------ */
+
+static u8 bly_zx_colour(const char *name, i16 n, int l) {
+    if (!(0 <= n && n <= 7)) {
+        bly_pr_cstr(name);
+        bly_zx_fail1(" ", n, " is not a colour 0..7", l);
+    }
+    return (u8)n;
+}
+
+static void bly_zx_ink(i16 n, int l) { bly_zx_attr_p = (u8)((bly_zx_attr_p & 0xF8) | bly_zx_colour("ink", n, l)); }
+static void bly_zx_paper(i16 n, int l) { bly_zx_attr_p = (u8)((bly_zx_attr_p & 0xC7) | (bly_zx_colour("paper", n, l) << 3)); }
+static void bly_zx_bright(b8 b) { bly_zx_attr_p = (u8)((bly_zx_attr_p & 0xBF) | (b ? 0x40 : 0)); }
+static void bly_zx_flash(b8 b) { bly_zx_attr_p = (u8)((bly_zx_attr_p & 0x7F) | (b ? 0x80 : 0)); }
+static void bly_zx_inverse(b8 b) { bly_zx_inv = b ? 1 : 0; }
+static void bly_zx_over(b8 b) { bly_zx_ovr = b ? 1 : 0; }
+static void bly_zx_border(i16 n, int l) { bly_zx_border_c = bly_zx_colour("border", n, l); }
+
+static void bly_zx_cls(void) {
+    memset(bly_zx_mem, 0, 6144);
+    memset(bly_zx_mem + 6144, bly_zx_attr_p, 768);
+    bly_zx_row = bly_zx_col = 0;
+}
+
+/* -- pixels ------------------------------------------------------------------------------------------------------- */
+
+static inline i32 bly_zx_onscreen(i32 x, i32 y) { return 0 <= x && x <= 255 && 0 <= y && y <= 175; }
+
+static void bly_zx_check(i32 x, i32 y, int l) {
+    if (!bly_zx_onscreen(x, y)) bly_zx_off("", x, y, " is off the screen", l);
+}
+
+/* plot an on-screen point: no checking */
+static void bly_zx_put(i32 x, i32 y) {
+    i32 ys = 175 - y;
+    i32 off = ((ys & 0xC0) << 5) | ((ys & 0x07) << 8) | ((ys & 0x38) << 2) | (x >> 3);
+    u8 bit = (u8)(0x80 >> (x & 7));
+    u8 value = bly_zx_inv ? 0 : bit;
+    if (bly_zx_ovr) bly_zx_mem[off] ^= value;
+    else bly_zx_mem[off] = (u8)((bly_zx_mem[off] & ~bit & 0xFF) | value);
+    bly_zx_mem[6144 + (ys >> 3) * 32 + (x >> 3)] = bly_zx_attr_p;
+}
+
+static void bly_zx_plot(i16 x, i16 y, int l) {
+    bly_zx_check(x, y, l);
+    bly_zx_put(x, y);
+}
+
+static b8 bly_zx_point(i16 x, i16 y, int l) {
+    bly_zx_check(x, y, l);
+    i32 ys = 175 - y;
+    i32 off = ((ys & 0xC0) << 5) | ((ys & 0x07) << 8) | ((ys & 0x38) << 2) | (x >> 3);
+    return (bly_zx_mem[off] & (0x80 >> (x & 7))) ? 1 : 0;
+}
+
+/* Bresenham, both ends plotted, every pixel once */
+static void bly_zx_line(i16 ax, i16 ay, i16 bx, i16 by, int l) {
+    bly_zx_check(ax, ay, l);
+    bly_zx_check(bx, by, l);
+    i32 x0 = ax, y0 = ay, x1 = bx, y1 = by;
+    i32 dx = x1 > x0 ? x1 - x0 : x0 - x1, sx = x0 < x1 ? 1 : -1;
+    i32 dy = -(y1 > y0 ? y1 - y0 : y0 - y1), sy = y0 < y1 ? 1 : -1;
+    i32 err = dx + dy;
+    for (;;) {
+        bly_zx_put(x0, y0);
+        if (x0 == x1 && y0 == y1) return;
+        i32 e2 = 2 * err;
+        if (e2 >= dy) { err += dy; x0 += sx; }
+        if (e2 <= dx) { err += dx; y0 += sy; }
+    }
+}
+
+/* the midpoint circle: each step's eight points deduplicated (so OVER can't cancel itself), off-screen ones skipped */
+static void bly_zx_circle(i16 icx, i16 icy, i16 r, int l) {
+    if (r < 0) bly_fail("a circle needs a radius of at least 0", l);
+    i32 cx = icx, cy = icy, x = r, y = 0, err = 1 - (i32)r;
+    while (x >= y) {
+        i32 pts[8][2] = {{cx + x, cy + y}, {cx + y, cy + x}, {cx - y, cy + x}, {cx - x, cy + y},
+                         {cx - x, cy - y}, {cx - y, cy - x}, {cx + y, cy - x}, {cx + x, cy - y}};
+        for (int i = 0; i < 8; i++) {
+            int seen = 0;
+            for (int j = 0; j < i && !seen; j++) seen = pts[j][0] == pts[i][0] && pts[j][1] == pts[i][1];
+            if (!seen && bly_zx_onscreen(pts[i][0], pts[i][1])) bly_zx_put(pts[i][0], pts[i][1]);
+        }
+        y += 1;
+        if (err < 0) err += 2 * y + 1;
+        else {
+            x -= 1;
+            err += 2 * (y - x) + 1;
+        }
+    }
+}
+
+static void bly_zx_attr(i16 r, i16 c, u8 a, int l) {
+    if (!(0 <= r && r <= 23 && 0 <= c && c <= 31)) bly_zx_off("attr ", r, c, " is off the screen", l);
+    bly_zx_mem[6144 + r * 32 + c] = a;
+}
+
+static void bly_zx_udg(i16 n, const u8 *rows, u16 len, int l) {
+    if (!(0 <= n && n <= 20)) bly_zx_fail1("udg ", n, " is not one of 0..20 (A to U)", l);
+    if (len != 8) bly_zx_fail1("a udg is 8 rows, not ", len, "", l);
+    memcpy(bly_zx_udgs + n * 8, rows, 8);
+}
+
+/* -- text --------------------------------------------------------------------------------------------------------- */
+
+static void bly_zx_at(i16 r, i16 c, int l) {
+    if (!(0 <= r && r <= 21 && 0 <= c && c <= 31)) bly_zx_off("print at ", r, c, " is off the screen", l);
+    bly_zx_row = r;
+    bly_zx_col = c;
+}
+
+static void bly_zx_glyph(u8 ch, u8 g[8]) {
+    if (0x20 <= ch && ch <= 0x7F) memcpy(g, bly_zx_font + (ch - 32) * 8, 8);
+    else if (0x80 <= ch && ch <= 0x8F) {
+        int b = ch - 0x80;
+        u8 top = (u8)((b & 2 ? 0xF0 : 0) | (b & 1 ? 0x0F : 0));
+        u8 bottom = (u8)((b & 8 ? 0xF0 : 0) | (b & 4 ? 0x0F : 0));
+        for (int i = 0; i < 8; i++) g[i] = i < 4 ? top : bottom;
+    } else if (0x90 <= ch && ch <= 0xA4) memcpy(g, bly_zx_udgs + (ch - 0x90) * 8, 8);
+    else memcpy(g, bly_zx_font + ('?' - 32) * 8, 8);
+}
+
+static inline i32 bly_zx_cell(i32 r, i32 i, i32 c) { return ((r & 0x18) << 8) | (i << 8) | ((r & 7) << 5) | c; }
+
+/* the 22 upper rows move up one; the new bottom row is cleared in the permanent colours. (Moving it by thirds, seven
+ * rows at a time, measured no faster: the cost is the 5.4K moved, not the number of moves. See z80/lib/NOTES.md.) */
+static void bly_zx_scroll(void) {
+    for (i32 r = 0; r < 21; r++) {
+        for (i32 i = 0; i < 8; i++) memcpy(bly_zx_mem + bly_zx_cell(r, i, 0), bly_zx_mem + bly_zx_cell(r + 1, i, 0), 32);
+        memcpy(bly_zx_mem + 6144 + r * 32, bly_zx_mem + 6144 + (r + 1) * 32, 32);
+    }
+    for (i32 i = 0; i < 8; i++) memset(bly_zx_mem + bly_zx_cell(21, i, 0), 0, 32);
+    memset(bly_zx_mem + 6144 + 21 * 32, bly_zx_attr_p, 32);
+}
+
+/* one byte of print's output, drawn where text goes next. Scrolling is lazy, as the ROM's is: a newline from the last
+ * row leaves the position pending below it, and only a character printed there scrolls first (a newline while pending
+ * scrolls once and stays pending). Wrapping past column 31 is lazy the same way. */
+static void bly_zx_out(u8 ch) {
+    if (ch == 10) {
+        if (bly_zx_row == 22) bly_zx_scroll();
+        else bly_zx_row += 1;
+        bly_zx_col = 0;
+        return;
+    }
+    if (bly_zx_col == 32) {
+        bly_zx_col = 0;
+        if (bly_zx_row == 22) bly_zx_scroll();
+        else bly_zx_row += 1;
+    }
+    if (bly_zx_row == 22) {
+        bly_zx_scroll();
+        bly_zx_row = 21;
+    }
+    u8 g[8];
+    bly_zx_glyph(ch, g);
+    for (i32 i = 0; i < 8; i++) {
+        u8 v = bly_zx_inv ? (u8)(~g[i] & 0xFF) : g[i];
+        i32 k = bly_zx_cell(bly_zx_row, i, bly_zx_col);
+        bly_zx_mem[k] = bly_zx_ovr ? (u8)(bly_zx_mem[k] ^ v) : v;
+    }
+    bly_zx_mem[6144 + bly_zx_row * 32 + bly_zx_col] = bly_zx_attr_p;
+    bly_zx_col += 1;
+}
+
+/* -- sound and time ----------------------------------------------------------------------------------------------- */
+
+static void bly_zx_beep(i16 ms, i16 semitone, int l) {
+    if (!(-60 <= semitone && semitone <= 69)) bly_zx_fail1("beep pitch ", semitone, " is outside -60..69", l);
+    if (ms < 0) bly_zx_fail1("beep length ", ms, " is negative", l);
+    if (bly_zx_nsnd + 2 > bly_zx_capsnd) {
+        size_t cap = bly_zx_capsnd ? 2 * bly_zx_capsnd : 256;
+        i16 *p = (i16 *)realloc(bly_zx_snd, cap * sizeof *p);
+        if (!p) bly_fail("no memory for the sound log", l);
+        bly_zx_snd = p;
+        bly_zx_capsnd = cap;
+    }
+    bly_zx_snd[bly_zx_nsnd++] = ms;
+    bly_zx_snd[bly_zx_nsnd++] = semitone;
+    /* no frames pass: the ROM's BEEPER plays with interrupts off, so FRAMES stands still (a 1-second beep on
+       omse-ai's 48K: 0 frames) */
+}
+
+static i32 bly_zx_ticks(void) {
+    bly_zx_frames = BLY_ZX_FRAMES(bly_zx_frames + 1);
+    return (i32)bly_zx_frames;
+}
+
+static void bly_zx_pause(i16 n, int l) {
+    if (n < 0) bly_zx_fail1("pause ", n, " is negative", l);
+    bly_zx_frames = BLY_ZX_FRAMES(bly_zx_frames + (u32)n);
+}
+
+static u8 bly_zx_key(void) { return 0; }
+
+/* -- the machine's memory: an address is any whole number, checked as an index is ------------------------------- */
+
+static void bly_addr(i64 a, int l) {
+    if (a < 0 || a > 65535) bly_zx_fail1("address ", a, " is outside 0..65536", l);
+}
+static u8 bly_peek(i64 a, int l) {
+    bly_addr(a, l);
+    return bly_mem[a];
+}
+static void bly_poke(i64 a, u8 v, int l) {
+    bly_addr(a, l);
+    if (a >= 0x4000) bly_mem[a] = v;                          /* the ROM can't be written */
+}
+
+/* -- saving: the .scr, a PNG beside it, and the sound log ---------------------------------------------------------- */
+
+static u32 bly_zx_crc(u32 crc, const u8 *p, size_t n) {
+    crc = ~crc;
+    for (size_t i = 0; i < n; i++) {
+        crc ^= p[i];
+        for (int k = 0; k < 8; k++) crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1u)));
+    }
+    return ~crc;
+}
+
+static void bly_zx_be32(u8 *p, u32 v) { p[0] = (u8)(v >> 24); p[1] = (u8)(v >> 16); p[2] = (u8)(v >> 8); p[3] = (u8)v; }
+
+static void bly_zx_chunk(FILE *f, const char *type, const u8 *data, u32 n) {
+    u8 hd[8];
+    bly_zx_be32(hd, n);
+    memcpy(hd + 4, type, 4);
+    u32 crc = bly_zx_crc(bly_zx_crc(0, hd + 4, 4), data, n);
+    u8 tl[4];
+    bly_zx_be32(tl, crc);
+    fwrite(hd, 1, 8, f);
+    if (n) fwrite(data, 1, n, f);
+    fwrite(tl, 1, 4, f);
+}
+
+/* the picture as the interpreter draws it (a 32-pixel border, doubled), in 16 indexed colours (bright is +8), with
+ * the image data in stored deflate blocks: no compressor needed */
+static void bly_zx_png(const char *path) {
+    enum { SCALE = 2, BORDER = 32, W = (256 + 2 * BORDER) * SCALE, H = (192 + 2 * BORDER) * SCALE, ROW = 1 + W / 2 };
+    size_t raw_n = (size_t)ROW * H, nblk = (raw_n + 65534) / 65535;
+    u8 *raw = (u8 *)malloc(raw_n), *z = (u8 *)malloc(2 + raw_n + 5 * nblk + 4);
+    FILE *f = fopen(path, "wb");
+    if (!raw || !z || !f) {
+        fprintf(stderr, "can't write %s\n", path);
+        if (f) fclose(f);
+        free(raw);
+        free(z);
+        return;
+    }
+    for (int py = 0; py < H; py++) {
+        u8 *row = raw + (size_t)py * ROW;
+        row[0] = 0;
+        memset(row + 1, 0, ROW - 1);
+        for (int px = 0; px < W; px++) {
+            int x = px / SCALE - BORDER, y = py / SCALE - BORDER, c = bly_zx_border_c;
+            if (0 <= x && x < 256 && 0 <= y && y < 192) {
+                int off = ((y & 0xC0) << 5) | ((y & 0x07) << 8) | ((y & 0x38) << 2) | (x >> 3);
+                u8 a = bly_zx_mem[6144 + (y >> 3) * 32 + (x >> 3)];
+                int on = bly_zx_mem[off] & (0x80 >> (x & 7));
+                c = (on ? (a & 7) : ((a >> 3) & 7)) + (a & 0x40 ? 8 : 0);
+            }
+            row[1 + px / 2] |= (u8)(px & 1 ? c : c << 4);
+        }
+    }
+    size_t zn = 0;
+    z[zn++] = 0x78;
+    z[zn++] = 0x01;
+    u32 s1 = 1, s2 = 0;
+    for (size_t at = 0; at < raw_n; at += 65535) {
+        size_t n = raw_n - at < 65535 ? raw_n - at : 65535;
+        z[zn++] = at + n == raw_n ? 1 : 0;
+        z[zn++] = (u8)n;
+        z[zn++] = (u8)(n >> 8);
+        z[zn++] = (u8)~n;
+        z[zn++] = (u8)(~n >> 8);
+        memcpy(z + zn, raw + at, n);
+        zn += n;
+        for (size_t i = 0; i < n; i++) {
+            s1 = (s1 + raw[at + i]) % 65521;
+            s2 = (s2 + s1) % 65521;
+        }
+    }
+    bly_zx_be32(z + zn, (s2 << 16) | s1);
+    zn += 4;
+    static const u8 pal[8][3] = {{0, 0, 0}, {0, 0, 0xD7}, {0xD7, 0, 0}, {0xD7, 0, 0xD7},
+                                 {0, 0xD7, 0}, {0, 0xD7, 0xD7}, {0xD7, 0xD7, 0}, {0xD7, 0xD7, 0xD7}};
+    u8 plte[16 * 3];
+    for (int i = 0; i < 16; i++)
+        for (int k = 0; k < 3; k++) plte[i * 3 + k] = i < 8 ? pal[i][k] : (pal[i - 8][k] ? 0xFF : 0);
+    u8 ihdr[13];
+    bly_zx_be32(ihdr, W);
+    bly_zx_be32(ihdr + 4, H);
+    ihdr[8] = 4;                                  /* 4 bits a pixel */
+    ihdr[9] = 3;                                  /* indexed */
+    ihdr[10] = ihdr[11] = ihdr[12] = 0;
+    fwrite("\x89PNG\r\n\x1a\n", 1, 8, f);
+    bly_zx_chunk(f, "IHDR", ihdr, 13);
+    bly_zx_chunk(f, "PLTE", plte, sizeof plte);
+    bly_zx_chunk(f, "IDAT", z, (u32)zn);
+    bly_zx_chunk(f, "IEND", z, 0);
+    fclose(f);
+    free(raw);
+    free(z);
+}
+
+static void bly_zx_save(void) {
+    const char *scr = getenv("BARLEY_SCREEN");
+    if (scr && *scr) {
+        FILE *f = fopen(scr, "wb");
+        if (!f || fwrite(bly_zx_mem, 1, 6912, f) != 6912) fprintf(stderr, "can't write %s\n", scr);
+        if (f) fclose(f);
+        /* the PNG beside it: the same name with .png for its extension, as Python's splitext would find it */
+        size_t n = strlen(scr), dot = n, base = 0;
+        for (size_t i = 0; i < n; i++)
+            if (scr[i] == '/') base = i + 1;
+        for (size_t i = n; i > base; i--)
+            if (scr[i - 1] == '.') { dot = i - 1; break; }
+        if (dot < n) {                                     /* only dots before it (".scr") means no extension */
+            size_t i = base;
+            while (i < dot && scr[i] == '.') i++;
+            if (i == dot) dot = n;
+        }
+        char *png = (char *)malloc(dot + 5);
+        if (png) {
+            memcpy(png, scr, dot);
+            memcpy(png + dot, ".png", 5);
+            bly_zx_png(png);
+            free(png);
+        }
+    }
+    const char *snd = getenv("BARLEY_SOUND");
+    if (snd && *snd) {
+        FILE *f = fopen(snd, "w");
+        if (!f) {
+            fprintf(stderr, "can't write %s\n", snd);
+            return;
+        }
+        for (size_t i = 0; i < bly_zx_nsnd; i += 2) fprintf(f, "%d %d\n", (int)bly_zx_snd[i], (int)bly_zx_snd[i + 1]);
+        fclose(f);
+    }
+}
+
+#endif

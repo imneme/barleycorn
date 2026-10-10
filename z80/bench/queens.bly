@@ -1,0 +1,25 @@
+-- (phase one's benchmark suite, in today's Barley: HISTORY.md) 8 queens: count the solutions
+const N = 8
+var cols: byte[N]
+var diag1: byte[2 * N]
+var diag2: byte[2 * N]
+var solutions: word
+
+func place(row: byte)
+  if row == N then
+    solutions = solutions + 1
+    return
+  end
+  for c in byte(0)..N do
+    if cols[c] == 0 and diag1[row + c] == 0 and diag2[row - c + N - 1] == 0 then
+      cols[c] = 1; diag1[row + c] = 1; diag2[row - c + N - 1] = 1
+      place(row + 1)
+      cols[c] = 0; diag1[row + c] = 0; diag2[row - c + N - 1] = 0
+    end
+  end
+end
+
+func main()
+  place(0)
+  print solutions
+end

@@ -1,0 +1,29 @@
+-- (phase one's benchmark suite, in today's Barley: HISTORY.md) CRC-16/CCITT over 1024 pseudo-random bytes: a tight bit loop.
+
+const LEN = 1024
+var data: byte[LEN]
+
+func crc16(n: word): word
+  var crc: word = $FFFF
+  for i in word(0)..n do
+    crc = crc ^ (word(data[i]) << 8)
+    for b in byte(1)..8 + 1 do
+      if crc & $8000 != 0 then
+        crc = (crc << 1) ^ $1021
+      else
+        crc = crc << 1
+      end
+    end
+  end
+  return crc
+end
+
+func main()
+  var x: word = 31415
+  for i in word(0)..LEN do
+    x = x * 25173 + 13849
+    data[i] = byte(x >> 8)
+  end
+  print crc16(LEN)
+  print crc16(9)
+end

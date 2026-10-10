@@ -1,0 +1,25 @@
+-- (phase one's benchmark suite, in today's Barley: HISTORY.md) The BYTE sieve (1981): count the primes among 3, 5, 7 ... 16383.
+
+const SIZE = 8190
+var flags: byte[SIZE + 1]
+
+func sieve(): word
+  var count: word = 0
+  for i in word(0)..SIZE + 1 do flags[i] = 1 end
+  for i in word(0)..SIZE + 1 do
+    if flags[i] != 0 then
+      var prime = i + i + 3
+      var k = i + prime
+      while k <= SIZE do
+        flags[k] = 0
+        k = k + prime
+      end
+      count = count + 1
+    end
+  end
+  return count
+end
+
+func main()
+  print sieve()
+end

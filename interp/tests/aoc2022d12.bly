@@ -1,0 +1,34 @@
+-- AoC 2022 day 12: fewest steps up the hill. Search down from E, and both parts fall out.
+
+func height(ch: byte): byte
+  case ch
+    when 'S' then return 'a'
+    when 'E' then return 'z'
+  end
+  return ch
+end
+
+func main()
+  var g = grid()                                    -- the input, as rows and columns of bytes
+  var start = g.find('S')
+  var goal = g.find('E')
+  var dist = grid[word](g.rows, g.cols, 65535)      -- 65535: not reached yet
+  var q = queue[pos](1000)
+  dist[goal] = 0
+  q.put(goal)
+  var part2: word = 65535
+  while q.len > 0 do
+    var p = q.get()
+    if height(g[p]) == 'a' then part2 = min(part2, dist[p]) end
+    for d in dirs4 do
+      var n = p + d
+      -- backwards, a step is allowed if going forwards it climbed at most one
+      if g.has(n) and dist[n] == 65535 and height(g[n]) + 1 >= height(g[p]) then
+        dist[n] = dist[p] + 1
+        q.put(n)
+      end
+    end
+  end
+  print "Part 1: "; dist[start]
+  print "Part 2: "; part2
+end

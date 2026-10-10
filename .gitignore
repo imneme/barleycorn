@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+# builds, fuzz failures and the like
+build/
+# your own tool paths (paths.py says what goes in it)
+paths.local
+# what Barley makes, and Spectrum ROMs you bring
+*.tap
+*.com
+*.COM
+*.rom
+*.sna
+*.scr

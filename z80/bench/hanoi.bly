@@ -1,0 +1,19 @@
+-- (phase one's benchmark suite, in today's Barley: HISTORY.md) Towers of Hanoi, 12 discs: four arguments, and each recursive call
+-- permutes the pegs.  The fourth argument doesn't fit in a register.
+
+var moves: word
+var trail: word
+
+func hanoi(n: byte, a: byte, b: byte, c: byte)
+  if n == 0 then return end
+  hanoi(n - 1, a, c, b)
+  moves = moves + 1
+  trail = trail * 3 + a * 4 + b
+  hanoi(n - 1, c, b, a)
+end
+
+func main()
+  hanoi(12, 1, 3, 2)
+  print moves
+  print trail
+end

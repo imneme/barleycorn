@@ -1,0 +1,38 @@
+-- (phase one's benchmark suite, in today's Barley: HISTORY.md) Bubble sort of 200 pseudo-random words, then a checksum.
+
+const N = 200
+var a: word[N]
+
+func fill()
+  var x: word = 12345
+  for i in word(0)..N do
+    x = x * 25173 + 13849
+    a[i] = x
+  end
+end
+
+func bubble(n: word)
+  var i: word = n - 1
+  while i > 0 do
+    for j in word(0)..i do
+      if a[j] > a[j + 1] then
+        var t = a[j]
+        a[j] = a[j + 1]
+        a[j + 1] = t
+      end
+    end
+    i = i - 1
+  end
+end
+
+func checksum(): word
+  var s: word = 0
+  for i in word(0)..N do s = s * 31 + a[i] end
+  return s
+end
+
+func main()
+  fill()
+  bubble(N)
+  print checksum()
+end

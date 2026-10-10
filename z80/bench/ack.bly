@@ -1,0 +1,12 @@
+-- (phase one's benchmark suite, in today's Barley: HISTORY.md) Ackermann's function: tail calls, and recursion 255 deep.
+
+func ack(m: word, n: word): word
+  if m == 0 then return n + 1 end
+  if n == 0 then return ack(m - 1, 1) end
+  return ack(m - 1, ack(m, n - 1))
+end
+
+func main()
+  print ack(2, 9)
+  print ack(3, 5)
+end
