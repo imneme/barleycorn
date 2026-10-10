@@ -230,7 +230,7 @@ SOUND       beep(ms, semitone)
             CP/M, an error, at its line, wherever a run could reach it:
             guard it with if ZX then ... end, or if ZX and ... then
 
-MACHINE     peek poke (not on the Z80 yet; inp outp call later)
+MACHINE     peek(a)  poke(a, v)  inp(port)  outp(port, v)   (call later)
             const ZX, CPM, C: the target, folded away
             func f(...) ... asm "f.asm" end    the body is f's reference
             twin (the Z80 running the fragment: later)
@@ -510,19 +510,28 @@ out; HACKING.md says how.)
 
 **Off the Spectrum, they still run.** The interpreter and the C backend
 give `peek` and `poke` a 64K memory, and the screen library's twins draw
-into it **at 4000h, laid out exactly as the Spectrum's screen is**. The
-twin of `plot` is just the real algorithm: work out the screen address,
-set the bit. At exit the screen is saved as a `.scr` and a PNG. Sound
-becomes a log of (duration, pitch) events, which can be rendered or
-compared. So a program that sings can be tested anywhere, and the
-picture it ends with is the one the Spectrum will show.
+into it **at 4000h, laid out exactly as the Spectrum's screen is**.
+`inp` and `outp` get the 48K's ports as omse-ai's 48K answers them with
+no key held: the border, and the EAR bit, which echoes what was last
+sent to the speaker (`z80/zxgfx.py` has the rule). The twin of `plot` is
+just the real algorithm: work out the screen address, set the bit. At
+exit the screen is saved as a `.scr` and a PNG. Sound becomes a log of
+(duration, pitch) events, which can be rendered or compared. So a
+program that sings can be tested anywhere, and the picture it ends with
+is the one the Spectrum will show.
 
 ### The machine, and adding what isn't there
 
 `peek` and `poke` are there because it's a Spectrum and you will want
-them (`inp`, `outp` and `call` later). **`ZX`, `CPM` and `C` are
-compile-time constants**, so `if ZX then beep(50, 12) end` costs nothing
-elsewhere.
+them, and `inp` and `outp` for the same reason: the keyboard's
+half-rows, the border, the speaker, a Kempston joystick (`call` later).
+An address or a port is any whole number, checked as an index is. Only
+the ROM, the screen and the UDGs are the same everywhere: the rest of
+the 64K is the interpreter's own, so a `peek` at the system variables or
+the program reads 0 off the Spectrum and the machine's bytes on it, and
+a `poke` there can break a Spectrum program, as it can in BASIC. **`ZX`,
+`CPM` and `C` are compile-time constants**, so
+`if ZX then beep(50, 12) end` costs nothing elsewhere.
 
 **Anything missing can be added**, by anyone, the same way the library
 itself is written: a function whose body is plain Barley, with a
@@ -944,8 +953,7 @@ Barleycorn (HISTORY.md says why).
 
 **Not built yet:**
 - `mark`, `release` and `free`, and `--fast` (every build is checked)
-- `peek` and `poke` on the Z80 (the interpreter and C have them); `inp`,
-  `outp` and `call` anywhere
+- `call`, anywhere
 - on the Z80, `grid[bit]` and containers of bits are a byte a bit (bit
   arrays pack), and a bit array can't be sorted
 - floats on CP/M

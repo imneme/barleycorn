@@ -722,6 +722,139 @@ end
 start
 index 5 is outside 0..3 at line 5
 
+=== the machine's memory: peek reads the ROM, the screen and the UDGs, and poke writes them (the ROM ignores it)
+func main()
+  cls()
+  print peek(0); " "; peek(1); " "; peek(0x3D00 + 8 * 33 + 2); " "; peek(16383); " "; peek(65535)
+  poke(0, 99)
+  poke(0x4000, 255)
+  poke(0x5800 + 32 * 5 + 7, 0x16)
+  var u: word = 0xFF58
+  poke(u, 0xAA)
+  var i: int = 0x5AFF
+  poke(i, peek(i) | 0x40)
+  var l: long = 0x4000 + 2048 + 5
+  poke(l, 0x81)
+  var d: dword = 0xFF58 + 8 * 20 + 7
+  poke(d, 0x18)
+  var q: quad = 0x401F
+  poke(q, 1)
+  var b: byte = 1
+  print peek(0); " "; peek(0x4000); " "; peek(u); " "; peek(i); " "; peek(l); " "; peek(d); " "; peek(q); " "; peek(b)
+  print at 3, 0; chr(164); chr(144)
+end
+--- screen
+--- expect
+243 175 66 60 0
+243 255 170 120 129 24 1 175
+
+=== the machine's ports: inp reads the ULA (no key held; bit 6 echoes bit 4 of the last outp there), the joystick, nothing
+func main()
+  print inp(0xFEFE); " "; inp(0x7FFE); " "; inp(0x1F); " "; inp(0xFF1F); " "; inp(0xFF3F); " "; inp(0xFF); " "; inp(0x5F)
+  outp(254, 0x12)
+  var p: word = 0xFBFE
+  print inp(p); " "; inp(254); " "; inp(0x1F); " "; inp(0x11)
+  beep(100, 0)
+  print inp(254)
+  outp(254, 0x14)
+  beep(1, -60)
+  var i: int = 254
+  print inp(i)
+  border(1)
+  var l: long = 0xFE
+  print inp(l)
+  outp(l, 0x16)
+  var d: dword = 0xFFFE
+  print inp(d)
+  var b: byte = 0x10
+  var q: quad = 0xFE
+  outp(q, b)
+  print inp(q)
+end
+--- expect
+191 191 0 0 255 255 255
+255 255 0 0
+191
+255
+191
+255
+255
+
+=== an address or a port is checked as an index is: a negative int
+func main()
+  var a: int = -1
+  print "before"
+  print peek(a)
+end
+--- expect
+before
+address -1 is outside 0..65536 at line 4
+
+=== a port that's a negative int says it's a port
+func main()
+  var p: int = -32768
+  outp(p, 1)
+end
+--- expect
+port -32768 is outside 0..65536 at line 3
+
+=== an address in a long is checked
+func main()
+  var a: long = 65535
+  poke(a, 1)
+  print "fine"
+  a += 1
+  poke(a, 1)
+end
+--- expect
+fine
+address 65536 is outside 0..65536 at line 6
+
+=== a port in a dword is checked
+func main()
+  var p: dword = 4294967295
+  print inp(p)
+end
+--- expect
+port 4294967295 is outside 0..65536 at line 3
+
+=== a port in a quad is checked, to its top byte
+func main()
+  var p: quad = -70000
+  p = 72057594037927936 + 254
+  outp(p, 7)
+end
+--- expect
+port 72057594037928190 is outside 0..65536 at line 4
+
+=== a literal address is checked when it's used, as the interpreter does
+func main()
+  print "before"
+  print peek(65535)
+  print peek(65536)
+end
+--- expect
+before
+0
+address 65536 is outside 0..65536 at line 4
+
+=== and a literal port
+func main()
+  outp(254, 0)
+  outp(-1, 0)
+end
+--- expect
+port -1 is outside 0..65536 at line 3
+
+=== on CP/M, the machine's memory and ports are Spectrum-only too
+func main()
+  print "before"
+  outp(254, 2)
+end
+--- as cpm
+--- expect
+outp() is Spectrum-only: put it inside if ZX then ... end at line 3
+
 === dword: unsigned 32 bits, which wrap (+ - * / % >> << - ~, min, max, a hash), and its widenings and casts
 func hash(s: str): dword
   var h: dword = 2166136261

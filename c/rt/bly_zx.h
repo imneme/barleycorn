@@ -33,7 +33,8 @@ static u8 bly_zx_attr_p = 0x38;                 /* paper 7, ink 0: the Spectrum'
 static u8 bly_zx_mask;                           /* MASK_P: the bits a square keeps (8: transparent) */
 static b8 bly_zx_ink9, bly_zx_paper9;            /* P_FLAG's INK 9 and PAPER 9: contrast */
 static b8 bly_zx_inv, bly_zx_ovr;
-static u8 bly_zx_border_c = 7;
+static u8 bly_zx_border_c = 7;                   /* BORDCR's */
+static u8 bly_zx_shown = 7, bly_zx_ear;          /* what the ULA was last told: the border showing, and bit 4 */
 static i32 bly_zx_row, bly_zx_col;               /* the print position; row 22 and column 32 are "pending" */
 static u8 *const bly_zx_udgs = bly_mem + 0xFF58;  /* A..U, as at power-on: the font's capitals */
 static u32 bly_zx_frames;                        /* ticks(): the frames that have passed, as far as the model knows;
@@ -122,7 +123,10 @@ static void bly_zx_paint(i32 cell) {
 }
 static void bly_zx_inverse(b8 b) { bly_zx_inv = b ? 1 : 0; }
 static void bly_zx_over(b8 b) { bly_zx_ovr = b ? 1 : 0; }
-static void bly_zx_border(i16 n, int l) { bly_zx_border_c = bly_zx_colour("border", n, 7, l); }
+static void bly_zx_border(i16 n, int l) {
+    bly_zx_shown = bly_zx_border_c = bly_zx_colour("border", n, 7, l);
+    bly_zx_ear = 0;
+}
 
 /* the ROM's CLS: the upper 22 rows in the colours as they are, the lower screen's 2 in the border's (BORDCR: the border
  * as paper, a white ink on a dark one) */
@@ -297,6 +301,11 @@ static void bly_zx_beep(i16 ms, i16 semitone, int l) {
     bly_zx_snd[bly_zx_nsnd++] = semitone;
     /* no frames pass: the ROM's BEEPER plays with interrupts off, so FRAMES stands still (a 1-second beep on
        omse-ai's 48K: 0 frames) */
+    i32 f4 = (i32)floor(1760.0 * pow(2.0, (semitone - 9) / 12.0) + 0.5);    /* zxbeep.asm's table */
+    if (f4 * (i32)ms / 4000) {                   /* it plays: the speaker ends off, the border is BORDCR's */
+        bly_zx_shown = bly_zx_border_c;
+        bly_zx_ear = 0;
+    }
 }
 
 static i32 bly_zx_ticks(void) {
@@ -323,6 +332,23 @@ static u8 bly_peek(i64 a, int l) {
 static void bly_poke(i64 a, u8 v, int l) {
     bly_addr(a, l);
     if (a >= 0x4000) bly_mem[a] = v;                          /* the ROM can't be written */
+}
+
+/* and its ports, as zxgfx.py says: the ULA's (even), the Kempston joystick's, and nothing's */
+static void bly_port(i64 a, int l) {
+    if (a < 0 || a > 65535) bly_zx_fail1("port ", a, " is outside 0..65536", l);
+}
+static u8 bly_inp(i64 a, int l) {
+    bly_port(a, l);
+    if (a % 2 == 0) return 0xBF | bly_zx_ear << 6;
+    return (a & 0xE0) == 0 ? 0 : 0xFF;
+}
+static void bly_outp(i64 a, u8 v, int l) {
+    bly_port(a, l);
+    if (a % 2 == 0) {
+        bly_zx_shown = v & 7;
+        bly_zx_ear = v >> 4 & 1;
+    }
 }
 
 /* -- saving: the .scr, a PNG beside it, and the sound log ---------------------------------------------------------- */
@@ -369,7 +395,7 @@ static void bly_zx_png(const char *path) {
         row[0] = 0;
         memset(row + 1, 0, ROW - 1);
         for (int px = 0; px < W; px++) {
-            int x = px / SCALE - BORDER, y = py / SCALE - BORDER, c = bly_zx_border_c;
+            int x = px / SCALE - BORDER, y = py / SCALE - BORDER, c = bly_zx_shown;
             if (0 <= x && x < 256 && 0 <= y && y < 192) {
                 int off = ((y & 0xC0) << 5) | ((y & 0x07) << 8) | ((y & 0x38) << 2) | (x >> 3);
                 u8 a = bly_zx_mem[6144 + (y >> 3) * 32 + (x >> 3)];

@@ -20,6 +20,11 @@ Every algorithm here is written to be followed exactly:
            block graphics; 90h-A4h the UDGs; anything else prints as '?'. Past column 31, a line wraps; past row 21,
            the 22 upper rows scroll up one and the new bottom row is cleared in the permanent colours. Both are
            lazy, as the ROM's are: they happen when the next character is printed, not at the newline.
+  ports    as omse-ai's 48K answers them. An even port is the ULA's: reading it gives BFh with no key held, and bit
+           6 is the EAR line, which echoes bit 4 of the last thing written there; writing it shows the border in
+           bits 0-2 (BORDCR, which cls and the lower screen use, is border()'s alone). An odd port with bits 5-7
+           clear is the Kempston joystick, 0 when nothing's pushed; any other reads FFh. border() and a beep
+           long enough to sound write it too: the ROM's BEEPER finishes with the speaker off and BORDCR's border.
 """
 
 import os
@@ -64,7 +69,8 @@ class Screen:
         for i in range(768):
             self.mem[6144 + i] = self.attr_p
         self.inverse = self.over = False
-        self.border_colour = 7
+        self.border_colour = 7                        # BORDCR's
+        self.shown_border, self.ear = 7, 0            # what the ULA was last told: the border showing, and bit 4
         self.row = self.col = 0
         self.font = font() if glyphs is None else glyphs
         self.udgs = bytearray(self.font[(ord('A') - 32) * 8:(ord('U') - 31) * 8])     # A..U, as at power-on
@@ -132,6 +138,16 @@ class Screen:
 
     def border(self, n):
         self.border_colour = self.colour('border', n)
+        self.shown_border, self.ear = self.border_colour, 0
+
+    def inp(self, port):
+        if port % 2 == 0:
+            return 0xBF | self.ear << 6
+        return 0 if port & 0xE0 == 0 else 0xFF
+
+    def outp(self, port, v):
+        if port % 2 == 0:
+            self.shown_border, self.ear = v & 7, v >> 4 & 1
 
     def bordcr(self):
         """the lower screen's colours, as the runtime keeps BORDCR: the border as paper, a white ink on a dark one"""
@@ -307,6 +323,9 @@ class Screen:
             raise ScreenError(f'beep length {ms} is negative')
         self.sound.append((ms, semitone))      # and no frames pass: the ROM's BEEPER plays with interrupts off, so
                                                # FRAMES stands still (a 1-second beep on omse-ai's 48K: 0 frames)
+        f4 = round(4 * 440 * 2 ** ((semitone - 9) / 12))      # zxbeep.asm's table: the frequency, times 4
+        if f4 * ms // 4000:                                    # cycles: zero is too short to hear, and isn't played
+            self.shown_border, self.ear = self.border_colour, 0
 
     def ticks(self):
         """the Spectrum's FRAMES is 24 bits: it wraps after 16,777,216 frames (about three days and a quarter)"""
@@ -331,7 +350,7 @@ class Screen:
                (0xD7, 0xD7, 0), (0xD7, 0xD7, 0xD7)]
         bright = [tuple(0xFF if v else 0 for v in p) for p in pal]
         rows = []
-        bc = pal[self.border_colour]
+        bc = pal[self.shown_border]
         for py in range(h):
             line = bytearray()
             for px in range(w):

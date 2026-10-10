@@ -158,7 +158,6 @@ All of the language on the card runs on all three implementations,
 except:
 - `mark`, `release` and `free`, and checks you can turn off (`--fast`),
   which aren't anywhere yet;
-- `peek` and `poke`, which aren't on the Z80 yet;
 - floats, which aren't on CP/M (there's no ROM to borrow);
 - the 128K Spectrum's extra memory and sound chip;
 - `asm` clauses, which are parsed but always run their Barleycorn body.

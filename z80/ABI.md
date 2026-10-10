@@ -525,6 +525,19 @@ the circle is the reference's midpoint algorithm with its eight points
 deduplicated each step, so OVER can't cancel itself. Off-screen errors
 print the values as `int`s.
 
+**The machine's memory and ports** (`peek`, `poke`, `inp`, `outp`) are
+generated in place: one `ld a,(hl)`, `ld (hl),a`, `in a,(c)` or
+`out (c),a`, and a constant address is `ld a,(nn)` or `ld (nn),a`. The
+ROM ignores writes, as it always does. A port is all 16 bits, B the top
+byte, as `in a,(c)` puts them on the bus (the top byte chooses the
+keyboard's half-rows). Only the check can be a call, and only when the
+address's type can hold a value out of range. A `byte` or `word` needs
+none. An `int` is `bit 7,d` and a jump to `bly_fail_addr_i16` or
+`bly_fail_port_i16` (DE = the value). Anything wider goes as a quad to
+`zxmach.asm`'s `bly_zx_addr64` (HL = &q, A = 0 for an address or 1 for a
+port; out: HL = the address). They fail with
+`address {a} is outside 0..65536`, or `port {a} ...`.
+
 ## 11. Floats: the ROM's, on the Spectrum only
 
 **A `float` is the ROM's own 5 bytes** (`lib/fp.asm`, target `zx48`), so

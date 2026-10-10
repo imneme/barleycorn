@@ -681,7 +681,8 @@ SCREEN_FUNCS = {                                   # the Spectrum's screen and s
     'point': ([INT, INT], BOOL), 'attr': ([INT, INT, BYTE], VOID), 'udg': ([INT, Gen('array', BYTE, n=None)], VOID),
     'key': ([], BYTE), 'ticks': ([], LONG), 'pause': ([INT], VOID), 'beep': ([INT, INT], VOID)}
 MACHINE_FUNCS = {                                  # the machine's 64K: an address is any whole number, as an index is
-    'peek': (['addr'], BYTE), 'poke': (['addr', BYTE], VOID)}
+    'peek': (['addr'], BYTE), 'poke': (['addr', BYTE], VOID),
+    'inp': (['port'], BYTE), 'outp': (['port', BYTE], VOID)}   # and its ports (IN and OUT), numbered the same way
 FLOAT_FUNCS = {'sqrt': math.sqrt, 'sin': math.sin, 'cos': math.cos, 'tan': math.tan, 'asin': math.asin,
                'acos': math.acos, 'atan': math.atan, 'ln': math.log, 'exp': math.exp,
                'trunc': lambda x: float(math.trunc(x)), 'floor': lambda x: float(math.floor(x)),
@@ -983,7 +984,8 @@ class Checker:
         (--as cpm) and every compiler, said at the line"""
         found = []
         def visit(node):
-            if node.k == 'call' and getattr(node, 'name', None) in SCREEN_FUNCS and not hasattr(node, 'func'):
+            if node.k == 'call' and (getattr(node, 'name', None) in SCREEN_FUNCS or getattr(node, 'name', None)
+                                     in MACHINE_FUNCS) and not hasattr(node, 'func'):
                 found.append((node.line, f'{node.name}()'))
             elif node.k == 'print' and any(kind == 'at' for kind, _ in node.items):
                 found.append((node.line, 'print at'))
@@ -1568,9 +1570,10 @@ class Checker:
                         raise BarleyError(f'{name} takes true or false (or 0 or 1)', a.line)
                     if t is FLEX:
                         self.settle_default(a)
-                elif p == 'addr':                                 # checked when it's used: 0..65536
+                elif p in ('addr', 'port'):                       # checked when it's used: 0..65536
                     if not (is_int(t) or t is FLEX):
-                        raise BarleyError(f'{name} takes an address, a whole number', a.line)
+                        raise BarleyError(f'{name} takes {"an address" if p == "addr" else "a port"}, a whole number',
+                                          a.line)
                     if t is FLEX:
                         self.settle_default(a)
                 else:
@@ -2299,10 +2302,14 @@ class Interp:
         if name in MACHINE_FUNCS:
             a = args[0]
             if not 0 <= a <= 65535:
-                raise BarleyError(f'address {a} is outside 0..65536', e.line)
+                raise BarleyError(f'{"port" if name in ("inp", "outp") else "address"} {a} is outside 0..65536', e.line)
             if name == 'peek':
                 return self.memory[a]
-            if a >= 0x4000:                                  # the ROM can't be written
+            if name == 'inp':                                # the ULA, the Kempston joystick, nothing (zxgfx.py)
+                return self.screen.inp(a)
+            if name == 'outp':
+                self.screen.outp(a, args[1])
+            elif a >= 0x4000:                                # poke: the ROM can't be written
                 self.memory[a] = args[1]
             return None
         if name in SCREEN_FUNCS:

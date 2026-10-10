@@ -2161,6 +2161,10 @@ class Gen:
             if self.target != 'zx48':
                 raise GenError(f'{name}() is Spectrum-only: put it inside if ZX then ... end')
             return self.screen_call(name, args)
+        if name in B.MACHINE_FUNCS:
+            if self.target != 'zx48':
+                raise GenError(f'{name}() is Spectrum-only: put it inside if ZX then ... end')
+            return self.machine_call(name, args, line)
         if name in B.FLOAT_FUNCS or name in ('abs', 'sign') and args[0].ty is B.FLOAT:
             return self.float_fn(name, args[0], t, line)
         if name == 'lines':
@@ -2344,6 +2348,53 @@ class Gen:
         self.emit(f'jr z,{end}')
         self.emit('ld a,1')
         self.place(end)
+
+    def machine_call(self, name, args, line):
+        """peek, poke, inp and outp: the address or port checked as an index is (unless its type can't hold one out
+        of range), then one LD, IN or OUT. A constant address needs nothing: poke(23692, 255) is ld a,255 / ld
+        (23692),a"""
+        v = self.conv(args[1], B.BYTE) if len(args) > 1 else None      # first, as converting may use HL
+        a, port = args[0], name in ('inp', 'outp')
+        if a.kind == 'imm' and 0 <= a.val <= 65535:
+            if name == 'peek':
+                self.emit(f'ld a,({a.val})')
+            elif name == 'poke':
+                self.load_a(v)
+                self.emit(f'ld ({a.val}),a')
+            else:
+                self.emit(f'ld bc,{a.val}')
+        else:
+            if a.kind != 'imm' and a.ty in (B.BYTE, B.WORD):
+                self.load_hl(a)
+            elif a.kind != 'imm' and a.ty is B.INT:
+                self.load_de(a)
+                self.emit('bit 7,d')
+                self.fail_jp('nz', f'bly_fail_{"port" if port else "addr"}_i16', line)
+                self.emit('ex de,hl')
+            else:
+                q = self.conv(a, B.QUAD) if a.kind != 'imm' else self.materialize(Op('imm', a.val, B.QUAD))
+                self.line(line)
+                self.emit(f'ld hl,{q.val}')
+                self.emit(f'ld a,{int(port)}')
+                self.call('bly_zx_addr64')
+            if name == 'peek':
+                self.emit('ld a,(hl)')
+            elif name == 'poke':
+                self.load_a(v)
+                self.emit('ld (hl),a')
+            else:
+                self.emit('ld b,h')
+                self.emit('ld c,l')
+        if name == 'inp':
+            self.emit('in a,(c)')
+        elif name == 'outp':
+            self.load_a(v)
+            self.emit('out (c),a')
+        if name in ('peek', 'inp'):
+            r = self.temp(B.BYTE)
+            self.emit(f'ld ({r.val}),a')
+            return r
+        return None
 
     def screen_call(self, name, args):
         """the Spectrum's screen and sound (ABI.md section 10)"""

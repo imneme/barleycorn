@@ -743,7 +743,10 @@ afresh the link breaks, so a `Screen(memory)` parameter would be
 sturdier. The C carries the ROM's 16K only when the program peeks, since
 nothing else can see them. They're in `MACHINE_FUNCS`, not
 `SCREEN_FUNCS`, so `z80gen.py`'s screen dispatch doesn't take them for
-drawing calls.
+drawing calls. `inp` and `outp` are there too: the model's ports
+(`zxgfx.py`), which the C repeats in `bly_inp` and `bly_outp`. The
+border a picture shows is kept apart from BORDCR's, since `outp(254, 2)`
+turns it red without changing what `cls` gives the lower screen.
 
 **How it's tested.** 39 hand-picked edges, all 44 failures (each also
 checked against its exact words), and 60 seeded random drawing programs
@@ -966,6 +969,56 @@ T a pixel. Circles were 283K T at r = 87 and 28M at r = 32767 whether or
 not anything showed: about 8 seconds on a real Spectrum, to draw
 nothing. A line or circle call pays a few hundred T up front for its
 patches.
+
+## The machine on the Z80: peek, poke, inp, outp
+
+Saturday 10 October. Melissa asked for IN and OUT "if they're not
+there". They weren't, and nor were `peek` and `poke` on the Z80, so all
+four came together.
+
+**Each is one instruction in the generated code** (ABI.md section 10):
+`peek` of a `word` is `ld hl,(v)` and `ld a,(hl)`, 23 T, and of a
+constant `ld a,(nn)`, 13 T. The checking is `zxmach.asm`, 97 bytes, and
+only a type that can hold an address out of range reaches it. It checks
+the quad's top six bytes itself rather than calling `num_chk.asm`'s
+`bly_n_q2w`, which would bring 346 bytes it doesn't need.
+
+**The ports mean what omse-ai's 48K does**, read in its source
+(`src/zxcore.cpp`, `io_read` and `io_write`) and then asked:
+- An even port is the ULA's. It reads BFh with no key held, and bit 6 is
+  the EAR line, which echoes bit 4 of the last write. Writing it sets
+  the border (bits 0-2) and that bit.
+- An odd port with bits 5-7 clear is the Kempston joystick, 0 with
+  nothing pushed; any other port reads FFh.
+- Two things write the ULA behind the program's back: `border()`, with
+  bit 4 clear, and the ROM's BEEPER, whose last OUT always has bit 4
+  clear and BORDCR's border. A beep too short for one cycle isn't played
+  (`zxbeep.asm` returns first), so it changes nothing. The model works
+  the cycles out from the same table, which is
+  `round(4 * 440 * 2 ** ((s - 9) / 12))` (checked against all 130
+  entries).
+- BASIC agreed: `OUT 254,16: PRINT IN 32766` is 255, and with a `BEEP`
+  or `BORDER` between them, 191. `PRINT IN 254` from BASIC gives 190,
+  not 191, because ENTER is still held while the line runs, and a top
+  byte of 0 reads every half-row.
+
+**How it's tested.** Ten suite cases. One is the memory: the ROM, the
+screen and the UDGs, through every address type, with the picture
+compared. One is the ports. Seven are failures, one for each kind of
+check: an `int` address and an `int` port, a `long`, a `dword`, a `quad`
+that only its top byte puts out of range, a literal at 65536, and a
+negative literal port. The last is the CP/M rule.
+`z80/tests/ula_check.py` (in `./check fragments`) runs 40 random
+programs of `outp`, `border`, `beep` and `inp` on omse-ai's 48K and on
+`zxgfx.Screen`, and what `inp` read and the border at the end must
+agree. Only it sees the border, which the suite's pictures don't hold.
+**15 mutants, all caught:** four in the model, two in the C, five in the
+generator and four in `zxmach.asm`. One survived at first, a constant
+address of 65536 taking the unchecked path, until the literal case moved
+from 70000 to the boundary. One more is equivalent, and kept as a note:
+dropping `ld b,h` before `in a,(c)` changes only which keyboard
+half-rows are read, which can't be seen with no key held. A test with a
+key held (`--- keys`, coming with `inkey()`) will see it.
 
 ## Floats on the Spectrum: the ROM's calculator, and the plumbing to it
 

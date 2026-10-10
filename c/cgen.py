@@ -881,9 +881,11 @@ class Gen:
         if name == 'peek':
             self.peeks = True
             return self.temp('u8', f'bly_peek((i64){args[0]}, {line})')
-        if name == 'poke':
-            self.emit(f'bly_poke((i64){args[0]}, {self.conv(args[1], e.args[1].ty, B.BYTE)}, {line});')
+        if name in ('poke', 'outp'):
+            self.emit(f'bly_{name}((i64){args[0]}, {self.conv(args[1], e.args[1].ty, B.BYTE)}, {line});')
             return None
+        if name == 'inp':
+            return self.temp('u8', f'bly_inp((i64){args[0]}, {line})')
         if name == 'lines':
             return self.temp('bly_lines *', f'bly_lines_new({line})')
         if name == 'input':
