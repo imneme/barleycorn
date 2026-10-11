@@ -1,0 +1,31 @@
+-- Loops: a..b leaves b out, rev() walks it backwards, continue skips a turn, break leaves, and while repeats while true.
+
+func main()
+  print "up:";
+  for i in 0..5 do                         -- 0 to 4: the 5 is where it stops, not a turn
+    print " "; i;                          -- a print takes the rest of its line, so it gets one of its own
+  end
+  print
+  print "down:";
+  for i in rev(0..5) do                    -- the same five numbers, 4 down to 0
+    print " "; i;
+  end
+  print
+  print "no 3s, and stop past 50:";
+  for i in 1..100 do
+    if i % 3 == 0 then continue end        -- continue: straight on to the next i
+    if i * i > 50 then break end           -- break: out of the loop altogether
+    print " "; i;
+  end
+  print
+  var n = 1000
+  var halvings = 0
+  while n > 1 do n /= 2; halvings += 1 end -- while: test first, then go round
+  print "1000 halves to 1 in "; halvings; " steps"
+end
+
+-- prints:
+-- > up: 0 1 2 3 4
+-- > down: 4 3 2 1 0
+-- > no 3s, and stop past 50: 1 2 4 5 7
+-- > 1000 halves to 1 in 9 steps

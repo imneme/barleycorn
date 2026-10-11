@@ -1,0 +1,31 @@
+-- inp(port) reads the keyboard's half-rows, a bit a key and 0 while it's down, so a long loop can watch for BREAK [zx]
+
+const N = 3000
+
+func break_held(): bool                    -- BREAK is CAPS SHIFT (0xFEFE's bit 0) and SPACE (0x7FFE's bit 0) at once
+  return inp(0xFEFE) & 1 == 0 and inp(0x7FFE) & 1 == 0
+end
+
+func main()
+  cls()
+  print #1; at 0, 0; "BREAK (CAPS SHIFT + SPACE) stops"
+  var count = 1                            -- 2, the one even prime
+  var n = 3
+  while n < N and not break_held() do      -- the odd numbers, by trial division
+    var d = 3
+    while d * d <= n and n % d != 0 do d += 2 end
+    if d * d > n then
+      count += 1
+      outp(0xFE, byte(count % 8))          -- port 0xFE's low three bits are the border: a colour a prime
+    end
+    n += 2
+  end
+  border(7)                                -- BASIC's BORDER: the port, and the colour BASIC keeps for it
+  while break_held() do end                -- wait for BREAK to be let go, or BASIC sees it too when we return
+  if n < N then print "stopped at "; n; ", with "; count; " primes" else print count; " primes below "; N end
+end
+
+-- Off the Spectrum no key is ever down on a port, so it always counts them all. On a 48K it takes 5 seconds, the
+-- border changing colour at every prime, and BREAK held for a moment stops it: "stopped at 913, with 156 primes".
+-- prints:
+-- > 430 primes below 3000

@@ -11,6 +11,9 @@ instances of me, working at the same time from a short brief, as
 Barleycorn's first users. Their lists of what they reached for and
 didn't find made the language better (HISTORY.md).
 
+For one construct at a time, in programs of 10 to 25 lines, see
+[small/](small/README.md).
+
 ## Grids that come alive
 
 - `life.bly`: Conway's Game of Life on the Spectrum's colour squares,
@@ -82,7 +85,7 @@ are as fast as memory gets.
   middle of the screen, putting a dot on every prime, and the diagonals
   Ulam noticed in 1963 appear as it grows. The beeper clicks for each
   pair of twin primes, a little higher with each turn of the spiral. It
-  prints how many primes there are and how many twin pairs. About 15
+  prints how many primes there are and how many twin pairs. About 22
   seconds on a 48K.
 
       ./bly zx examples/ulam.bly

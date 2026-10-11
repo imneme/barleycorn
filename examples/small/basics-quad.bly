@@ -1,0 +1,30 @@
+-- A quad is 64 bits, enough for 20! = 2432902008176640000; a long, 32 bits, runs out after 12!.
+
+func main()
+  var f: quad = 1
+  for n in 1..21 do
+    f *= n
+    if n >= 11 then
+      var fits = "long"                    -- the smallest type it fits in
+      if f > 2147483647 then fits = "quad" end
+      print n; "! = "; f; ", a "; fits
+    end
+  end
+  var l: long = 1
+  for n in 1..13 do l *= n end             -- 12! in a long, which is plenty
+  print "12! in a long: "; l
+end
+
+-- 21! is past 9223372036854775807, the biggest quad, and would stop the program with "quad overflow".
+-- prints:
+-- > 11! = 39916800, a long
+-- > 12! = 479001600, a long
+-- > 13! = 6227020800, a quad
+-- > 14! = 87178291200, a quad
+-- > 15! = 1307674368000, a quad
+-- > 16! = 20922789888000, a quad
+-- > 17! = 355687428096000, a quad
+-- > 18! = 6402373705728000, a quad
+-- > 19! = 121645100408832000, a quad
+-- > 20! = 2432902008176640000, a quad
+-- > 12! in a long: 479001600

@@ -1,0 +1,29 @@
+-- A map finds a value by its key: m[k] = v sets it, get(k, d) reads it or d, in asks, del forgets, and for walks it
+
+func show(count: map[word, int])           -- in the order the keys first came, as Python's dicts do
+  var gap = ""
+  for id, n in count do
+    print gap; name(id); " "; n;
+    gap = ", "
+  end
+  print
+end
+
+func main()
+  var count = map[word, int](16)           -- keys are numbers, so words go in as intern()'s small numbers
+  for w in "the cat sat on the mat and the cat slept".split(' ') do
+    var id = intern(w)
+    count[id] = count.get(id, 0) + 1       -- get gives 0 for a word it hasn't seen yet
+  end
+  show(count)
+  print "cat: "; intern("cat") in count; ", dog: "; intern("dog") in count
+  count.del(intern("the"))                 -- gone, and the others keep their order
+  print count.len; " words left"
+  show(count)
+end
+
+-- prints:
+-- > the 3, cat 2, sat 1, on 1, mat 1, and 1, slept 1
+-- > cat: true, dog: false
+-- > 6 words left
+-- > cat 2, sat 1, on 1, mat 1, and 1, slept 1

@@ -1,0 +1,29 @@
+-- ZX is true only on a Spectrum, and if ZX then ... end folds away elsewhere: one program sings there, and runs on CP/M
+
+const SCALE = int[0, 2, 4, 5, 7, 9, 11, 12, 14, 16]       -- a note for each digit, up a major scale
+
+func main()
+  if ZX then cls() end                     -- the screen and the speaker are the Spectrum's: all of it inside if ZX
+  var a = 0
+  var b = 1
+  var n = 0
+  while true do                            -- the last digits of the Fibonacci numbers, until 0, 1 comes round again
+    if ZX then
+      line(8 + 4 * n, 40, 8 + 4 * n, 40 + 12 * a)    -- a bar as tall as the digit
+      beep(30, SCALE[a])                   -- and its note
+    end
+    if ZX and a == 0 then plot(8 + 4 * n, 30) end    -- a dot under each 0: ZX and anything is false off a Spectrum
+    var c = (a + b) % 10
+    a = b
+    b = c
+    n += 1
+    if a == 0 and b == 1 then break end
+  end
+  if ZX then print at 20, 1; end           -- on a Spectrum, the answer goes under the bars; elsewhere, on the next line
+  print "the last digits repeat every "; n               -- the answer: the same on every machine
+end
+
+-- Take away the if ZX round the bar and its note, and CP/M refuses the whole program before it starts, with
+-- line() is Spectrum-only: put it inside if ZX then ... end at line 12
+-- prints:
+-- > the last digits repeat every 60

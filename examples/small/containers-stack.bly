@@ -1,0 +1,30 @@
+-- A list is a stack: push puts a value on top, pop takes the top one off, and len says how many are there
+
+func rpn(sum: str): long                   -- reverse Polish: each sign works on the two numbers before it
+  var stack = list[long](16)
+  for token in sum.split(' ') do
+    if token == "+" or token == "-" or token == "*" then
+      var b = stack.pop()                  -- the top one is the second number
+      var a = stack.pop()
+      if token == "+" then stack.push(a + b)
+      elif token == "-" then stack.push(a - b)
+      else stack.push(a * b)
+      end
+    else
+      stack.push(token.int())
+    end
+  end
+  assert stack.len == 1                    -- a whole sum leaves just its answer
+  return stack.pop()
+end
+
+func main()
+  print rpn("3 4 + 2 *")                   -- (3 + 4) * 2
+  print rpn("5 1 2 + 4 * + 3 -")           -- 5 + (1 + 2) * 4 - 3
+  print rpn("2 3 4 * -")                   -- 2 - 3 * 4: no brackets needed
+end
+
+-- prints:
+-- > 14
+-- > 14
+-- > -10

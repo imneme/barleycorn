@@ -1,0 +1,27 @@
+-- peek(a) and poke(a, v) on the attribute bytes, rows of 32 from 0x5800: colouring by hand, as attr() does [zx]
+
+const ATTRS = 0x5800                       -- 22528: 24 rows of 32 squares, each flash 128 + bright 64 + paper x 8 + ink
+
+func main()
+  cls()
+  for r in 2..22 do                        -- diagonal bands, two squares wide, in every bright paper
+    for c in 0..32 do poke(ATTRS + 32 * r + c, byte(64 + (r + c) / 2 % 8 * 8)) end
+  end
+  for step in 0..32 do                     -- slide each row a square to the left, 32 times, all the way round
+    for r in 2..22 do
+      var row = ATTRS + 32 * r
+      var first = peek(row)
+      for c in 0..31 do poke(row + c, peek(row + c + 1)) end
+      poke(row + 31, first)                -- the one that fell off the left comes back on the right
+    end
+  end
+  var a = ATTRS + 32 * 10 + 3              -- row 10, column 3
+  print "peek("; a; ") = attr(10, 3) = "; attr(10, 3)
+  print "bright "; peek(a) / 64 % 2; ", paper "; peek(a) / 8 % 8; ", ink "; peek(a) % 8
+end
+
+-- On a 48K the bands take three seconds to slide once round. The screen, the UDGs and the ROM are the same
+-- everywhere, so peek and poke there agree off the Spectrum too; the rest of the 64K is each machine's own.
+-- prints:
+-- > peek(22851) = attr(10, 3) = 112
+-- > bright 1, paper 6, ink 0

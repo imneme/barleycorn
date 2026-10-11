@@ -1,0 +1,30 @@
+-- ink, paper, bright, flash and inverse colour what's printed next; 8 keeps a square's own, 9 contrasts [zx]
+
+func main()
+  paper(7)
+  ink(0)
+  cls()
+  for c in 0..8 do                         -- the eight colours as paper, with ink 9: white on dark, black on light
+    paper(c)
+    ink(9)
+    print at 1, 4 * c; " "; c; "  ";
+    bright(true)                           -- the same eight, bright
+    print at 3, 4 * c; " "; c; "  ";
+    bright(false)
+  end
+  paper(1)
+  ink(6)
+  flash(true)
+  print at 6, 1; " flash: ink and paper swap ";
+  flash(false)
+  inverse(true)
+  print at 8, 1; " inverse: swapped for good ";
+  inverse(false)
+  for c in 0..32 do attr(11, c, byte(c % 8 * 8 + 7 - c % 8)) end     -- a stripe, each square its own colours
+  ink(8)                                   -- 8: print on them, and every square keeps its own colours
+  paper(8)
+  print at 11, 2; "ink 8 and paper 8: theirs kept";
+end
+
+-- Everything here is placed with print at, so it's the screen's alone, and the program's output is empty.
+-- prints:

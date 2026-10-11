@@ -1,0 +1,21 @@
+-- print: ; joins with nothing between, , moves on to the next 16-column zone, and a trailing ; keeps the line open.
+
+func main()
+  print "Hello, world"
+  print "Hello"; ", "; "Barleycorn"        -- ; joins pieces, with nothing added between them
+  print "corn"; 1; 2; 3                    -- numbers join the same way: no spaces appear by themselves
+  print "a", "b", "c"                      -- , pads to the next zone: columns 0, 16, 32 and on
+  print "still ";                          -- a trailing ; leaves the line open...
+  print "the same line"                    -- ...so the next print carries on where it stopped
+  print                                    -- print on its own ends a line: here, a blank one
+  print "6 x 7 = "; 6 * 7                  -- anything you can work out, you can print
+end
+
+-- prints:
+-- > Hello, world
+-- > Hello, Barleycorn
+-- > corn123
+-- > a               b               c
+-- > still the same line
+-- >
+-- > 6 x 7 = 42

@@ -1,0 +1,29 @@
+-- A record bundles values: Score(...) makes one, s.name reads a field, and records compare field by field, in order
+
+record Score
+  points: int                              -- first, so points decide before names do
+  name: str
+end
+
+func main()
+  var table: Score[4]
+  table[0] = Score(120, "Wren")
+  table[1] = Score(340, "Vesper")
+  table[2] = Score(95, "Frances")
+  table[3] = Score(340, "Barley")
+  table.sort()                             -- no comparison to write: records already know their order
+  for i in rev(0..table.len) do            -- the highest score first
+    print table[i].points; " "; table[i].name
+  end
+  var a = Score(340, "Barley")
+  print a == table[2]; " "; a < table[2]   -- sorted, table[2] is Barley's: equal, not less
+  print Score(340, "Barley") < Score(340, "Vesper")    -- a tie on points: the names decide
+end
+
+-- prints:
+-- > 340 Vesper
+-- > 340 Barley
+-- > 120 Wren
+-- > 95 Frances
+-- > true false
+-- > true

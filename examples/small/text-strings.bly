@@ -1,0 +1,29 @@
+-- a str is bytes: slice it with s[a..b], search it with find and starts, cut it with split, walk it with for
+
+func main()
+  var s = "   Barley: toasty, gold, unbothered   "
+  var t = s.trim()                         -- the spaces off both ends: a slice of s, nothing copied
+  print "["; t; "] is "; t.len; " bytes"
+  print t[0..6]                            -- half-open: from 0 up to, not including, 6
+  var colon = t.find(":")                  -- where it first is, or -1 if it isn't there at all
+  print colon; " "; t.find("cat"); " "; t.starts("Barley"); " "; t.starts("Fern")
+  for part in t[colon + 2..int(t.len)].split(", ") do     -- find gives an int (it can be -1), len a word
+    print "- "; part
+  end
+  print t[0]; " is the byte for "; chr(t[0])     -- a byte prints as a number; chr() prints its character
+  var vowels = 0
+  for ch in t do
+    if ch == 'a' or ch == 'e' or ch == 'i' or ch == 'o' or ch == 'u' then vowels += 1 end
+  end
+  print vowels; " vowels"
+end
+
+-- prints:
+-- > [Barley: toasty, gold, unbothered] is 32 bytes
+-- > Barley
+-- > 6 -1 true false
+-- > - toasty
+-- > - gold
+-- > - unbothered
+-- > 66 is the byte for B
+-- > 9 vowels

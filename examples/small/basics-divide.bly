@@ -1,0 +1,20 @@
+-- Dividing whole numbers: / and % cut towards zero, as in C, and mod() is never negative, as a clock is.
+
+const DAYS = str["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+
+func main()
+  print 17 / 5; " "; 17 % 5                -- 3 2: three fives in seventeen, and two over
+  print -17 / 5; " "; -17 % 5              -- -3 -2: cut towards zero, and % keeps the sign of the -17
+  print mod(-17, 5)                        -- 3: mod() always lands in 0 to 4, like a clock: -17 is 3 past -20
+
+  var today = 3                            -- Wednesday
+  print "10 days after "; DAYS[today]; ": "; DAYS[(today + 10) % 7]   -- going forwards, % is enough
+  print "5 days before: "; DAYS[mod(today - 5, 7)]                   -- going back, (3 - 5) % 7 is -2: no day at all
+end
+
+-- prints:
+-- > 3 2
+-- > -3 -2
+-- > 3
+-- > 10 days after Wednesday: Saturday
+-- > 5 days before: Friday

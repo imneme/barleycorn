@@ -1,0 +1,28 @@
+-- intern(s) turns a word into a small number, the same one every time it meets that word, and name(id) gives it back
+
+const SAID = "the cat sat on the mat and the cat slept"
+
+func main()
+  var count: int[16]                       -- a count for each different word, indexed by the word's number
+  var words: word = 0                      -- how many different words so far
+  for w in SAID.split(' ') do
+    var id = intern(w)                     -- 0 for the first new word, then 1, 2, ...; "the" is 0 every time
+    if id == words then words += 1 end     -- a new word gets the next number
+    count[id] += 1
+  end
+  for id in word(0)..words do
+    print id; " "; name(id); " "; count[id]
+  end
+  print "cat is "; intern("cat"); " again"
+end
+
+-- Maps and sets hold numbers, so names become numbers to go in them: this is the Spectrum's answer to string keys.
+-- prints:
+-- > 0 the 3
+-- > 1 cat 2
+-- > 2 sat 1
+-- > 3 on 1
+-- > 4 mat 1
+-- > 5 and 1
+-- > 6 slept 1
+-- > cat is 1 again

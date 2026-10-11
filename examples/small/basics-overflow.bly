@@ -1,0 +1,24 @@
+-- A signed number that overflows stops the program, saying what and on which line; an unsigned one wraps round.
+
+func main()
+  var w: word = 65535
+  w += 1                                   -- a word wraps round to 0, quietly, as unsigned numbers do
+  print "a word: "; w
+  var n = 1                                -- an int: -32768 to 32767
+  while true do
+    print n
+    n *= 10                                -- 100000 doesn't fit, and the program stops here, not later
+  end
+  print "never printed"
+end
+
+-- Every backend stops at the same place with the same words, so a wrong answer can't sneak through.
+-- To go further, make n a long.
+-- prints:
+-- > a word: 0
+-- > 1
+-- > 10
+-- > 100
+-- > 1000
+-- > 10000
+-- > int overflow at line 10

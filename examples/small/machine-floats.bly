@@ -1,0 +1,22 @@
+-- float is the machine's own number with a point: on a Spectrum, the ROM's, with sqrt, sin and the rest [zx]
+
+const PI = 3.14159265
+
+func main()
+  cls()
+  line(0, 76, 255, 76)
+  for x in 0..256 do                       -- sin, twice round, 64 pixels each way
+    var y = 64 * sin(float(x) * 4 * PI / 256)
+    plot(x, 76 + int(round(y)))            -- round to the nearest; int() alone would cut towards zero
+  end
+  var h = sqrt(3.0 * 3.0 + 4.0 * 4.0)      -- the long side of a right triangle with sides 3 and 4
+  print "3, 4 and "; round(h)
+  print "1000 sin 30 degrees: "; int(round(1000 * sin(PI / 6)))
+end
+
+-- The ROM's floats can differ from the interpreter's in the last digit, so this lands on whole numbers before
+-- printing. They're slow, too: sin is about 144,000 T-states, a 25th of a second, so the wave takes 13 seconds,
+-- and the ROM's sqrt is exp(ln(x) / 2), about 380,000. A multiply is about 6,000.
+-- prints:
+-- > 3, 4 and 5
+-- > 1000 sin 30 degrees: 500

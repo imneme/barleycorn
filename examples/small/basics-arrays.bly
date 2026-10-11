@@ -1,0 +1,35 @@
+-- Arrays: T[N] is N values in a row, a.sort() puts them in order, and a T[] parameter is the caller's own array.
+
+func tally(rolls: byte[], counts: int[])   -- counts is main's array itself, not a copy, so what this adds stays
+  for r in rolls do counts[r] += 1 end
+end
+
+func main()
+  var rolls: byte[12]                      -- twelve dice: an array starts all 0s, and its length is fixed
+  var x: word = 1984                       -- a small LCG, as there's no random number generator
+  for i in 0..rolls.len do
+    x = x * 25173 + 13849
+    rolls[i] = byte(x >> 8) % 6 + 1
+  end
+  var counts: int[7]                       -- counts[1] to counts[6], one for each face (counts[0] isn't used)
+  tally(rolls, counts)
+  for face in 1..7 do print face; ": "; counts[face] end
+  rolls.sort()                             -- smallest first, in place
+  var gap = ""
+  for r in rolls do
+    print gap; r;                          -- a trailing ; keeps the line open
+    gap = " "
+  end
+  print
+  print "the middle two: "; rolls[5]; " and "; rolls[6]
+end
+
+-- prints:
+-- > 1: 2
+-- > 2: 2
+-- > 3: 2
+-- > 4: 3
+-- > 5: 2
+-- > 6: 1
+-- > 1 1 2 2 3 3 4 4 4 5 5 6
+-- > the middle two: 3 and 4

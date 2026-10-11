@@ -1,0 +1,32 @@
+-- set[K](cap): add(), in and len answer "have I seen this before?", which tells a loop from a road that ends.
+
+func digits(n: int): int                   -- the sum of the squares of n's digits
+  var s = 0
+  while n > 0 do
+    s += (n % 10) * (n % 10)
+    n /= 10
+  end
+  return s
+end
+
+func walk(n: int)                          -- follow n until it comes back to a number it has already been
+  var seen = set[int](32)                  -- a new set each call, in the arena: fine for three calls, not a thousand
+  while not (n in seen) do
+    seen.add(n)
+    print n; " ";
+    n = digits(n)
+  end
+  print "-> "; n; " again, after "; seen.len; " numbers";
+  if n == 1 then print ": happy" else print ": a loop" end
+end
+
+func main()
+  walk(7)                                  -- 7 reaches 1, which leads only to 1: a happy number
+  walk(2)                                  -- 2 falls into a loop of eight, the one every unhappy number ends in
+  walk(2026)                               -- and the year this was written
+end
+
+-- prints:
+-- > 7 49 97 130 10 1 -> 1 again, after 6 numbers: happy
+-- > 2 4 16 37 58 89 145 42 20 -> 4 again, after 9 numbers: a loop
+-- > 2026 44 32 13 10 1 -> 1 again, after 6 numbers: happy

@@ -1,0 +1,20 @@
+-- print at puts text on the screen as display, not output, so a count can change in place while the answer is printed
+
+func main()
+  if ZX then cls() end                     -- the screen is the Spectrum's, so every use of it sits inside if ZX
+  var n = 27
+  var steps = 0
+  while n != 1 do                          -- Collatz: halve it if it's even, or treble it and add one
+    if n % 2 == 0 then n /= 2 else n = 3 * n + 1 end
+    steps += 1
+    if ZX then
+      print at 10, 4; "step "; steps; ": "; n; "    "      -- drawn over itself each time, and never output
+    end
+  end
+  if ZX then print at 12, 4; end           -- an at with nothing after it: the next print lands there
+  print "27 reaches 1 in "; steps; " steps"               -- the answer: output on every machine
+end
+
+-- On CP/M it prints the same line, with no screen to count on.
+-- prints:
+-- > 27 reaches 1 in 111 steps

@@ -1,0 +1,28 @@
+-- beep(ms, semitone) plays a note on the beeper, with 0 as middle C and 1 for each semitone up [zx]
+
+const NAMES = str["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+const SCALE = int[0, 2, 4, 5, 7, 9, 11, 12]                     -- a major scale: whole, whole, half, whole...
+const TUNE = int[0, 0, 7, 7, 9, 9, 7, 5, 5, 4, 4, 2, 2, 0]      -- Twinkle, Twinkle, Little Star
+const BEATS = int[1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 2]
+
+func main()
+  cls()
+  var gap = ""
+  for p in SCALE do
+    print gap; NAMES[p % 12];              -- a trailing ; keeps the line open
+    gap = " "
+    beep(200, p)
+  end
+  print
+  pause(25)                                -- half a second's rest: the Spectrum counts 50 frames a second
+  for i in 0..TUNE.len do
+    border(TUNE[i] % 8)                    -- the border keeps time
+    beep(BEATS[i] * 300, TUNE[i])
+  end
+  border(7)
+  print TUNE.len; " notes of Twinkle, Twinkle"
+end
+
+-- prints:
+-- > C D E F G A B C
+-- > 14 notes of Twinkle, Twinkle

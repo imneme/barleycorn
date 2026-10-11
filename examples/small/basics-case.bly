@@ -1,0 +1,33 @@
+-- case compares one value against each when in turn: a when can list several values, and else takes the rest
+
+const NAMES = str["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+func days(month: int, leap: bool): int     -- month 1 to 12
+  case month
+    when 4, 6, 9, 11 then return 30        -- thirty days hath September, April, June and November
+    when 2 then
+      if leap then return 29 end
+      return 28
+    else return 31                         -- all the rest have thirty-one
+  end
+end
+
+func main()
+  var year = 0
+  for m in 1..13 do
+    print NAMES[m - 1]; " "; days(m, false);
+    if m % 4 == 0 then
+      print                                -- four months to a line
+    else
+      print "  ";
+    end
+    year += days(m, false)
+  end
+  print year; " days, or "; year - days(2, false) + days(2, true); " in a leap year"
+end
+
+-- prints:
+-- > Jan 31  Feb 28  Mar 31  Apr 30
+-- > May 31  Jun 30  Jul 31  Aug 31
+-- > Sep 30  Oct 31  Nov 30  Dec 31
+-- > 365 days, or 366 in a leap year

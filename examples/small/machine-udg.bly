@@ -1,0 +1,27 @@
+-- udg(n, rows) draws your own character n, 0 to 20, from eight bytes, a row each; chr(0x90 + n) prints it [zx]
+
+const CAT = byte[%01000010, %01100110, %01111110, %11011011, %11111111, %11100111, %01111110, %00111100]
+const INK = ".#"
+
+func main()
+  cls()
+  for row in CAT do                        -- the eight bytes as text: each bit set is a pixel inked
+    for b in 0..8 do print chr(INK[(row >> (7 - b)) & 1]); end
+    print
+  end
+  udg(0, CAT)                              -- character 0x90, the UDG A, is a cat now
+  for c in 0..7 do                         -- and here it is, in each ink but white
+    ink(c)
+    print at 10, 2 + 4 * c; chr(0x90)
+  end
+end
+
+-- prints:
+-- > .#....#.
+-- > .##..##.
+-- > .######.
+-- > ##.##.##
+-- > ########
+-- > ###..###
+-- > .######.
+-- > ..####..

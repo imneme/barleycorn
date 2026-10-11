@@ -1,0 +1,28 @@
+-- A heap gives back its smallest value first, whatever order things went in: a to-do list by priority
+
+record Job
+  priority: int                            -- first, so the heap orders by it: 1 is most urgent
+  what: str                                -- and on a tie, by name
+end
+
+func main()
+  var todo = heap[Job](8)
+  todo.push(Job(3, "water the fern"))
+  todo.push(Job(1, "feed Barley"))
+  todo.push(Job(2, "put the kettle on"))
+  todo.push(Job(3, "answer the mail"))
+  while todo.len > 0 do
+    var job = todo.pop()                   -- the most urgent still waiting
+    print job.priority; " "; job.what
+    if job.what == "put the kettle on" then
+      todo.push(Job(2, "make the genmaicha"))    -- one job can add another, and it takes its place
+    end
+  end
+end
+
+-- prints:
+-- > 1 feed Barley
+-- > 2 put the kettle on
+-- > 2 make the genmaicha
+-- > 3 answer the mail
+-- > 3 water the fern

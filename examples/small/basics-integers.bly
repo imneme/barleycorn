@@ -1,0 +1,30 @@
+-- Six sizes of whole number: byte, word and dword are unsigned 8, 16 and 32 bits; int, long and quad are signed.
+
+func main()
+  var b: byte = 200                        -- 0 to 255
+  var w: word = 60000                      -- 0 to 65535
+  var i: int = -1000                       -- -32768 to 32767, and the type a plain number gets
+  var l: long = 100000                     -- too big for an int; a long goes past two thousand million
+  print b; " "; w; " "; i; " "; l
+
+  var wide: long = i                       -- widening is free: every int fits in a long
+  wide *= 1000
+  print wide
+  var narrow = int(l / 8)                  -- narrowing takes a cast; without, "a long where an int is needed"
+  print narrow
+
+  b += 100                                 -- unsigned numbers wrap round: 300 is 44 in a byte
+  w = 0
+  w -= 1                                   -- and 0 - 1 is the biggest word
+  print b; " "; w
+  var d: dword = 4000000000                -- a dword holds four thousand million
+  var q: quad = d                          -- and a quad holds that times four, and far more
+  print q * 4
+end
+
+-- prints:
+-- > 200 60000 -1000 100000
+-- > -1000000
+-- > 12500
+-- > 44 65535
+-- > 16000000000

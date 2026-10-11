@@ -1,0 +1,35 @@
+-- Bits: & | ^ ~ << >>, binary literals like %1010, and & binding tighter than ==, so x & 1 == 0 means what you hope.
+
+func binary(x: byte)                       -- a byte's eight bits, highest first
+  for i in rev(0..8) do print (x >> i) & 1; end
+  print
+end
+
+func main()
+  var a: byte = %1100
+  var b: byte = %1010
+  binary(a & b)                            -- 1 where both have a 1
+  binary(a | b)                            -- 1 where either has
+  binary(a ^ b)                            -- 1 where they differ
+  binary(~a)                               -- every bit turned over
+  print 1 << 10; " "; 1000 >> 3            -- each place left doubles, each right halves: 1024, 125
+  var flags: byte = 0
+  flags |= 1 << 5                          -- turn bit 5 on
+  flags |= %11                             -- and bits 1 and 0
+  flags &= ~byte(%10)                      -- and bit 1 off again (~%10 alone is an int, -3)
+  binary(flags)
+  for n in 0..5 do
+    if n & 1 == 0 then print n; " is even" end   -- (n & 1) == 0, as in Python; in C it would be n & (1 == 0)
+  end
+end
+
+-- prints:
+-- > 00001000
+-- > 00001110
+-- > 00000110
+-- > 11110011
+-- > 1024 125
+-- > 00100001
+-- > 0 is even
+-- > 2 is even
+-- > 4 is even

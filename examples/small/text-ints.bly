@@ -1,0 +1,25 @@
+-- s.ints() walks every number in a string, signs and all, and s.int(k) is the k-th of them, counting from 0
+
+const LINES = str["move 3 from 1 to 2", "x=-3, y=4", "2-4,6-8", "no numbers here"]
+
+func main()
+  var m = LINES[0]
+  print "move "; m.int(0); " crates from stack "; m.int(1); " to stack "; m.int(2)
+  for s in LINES do
+    print s; ":";
+    var n = 0
+    for v in s.ints() do                   -- everything that isn't part of a number is skipped
+      print " "; v;
+      n += 1
+    end
+    print " ("; n; ")"
+  end
+end
+
+-- A minus is a sign only when it doesn't follow a digit: x=-3 is minus three, but 2-4 is two numbers, 2 and 4.
+-- prints:
+-- > move 3 crates from stack 1 to stack 2
+-- > move 3 from 1 to 2: 3 1 2 (3)
+-- > x=-3, y=4: -3 4 (2)
+-- > 2-4,6-8: 2 4 6 8 (4)
+-- > no numbers here: (0)

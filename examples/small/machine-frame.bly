@@ -1,0 +1,35 @@
+-- frame do ... end runs 50 times a second, in the interrupt, whatever else is going on: a spinner while a sum runs [zx]
+
+const ROW = byte[10, 10, 11, 12, 12, 12, 11, 10]   -- eight squares round (11, 15), clockwise from the top
+const COL = byte[15, 16, 16, 16, 15, 14, 14, 14]
+const N = 5000
+var spin: byte = 0                         -- what frame keeps between frames lives in globals
+
+frame do                                   -- 16-bit Barley only: no print, no calls, no longs (it says why, if you try)
+  attr(ROW[spin], COL[spin], 7 * 8)        -- the lit square goes back to white
+  spin = (spin + 1) % 8
+  attr(ROW[spin], COL[spin], 2 * 8)        -- and the next one round turns red
+end
+
+func main()
+  cls()
+  print at 11, 18; "adding up"
+  frames(true)                             -- from now on frame runs, and the spinner spins while the sum goes on
+  var total: quad = 0
+  for i in 1..N + 1 do total += long(i) * i end
+  frames(false)
+  for k in 0..8 do attr(ROW[k], COL[k], 4 * 8) end   -- all eight green: done, however far it got round
+  print at 11, 18; "done     "
+  print at 0, 0;
+  print "the first "; N; " squares"
+  print "added up", total
+  print "n(n+1)(2n+1)/6", quad(N) * (N + 1) * (2 * N + 1) / 6
+end
+
+-- On a 48K the sum takes about 4 seconds, and the spinner goes round 25 times. Off the Spectrum a frame passes only
+-- in pause() and ticks(), so there the spinner never moves. The final screen agrees because frame is turned off and
+-- the ring painted green before the end. (So a mistake inside frame shows only on the 48K: bly all is what finds it.)
+-- prints:
+-- > the first 5000 squares
+-- > added up        41679167500
+-- > n(n+1)(2n+1)/6  41679167500

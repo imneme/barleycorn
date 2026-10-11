@@ -1,0 +1,23 @@
+-- print #4 prints in an FZX font, at any pixel: const F = @embed("font.fzx") brings it in, and fzx(F) picks it [zx]
+
+const SPRIG = @embed("sprig.fzx")          -- the font's bytes, built into the program as it compiles
+const S = int[0, 29, 50, 58, 50, 29, 0, -29, -50, -58, -50, -29]   -- 58 x the sine of h hours, 30 degrees each
+
+func main()
+  cls()
+  print "sprig: "; SPRIG.len; " bytes, "; SPRIG[0]; " pixels high"   -- an FZX font starts with its height
+  circle(128, 88, 72)
+  fzx(SPRIG)
+  for h in 1..13 do
+    var x = 128 + S[h % 12] - 2            -- the middle of the number, less half a digit's width
+    var y = 88 + S[(h + 3) % 12]           -- and the cosine is the sine, a quarter turn on
+    if h >= 10 then x -= 2 end             -- two digits are about twice as wide
+    print #4; at 175 - y - 3, x; h         -- print #4's y counts down from the top (plot's, up); 3 is half a digit
+  end
+  print #4; at 112, 122; "AM"              -- the font's text isn't output: only the first print is
+end
+
+-- sprig.fzx is the font Barleycorn's tests draw for themselves (tools/make_fzx.py): digits, a little punctuation,
+-- and twelve letters, A B M W a b g i j m x y. Any FZX font works the same way; the Spectrum's are their makers'.
+-- prints:
+-- > sprig: 454 bytes, 10 pixels high

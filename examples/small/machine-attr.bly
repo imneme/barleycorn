@@ -1,0 +1,23 @@
+-- attr(r, c, a) colours a square from one byte, flash 128 + bright 64 + paper x 8 + ink, and attr(r, c) reads it [zx]
+
+const PI = byte[3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5, 8, 9, 7, 9, 3]
+
+func main()
+  paper(0)
+  ink(7)
+  cls()
+  for i in 0..16 do                        -- a bar for each digit of pi, as tall as the digit
+    var d = PI[i]
+    var a = byte(64 + (1 + d % 7) * 8)     -- bright, with a paper from blue to white, and ink 0
+    for h in 0..d do attr(19 - h, 2 * i, a) end
+    print at 20, 2 * i; d;
+  end
+  if ZX then print at 0, 0; end            -- the answer at the top, above the bars
+  var sq = attr(19, 0)                     -- the first bar's bottom square, read back
+  print "attr(19, 0) is "; sq
+  print "bright "; sq / 64 % 2; ", paper "; sq / 8 % 8; ", ink "; sq % 8
+end
+
+-- prints:
+-- > attr(19, 0) is 96
+-- > bright 1, paper 4, ink 0

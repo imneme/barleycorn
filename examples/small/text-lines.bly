@@ -1,0 +1,26 @@
+-- for line in lines() walks the input a line at a time, and line.int() reads the number the line starts with
+
+func main()
+  var total: long = 0                      -- a long: a total of many lines can outgrow an int's 32767
+  var count = 0
+  for line in lines() do                   -- each line without its line end, so a blank one is ""
+    if line == "" then
+      print "(a blank line)"
+      continue
+    end
+    total += line.int()                    -- the number takes its type from where it goes: a long, here
+    count += 1
+    print line.int(); ", and "; total; " so far"
+  end
+  print count; " numbers, "; total; " in all"
+end
+
+-- The input is text-lines.txt, beside it: ./bly run text-lines.bly text-lines.txt
+-- input: text-lines.txt
+-- prints:
+-- > 12, and 12 so far
+-- > 7, and 19 so far
+-- > (a blank line)
+-- > 30000, and 30019 so far
+-- > 30000, and 60019 so far
+-- > 4 numbers, 60019 in all

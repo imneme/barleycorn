@@ -1,0 +1,25 @@
+-- over(true) draws by flipping pixels, so drawing a thing twice rubs it out; inverse(true) draws in the paper [zx]
+
+func main()
+  cls()
+  for x in 0..16 do line(16 * x, 0, 16 * x, 150) end   -- a fence to roll past
+  over(true)
+  for x in 20..220 do                      -- a ball rolls across the fence and leaves it as it found it:
+    circle(x, 88, 12)                      -- drawn once, each of its pixels flips
+    pause(1)
+    circle(x, 88, 12)                      -- drawn again, they flip back
+  end
+  circle(220, 88, 12)                      -- once more, and left: where it crosses the fence, the fence flips
+  over(false)
+  inverse(true)
+  line(0, 40, 255, 40)                     -- inverse: a line in the paper's colour, cutting the fence
+  inverse(false)
+  print "the fence at y 120: "; point(112, 120)
+  print "where the ball rolled: "; point(112, 88)
+  print "where inverse drew: "; point(112, 40)
+end
+
+-- prints:
+-- > the fence at y 120: true
+-- > where the ball rolled: true
+-- > where inverse drew: false

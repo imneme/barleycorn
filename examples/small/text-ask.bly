@@ -1,0 +1,26 @@
+-- ask(prompt) reads a line typed at the keyboard, and .int() reads a number from it: a long, unless you say
+
+func main()
+  var name = ask("What's your name? ")     -- the prompt and the typing are display, as BASIC's INPUT is
+  var big = ask("Pick a big number: ").int()          -- nothing says what it is, so it's a long
+  var small: int = ask("And a small one: ").int()     -- an int, because the variable says so
+  print "Hello, "; name; "!"               -- name still holds: each ask() makes a new str, and keeps it
+  print big; " times "; small; " is "; big * small
+  var again = ask("Again (y/n)? ")
+  if again.starts("y") then
+    print "Then once more: "; big * small * 2
+  else
+    print "Bye, "; name
+  end
+end
+
+-- On CP/M, where there's one console, the prompts and the typing are output too.
+-- keys:
+-- < Fern
+-- < 70000
+-- < 12
+-- < n
+-- prints:
+-- > Hello, Fern!
+-- > 70000 times 12 is 840000
+-- > Bye, Fern

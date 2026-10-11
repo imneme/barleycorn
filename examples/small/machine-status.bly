@@ -1,0 +1,32 @@
+-- print #1 writes in the bottom two lines, the lower screen, as BASIC's PRINT #1 does: a status line, not output [zx]
+
+const N = 10000
+
+func main()
+  border(1)                                -- the lower screen takes the border's colours, as BASIC's does
+  cls()
+  print #1; at 0, 0; "perfect numbers below "; N        -- at 0 is the upper of the two lines, at 1 the bottom one
+  var sum: int[N]                          -- sum[n]: the divisors of n smaller than n, added up so far
+  var found = 0
+  for d in 1..N do
+    if sum[d] == d then                    -- every divisor of d is smaller than d, so d's sum is complete
+      print d; " is perfect"               -- the answer, in the upper screen: output, as ever
+      found += 1
+    end
+    var m = 2 * d
+    while m < N do                         -- now give d to each of its multiples
+      sum[m] += d
+      m += d
+    end
+    if d % 100 == 0 then print #1; at 1, 0; "up to "; d; ", found "; found end
+  end
+  print #1; at 1, 0; "done: "; found; " found        "   -- the spaces rub out the rest of the last one
+end
+
+-- None of the status line is output. When the program ends, BASIC's report (0 OK) takes the bottom two lines,
+-- as it does after any BASIC program; the picture is the interpreter's, from just before.
+-- prints:
+-- > 6 is perfect
+-- > 28 is perfect
+-- > 496 is perfect
+-- > 8128 is perfect

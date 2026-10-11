@@ -1,0 +1,25 @@
+-- @embed("file") is a file's bytes as a byte table, read from beside the program as it compiles, and built in
+
+const POEM = @embed("machine-embed.txt")   -- only a const can be @embed: it happens before the program runs
+
+func main()
+  print POEM.len; " bytes, the first "; POEM[0]; ", which is "; chr(POEM[0])
+  var lines = 0
+  for b in POEM do                         -- a byte table, not a str: each byte is a number
+    if b == 10 then                        -- a line end in the file
+      print
+      lines += 1
+    else
+      print chr(b);
+    end
+  end
+  print lines; " lines, and the file isn't needed again"
+end
+
+-- machine-embed.txt can go now: its bytes are in the tape, the .COM and the C.
+-- prints:
+-- > 66 bytes, the first 84, which is T
+-- > Toasted rice in tea,
+-- > a fern uncurling slowly,
+-- > the cat unbothered.
+-- > 3 lines, and the file isn't needed again

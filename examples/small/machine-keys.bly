@@ -1,0 +1,37 @@
+-- inkey() is the key held down now, key() a new press since it last looked: one moves while held, one counts [zx]
+
+func main()
+  cls()
+  print at 0, 0; "O P: move   C: colour   Q: stop"
+  var x = 15
+  var colour = 2
+  var changes = 0
+  while true do
+    var k = key()                          -- a new press, once each time it's pressed
+    if k == 'q' then break end
+    if k == 'c' then
+      colour = colour % 7 + 1
+      changes += 1
+    end
+    var held = inkey()                     -- whatever is down right now, for as long as it's down
+    if held == 0 then held = k end         -- or else the key pressed since we last looked, so a tap still counts
+    var step = 0
+    if held == 'o' and x > 0 then step = -1 end
+    if held == 'p' and x < 31 then step = 1 end
+    attr(10, x, 7 * 8)                     -- rub the block out
+    x += step
+    attr(10, x, byte(colour * 8))          -- and draw it again, in the colour it is now
+    pause(3)                               -- held down, it steps every 3 frames
+  end
+  print "the colour changed "; changes; " times"
+end
+
+-- Held now, or else the last key pressed: that's Melissa's, from her snake in BASIC, which reads INKEY$ and, when
+-- that's empty, the last key the interrupt saw (LAST_K, PEEK 23560), clearing it once used. A quick tap can come and
+-- go inside the pause; this way it still moves the block. The keys hold P long enough to reach the right-hand edge,
+-- so the block ends in the same place however they're timed.
+
+-- keys:
+-- < oooopppppppppppppppppppppcccq
+-- prints:
+-- > the colour changed 3 times

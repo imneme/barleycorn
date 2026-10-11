@@ -1,0 +1,25 @@
+-- plot, line and circle draw with (0, 0) at the bottom left, as BASIC does, and point reads a pixel back [zx]
+
+func main()
+  cls()
+  line(0, 10, 255, 10)                     -- the ground: x runs 0 to 255 across, y 0 to 175 up
+  line(70, 10, 70, 60)                     -- a house: line takes both ends
+  line(150, 10, 150, 60)
+  line(70, 60, 150, 60)
+  line(70, 60, 110, 95)                    -- and a roof
+  line(110, 95, 150, 60)
+  circle(210, 120, 20)                     -- the sun: its centre, and its radius
+  for i in 0..30 do plot(i * 97 % 181, 100 + i * i * 13 % 50) end    -- plot lights one pixel: stars
+  print "a wall: "; point(70, 30); ", indoors: "; point(110, 30)
+  var lit = 0
+  for x in 189..232 do                     -- point reads pixels back: count the sun's
+    for y in 99..142 do
+      if point(x, y) then lit += 1 end
+    end
+  end
+  print "the sun's rim is "; lit; " pixels"
+end
+
+-- prints:
+-- > a wall: true, indoors: false
+-- > the sun's rim is 112 pixels

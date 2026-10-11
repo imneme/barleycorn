@@ -1,0 +1,27 @@
+-- A const table is a fixed list of values of one type, ints or strs or any other, read like an array
+
+const VALUES = int[1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1]
+const LETTERS = str["M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I"]
+const YEARS = int[1982, 1999, 2026]        -- the Spectrum's year, the last of its century, and this one
+
+func roman(n: int)                         -- the biggest value that fits, again and again
+  for i in 0..VALUES.len do
+    while n >= VALUES[i] do
+      print LETTERS[i];
+      n -= VALUES[i]
+    end
+  end
+  print
+end
+
+func main()
+  for year in YEARS do                     -- for walks a table as it walks an array
+    print year; " is ";
+    roman(year)
+  end
+end
+
+-- prints:
+-- > 1982 is MCMLXXXII
+-- > 1999 is MCMXCIX
+-- > 2026 is MMXXVI

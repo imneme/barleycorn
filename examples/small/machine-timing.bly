@@ -1,0 +1,20 @@
+-- pause(n) waits n frames and ticks() counts them, 50 to a second, so ticks() before and after times a loop [zx]
+
+func main()
+  cls()
+  var start = ticks()
+  for s in rev(1..4) do                    -- a countdown, a second for each number
+    print at 10, 15; s;
+    pause(50)
+  end
+  print at 10, 14; "GO!";
+  var frames = ticks() - start
+  print at 0, 0;                           -- print carries on from the last print at, so go back to the top
+  print "the countdown took "; (frames + 25) / 50; " seconds"      -- to the nearest second: see below
+end
+
+-- Off the Spectrum the clock is a model, in which pause(n) is n frames, ticks() is one more, and arithmetic
+-- takes none, so the interpreter makes this loop 151 frames where the 48K makes it 150; to the nearest second,
+-- they agree. Timing a loop of sums the same way shows what it costs on a real 48K, which only the 48K can say.
+-- prints:
+-- > the countdown took 3 seconds

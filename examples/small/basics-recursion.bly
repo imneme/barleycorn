@@ -1,0 +1,22 @@
+-- A function can call itself, and can call one written further down the file, so main() can come first
+
+func main()
+  print "13 in binary is "; binary(13)
+  print "3 to the 13 is "; power(3, 13)
+end
+
+func binary(n: int): int                   -- n's binary digits, read as a decimal number: 13 is 1101
+  if n < 2 then return n end
+  return binary(n / 2) * 10 + n % 2        -- the digits of n / 2, then n's last digit after them
+end
+
+func power(b: long, e: int): long          -- b to the e by halving e: five calls for 13, not thirteen
+  if e == 0 then return 1 end
+  var half = power(b, e / 2)               -- each call has its own half and its own e
+  if e % 2 == 0 then return half * half end
+  return half * half * b
+end
+
+-- prints:
+-- > 13 in binary is 1101
+-- > 3 to the 13 is 1594323

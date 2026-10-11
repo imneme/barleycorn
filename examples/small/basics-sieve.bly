@@ -1,0 +1,31 @@
+-- bit[N] is an array of true and false packed eight to a byte: here a sieve of Eratosthenes, up to 10,000
+
+const N = 10000
+var crossed: bit[N]                        -- 10,000 flags in 1,250 bytes, all false to begin with
+
+func main()
+  for i in 2..100 do                       -- 100 times 100 is N: whatever's left after that is prime
+    if not crossed[i] then
+      var j = i * i                        -- the smaller multiples of i are crossed off already
+      while j < N do
+        crossed[j] = true
+        j += i
+      end
+    end
+  end
+  var count = 0
+  var gap = ""
+  for n in 2..N do
+    if not crossed[n] then
+      if count < 10 then print gap; n; end
+      gap = " "
+      count += 1
+    end
+  end
+  print
+  print count; " primes below "; N
+end
+
+-- prints:
+-- > 2 3 5 7 11 13 17 19 23 29
+-- > 1229 primes below 10000
