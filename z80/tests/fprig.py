@@ -102,7 +102,7 @@ class Rig:
         code = code[:self.sym['bly_code_end'] - ORG]
         self.code_bytes = len(code)
         prog = zxbuild.loader(ORG)
-        tap = zxbuild.header(0, 'rig', len(prog), 10, len(prog)) + zxbuild.block(0xFF, prog)
+        tap = zxbuild.header(0, 'rig', len(prog), zxbuild.AUTOSTART, len(prog)) + zxbuild.block(0xFF, prog)
         inp = (0).to_bytes(2, 'little')
         tap += zxbuild.header(3, 'input', len(inp), 0x8000, 32768) + zxbuild.block(0xFF, inp)
         tap += zxbuild.header(3, 'rig', len(code), ORG, 32768) + zxbuild.block(0xFF, code)
@@ -128,7 +128,7 @@ class Rig:
         r = z.regs()
         return {'iy': r['iy'], "hl'": r["hl'"], 'ERR_SP': z.peek16(ERR_SP), 'ERR_NR': z.peek(ERR_NR),
                 'STKEND-STKBOT': z.peek16(STKEND) - z.peek16(STKBOT), 'MEM': z.peek16(MEM),
-                'X_PTR_hi': z.peek(0x5C60), 'CH_ADD': z.peek16(CH_ADD)}
+                'X_PTR': z.peek16(0x5C5F), 'CH_ADD': z.peek16(CH_ADD)}
 
     def call(self, routine, hl=0, de=0, bc=0, a=0, mem=None, frames=200):
         z, s = self.zx, self.sym

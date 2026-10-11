@@ -2,18 +2,22 @@
 """Build a Barley program into a Spectrum tape: a BASIC loader, the input, the
 code. Code lives high.
 
-The loader is line 10: CLEAR 32767: LOAD "" CODE: LOAD "" CODE: CLS:
-RANDOMIZE USR start. The CLS takes the loader's own words away, so a program
-starts on a clear screen, as it does in the interpreter and in C. A second
-line, numbered with the year the tape was made, has as many statements as
-the month's number (colons, which are empty statements, or a REM in
-January), so a program that ends well leaves BASIC saying 0 OK, 2026:10
-(Melissa's idea); a failure stops at line 10. SOURCE_DATE_EPOCH, if it's
-set, says when the tape was made, for a build that comes out the same. The first
-CODE block is the input at 8000h (a length word, then the
-text, so a missing input is just a zero), the second is the program, assembled
-twice so it sits flush under the UDGs at FF58h, with its slots just beneath
-it.
+The loader starts at line 20: CLEAR 32767: LOAD "" CODE: LOAD "" CODE: GO TO
+10. Line 10 puts the colours back as a 48K starts them (POKEs of ATTR_P 56,
+MASK_P 0 and P_FLAG 0, read from a fresh 48K, and BORDER 7: INK and the like
+would print their codes, which the transcript would see), then CLS, which
+takes the loader's own words away, so a program starts on a clear screen as
+it does in the interpreter and in C; then RANDOMIZE USR start: GO TO the
+year. So RUN runs the program again without loading it (RUN's CLEAR keeps
+RAMTOP), and from the same start: not the colours the last run left. The
+last line, numbered with the year the tape was made, has as many statements
+as the month's number (colons, which are empty statements, or a REM in
+January), so a program that ends well leaves BASIC saying 0 OK, 2026:10; a
+failure stops at line 10 (both Melissa's ideas). SOURCE_DATE_EPOCH, if it's
+set, says when the tape was made, for a build that comes out the same. The
+first CODE block is the input at 8000h (a length word, then the text, so a
+missing input is just a zero), the second is the program, assembled twice so
+it sits flush under the UDGs at FF58h, with its slots just beneath it.
 """
 import argparse
 import datetime
@@ -79,16 +83,26 @@ def made():
     return d.year, d.month
 
 
+AUTOSTART = 20                                          # the tape's: line 20 loads the code; RUN starts at 10
+
+
 def loader(start, input_at=INPUT, when=None):
-    """line 10 loads and starts the program; line YEAR's last statement is the month's, for BASIC's 0 OK report"""
-    CLEAR, LOAD, CODE, CLS, RANDOMIZE, USR, REM = 0xFD, 0xEF, 0xAF, 0xFB, 0xF9, 0xC0, 0xEA
-    line = (bytes([CLEAR]) + number(input_at - 1) + b':' + bytes([LOAD]) + b'""' + bytes([CODE]) + b':' +
-            bytes([LOAD]) + b'""' + bytes([CODE]) + b':' + bytes([CLS]) + b':' +       # the loader's words away:
-            bytes([RANDOMIZE, USR]) + number(start) + b'\r')                      # the program starts on a clear screen
+    """line 10 runs the program, line 20 loads it first, and line YEAR's last statement is the month's, for BASIC's
+    0 OK report"""
+    CLEAR, LOAD, CODE, CLS, RANDOMIZE, USR, REM, GOTO = 0xFD, 0xEF, 0xAF, 0xFB, 0xF9, 0xC0, 0xEA, 0xEC
+    POKE, BORDER = 0xF4, 0xE7
     year, month = when or made()
-    date = (b':' * (month - 1) if month > 1 else bytes([REM])) + b'\r'          # a line can't be empty: January's REM
-    return (10).to_bytes(2, 'big') + len(line).to_bytes(2, 'little') + line + \
-        year.to_bytes(2, 'big') + len(date).to_bytes(2, 'little') + date
+
+    def line(n, body):
+        return n.to_bytes(2, 'big') + len(body + b'\r').to_bytes(2, 'little') + body + b'\r'
+    fresh = b':'.join([bytes([POKE]) + number(a) + b',' + number(v) for a, v in ((23693, 56), (23694, 0), (23697, 0))] +
+                      [bytes([BORDER]) + number(7)])                # ATTR_P, MASK_P, P_FLAG: a fresh 48K's
+    run = (fresh + b':' + bytes([CLS]) + b':' +                  # as a 48K starts, the loader's words away: the
+           bytes([RANDOMIZE, USR]) + number(start) + b':' + bytes([GOTO]) + number(year))     # interpreter's start
+    load = (bytes([CLEAR]) + number(input_at - 1) + b':' + bytes([LOAD]) + b'""' + bytes([CODE]) + b':' +
+            bytes([LOAD]) + b'""' + bytes([CODE]) + b':' + bytes([GOTO]) + number(10))
+    date = b':' * (month - 1) if month > 1 else bytes([REM])                      # a line can't be empty: January's REM
+    return line(10, run) + line(AUTOSTART, load) + line(year, date)
 
 
 def build(src, text=b'', markers=True):
@@ -113,7 +127,7 @@ def build(src, text=b'', markers=True):
         raise SystemExit(f'the code is {size} bytes at 8000h but {size2} at {org:04X}h: the two passes must agree')
     code = code[:size]
     prog = loader(org, input_at)
-    tap = header(0, 'barley', len(prog), 10, len(prog)) + block(0xFF, prog)
+    tap = header(0, 'barley', len(prog), AUTOSTART, len(prog)) + block(0xFF, prog)
     inp = len(text).to_bytes(2, 'little') + text
     tap += header(3, 'input', len(inp), input_at, 32768) + block(0xFF, inp)
     tap += header(3, 'program', len(code), org, 32768) + block(0xFF, code)

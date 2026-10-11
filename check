@@ -59,10 +59,10 @@ def stages(quick):
                                                [OPY, os.path.join(ROOT, 'z80', 'tests', 'fzx_check.py')]])),
         ('screen', 'the C screen against the reference', lambda: None if have(paths.CC) and omse_ready() else
          'needs a C compiler and the 48K ROM', [[PY, os.path.join(ROOT, 'c', 'tests', 'test_screen.py')]]),
-        ('small', 'the small examples print what they say, on every machine',
+        ('small', 'the small examples print what they say everywhere; RUN reruns all',
          lambda: None if have(paths.CC) and have(paths.SJASMPLUS) and have(paths.TNYLPO) and omse_ready() else
          'needs a C compiler, sjasmplus, tnylpo, omse-ai and the 48K ROM',
-         [[PY, os.path.join(ROOT, 'tools', 'check_small.py')]]),
+         [[PY, os.path.join(ROOT, 'tools', 'check_small.py')], [OPY, os.path.join(ROOT, 'z80', 'tests', 'rerun_check.py')]]),
         ('docs', 'the programs the docs quote are the programs as they are', lambda: None,
          [[PY, os.path.join(ROOT, 'tools', 'check_docs.py')]]),
         ('wrap', 'the Markdown wrapped at 72 columns, as mdwrap does it',

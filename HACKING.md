@@ -226,6 +226,11 @@ spectrum-minilib (`zxask.asm`).
   the text each prints and the final screens. The tape's loader does a
   CLS before the program starts, so the 48K's screen starts as clear as
   the interpreter's.
+- **RUN again** (`z80/tests/rerun_check.py`): every example from its
+  tape, then again by typing RUN, which starts at the loader's line 10
+  without reloading. The two runs must match: report, text and screen.
+  Line 10 puts the colours back as a 48K starts them, which is what
+  makes them match.
 - **The screen**: `c/tests/test_screen.py` holds C to the reference;
   `z80/tests/test_zxgfx.py` holds the Z80's drawing to it;
   `z80/tests/rom_text_check.py` holds the reference's text to the real
