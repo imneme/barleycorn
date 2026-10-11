@@ -69,18 +69,31 @@ bly_random_u16:                     ; HL = n, a word
         jp bly_fail
 .some:  dec hl
         ld (.m),hl                  ; m = n - 1
-        ld de,0
-.grow:  ld a,d                      ; the mask: 0, 1, 3, 7... until it covers m
-        cp h
-        jr c,.more
+        ld a,h                      ; the mask: m's top byte with every bit below its highest set (and FFh under
+        ld e,0FFh                   ; it), or the low byte's if the top's 0
+        or a
+        jr nz,.smear
+        ld a,l
+        ld e,a
+.smear: ld c,a
+        srl a
+        or c
+        ld c,a
+        srl a
+        srl a
+        or c
+        ld c,a
+        srl a
+        srl a
+        srl a
+        srl a
+        or c
+        ld d,a
+        inc h
+        dec h
         jr nz,.draw0
-        ld a,e
-        cp l
-        jr nc,.draw0
-.more:  scf
-        rl e
-        rl d
-        jr .grow
+        ld e,a                      ; the top byte was 0: the smear is the low byte's, and D is 0
+        ld d,h
 .draw0: ld (.mask),de
 .draw:  call bly_rand16
         ld de,(.mask)

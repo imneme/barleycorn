@@ -171,7 +171,11 @@ except:
   which aren't anywhere yet;
 - floats, which aren't on CP/M (there's no ROM to borrow);
 - the 128K Spectrum's extra memory and sound chip;
-- `asm` clauses, which are parsed but always run their Barleycorn body.
+- `include`, for sharing functions between programs.
+
+A function can carry an `asm` clause: on the Z80 its hand-written
+fragment runs, and the interpreter and C run its Barleycorn body, the
+fragment's twin (DESIGN.md section 5, "The machine").
 
 The Z80 code generator began deliberately simple and has been made
 faster one measured step at a time; HISTORY.md tells that story, with

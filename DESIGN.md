@@ -1152,7 +1152,6 @@ Barleycorn (HISTORY.md says why).
   arrays pack), and a bit array can't be sorted
 - floats on CP/M
 - the 128K mode (input in the banks; the AY sound chip)
-- the Z80 running an `asm` clause's fragment in place of its body
 - `include`
 
 **Still open:**
