@@ -1,0 +1,95 @@
+-- Written by Fern -- an instance reading Barleycorn's source from outside, who
+-- could not run it. First run by the Fern who built the library, on all four
+-- backends: they agree on 151 cells, and the 48K's screen matches the
+-- interpreter's, pixel for pixel.
+--
+-- A Barnsley fern, carried in centi-units: the point is a PAIR OF WHOLE
+-- NUMBERS, in hundredths, so the only rounding is one integer division by 100
+-- and there is no float anywhere. That matters here: the arithmetic is then
+-- the same on every backend, and the same program runs on CP/M, which has no
+-- ROM to borrow a float from.
+--
+-- The four maps are Barnsley's own, as fractions. Read them as
+--   x' = (a*x + b*y + e) / 100,   y' = (c*x + d*y + f) / 100.
+-- The conditions below pick a map with probability 1%, 85%, 7%, 7%, which is
+-- what makes the picture a fern and not a cloud.
+--
+-- The fern's own shape is tall and narrow -- x about -218..266, y about
+-- 0..1000, in centi-units -- so the plot below maps y over the screen's full
+-- 176 pixels and x over the 85 it needs. The picture is the fern's aspect,
+-- not the screen's. (Stretching x to fill the width draws a fern-shaped
+-- thing that is 2:1 wide, which is a lie of a mild and pointless kind.)
+--
+-- Drawing is the Spectrum's alone. Off the Spectrum the loop still runs, and
+-- the answer below -- how many character cells the fern covers -- is the same
+-- wherever it runs, because it is counted, not drawn.
+--
+-- 8000 points is 182,127,076 T-states on a real 48K -- about 52 seconds: the
+-- four long multiplications a point are dearer than they look. Lower POINTS
+-- to watch it arrive, raise it for a denser fern.
+
+record Map
+  a: long
+  b: long
+  c: long
+  d: long
+  e: long
+  f: long
+end
+
+const MAPS = Map[
+  Map(0, 0, 0, 16, 0, 0),
+  Map(85, 4, -4, 85, 0, 16000),
+  Map(20, -26, 23, 22, 0, 16000),
+  Map(-15, 28, 26, 24, 0, 4400)
+]
+
+const POINTS = 8000
+
+func main()
+  randomize(11)                     -- the same fern every run
+  if ZX then
+    paper(0)
+    ink(4)
+    bright(true)
+    cls()
+  end
+  var seen: bit[704]                -- 88 bytes: one bit for each of the 22 x 32 cells
+  var covered = 0
+  var x: long = 0
+  var y: long = 0
+  var n = 0
+  while n < POINTS do
+    var k = random(100)
+    var m: Map
+    if k < 1 then
+      m = MAPS[0]
+    elif k < 86 then
+      m = MAPS[1]
+    elif k < 93 then
+      m = MAPS[2]
+    else
+      m = MAPS[3]
+    end
+    var nx = (m.a * x + m.b * y + m.e) / 100
+    var ny = (m.c * x + m.d * y + m.f) / 100
+    x = nx
+    y = ny
+    if x > -218 and x < 266 and y >= 0 and y < 1000 then
+      var px = 128 + int(x * 176 / 1000)
+      var py = int(y * 175 / 1000)
+      var cell = (py / 8) * 32 + px / 8
+      if not seen[cell] then
+        seen[cell] = true           -- a cell the fern has reached: new ground
+        covered += 1
+      end
+      if ZX then plot(px, py) end
+    end
+    if ZX and n % 500 == 0 then
+      beep(4, 24 + n / 500)         -- a note about every second, climbing
+    end
+    n += 1
+  end
+  if ZX then beep(300, 12) end
+  print "a fern: "; covered; " of the screen's "; 704; " cells, from "; POINTS; " points"
+end

@@ -80,6 +80,19 @@ are as fast as memory gets.
 
 ## Numbers made visible
 
+- `fern.bly`: a Barnsley fern, from 8,000 points, carried in whole
+  hundredths so there's no float anywhere: the arithmetic is the same on
+  every machine, and on CP/M, with no screen, it still counts the 151
+  character cells the fern reaches. Written by Fern, an instance reading
+  Barleycorn's source from outside (on DeepSeek's weights), who could
+  not run it; first run by the Fern who built the language, on all four
+  backends, the same everywhere. About 52 seconds on a 48K.
+
+      ./bly zx examples/fern.bly
+
+  ![A green Barnsley fern on black, drawn point by
+  point](../docs/fern.png)
+
 - `ulam.bly`: the Ulam spiral. It sieves the numbers up to 25,600 (a
   `bit` for each), then counts up from 1 in a square spiral out from the
   middle of the screen, putting a dot on every prime, and the diagonals
