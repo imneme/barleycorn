@@ -32,8 +32,9 @@ work on the Spectrum, in the interpreter and in C (which keep a picture
 of the screen and a log of the notes), and are an error on CP/M. Floats
 are the one exception: on a Spectrum they're the ROM's own, so they can
 differ in the last digit. The test suite holds the backends to that, and
-so does a fuzzer that writes random programs and checks each backend
-against the interpreter.
+so does a fuzzer that writes random programs and checks C and CP/M
+against the interpreter (`./check` runs 400 of them; `--quick` leaves it
+out).
 
 It was made for Advent of Code-sized problems: read some text, pull the
 numbers out, search a grid or a graph, and print an answer that may need
@@ -174,7 +175,8 @@ except:
 
 A function can carry an `asm` clause: on the Z80 its hand-written
 fragment runs, and the interpreter and C run its Barleycorn body, the
-fragment's twin (DESIGN.md section 5, "The machine").
+fragment's twin, as does a target the fragment's `targets:` leave out
+(DESIGN.md section 5, "The machine").
 
 The Z80 code generator began deliberately simple and has been made
 faster one measured step at a time; HISTORY.md tells that story, with

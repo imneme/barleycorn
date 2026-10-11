@@ -155,7 +155,7 @@ target out isn't used for it, and the twin is compiled instead.
 | grids | `a grid has no negative sides`; `a grid side is at most 32767`; `({r}, {c}) is off the grid ({rows} x {cols})`; `{v} is not on the grid` |
 | text | `"{s}" doesn't start with an integer`; `there is no integer {k} in "{s}"`; `{digits} doesn't fit in {a type}` ("an int", "a word"); `split needs a separator`; `no name has the number {n}`; `too many names: intern holds 65536` |
 | input | `no more input lines`; `the input is not a grid: line {r} is {len} long, not {cols}`; `input line {n} is longer than 65535`; `the input is longer than 65535, too long for one str` |
-| memory | `arena full` |
+| memory | `arena full`; at start-up, `the input doesn't fit in memory` (both platforms) and `can't read the input` (CP/M) |
 | other | `assertion failed` |
 
 `{kind}` is one of `list`, `queue`, `heap`, `map`, `set`. `{type}` is
@@ -353,9 +353,9 @@ or `SBC HL,DE`.
 **Numbers to and from text** (`lib/num*.asm`):
 
 - **Printing:** `bly_pr_u8`, `bly_pr_u16`, `bly_pr_i16`, `bly_pr_i32`,
-  `bly_pr_i64`, division-free (as z88dk's library does it). Core has
-  simple first versions of the 16-bit ones; this replaces them with
-  faster ones under the same names.
+  `bly_pr_i64`, division-free (as z88dk's library does it). Core has the
+  16-bit ones, and `num.asm` builds on them (it needs `bly_pr_u16`): a
+  name is provided once, so these are additions, not replacements.
 - **Reading:**
   - `bly_num` turns a run of digits into a number: HL = &digits, BC =
     their count, A = the type code (+80h if the number is negative), DE =

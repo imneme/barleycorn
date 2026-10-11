@@ -13,8 +13,9 @@ pins it. That has happened: the fuzzer's first finds were in the
 interpreter (the order an assignment evaluates its parts).
 
 Floats are the one place they may differ: the Spectrum's are the ROM's
-own (DESIGN.md, section 5). The suite compares printed floats to within
-the ROM's precision, and every other character exactly.
+own (DESIGN.md, section 5). The suite holds C to the interpreter
+exactly, floats too; only the 48K's printed floats are compared to
+within the ROM's precision, and every other character exactly.
 
 ## The layout
 
@@ -133,9 +134,9 @@ anything the ROM's printing can do, a Barleycorn program's can.
 faster per character, but a scroll costs about the same whichever code
 moves the 5.4K, and it is the scroll that dominates a program printing
 line after line. So the ROM stays, unless a program shows otherwise.
-Reading the keyboard will go through the ROM too (`inkey()`, and input
-of numbers and text through the ROM's editor, in the way of Melissa's
-spectrum-minilib), when it comes.
+Reading the keyboard goes through the ROM too: `inkey()`, `key()`, and
+`ask()` through the ROM's own editor, in the way of Melissa's
+spectrum-minilib (`zxask.asm`).
 
 ## Tests
 

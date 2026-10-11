@@ -208,8 +208,9 @@ TEXT        str: bytes, sliced   s.len (a word)  s[i] (a byte: chr(s[i])
             intern(s) -> word (0, 1, 2...)   name(id) -> str   chr(b)
 
 ARRAYS      T[N]: global, or local.  a[i] a.len
-            a.sort().  A parameter T[] is by reference.  bit as an element
-            type packs 8 to a byte.  An index can be any integer type.
+            a.sort().  A parameter T[] is by reference.  bit as an array's
+            element packs 8 to a byte (a list or grid of bits is a byte
+            a cell).  An index can be any integer type.
 
 POSITIONS   pos(r, c)  p + d  p - q  ==  p.r  p.c    dirs4 (N E S W)  dirs8
 
@@ -636,13 +637,14 @@ outp, border, inkey and attr are all there. The 16-bit arithmetic keeps
 nothing in memory, so it can't trip over the program it interrupts. What
 does keep something in memory is refused, each with its reason. That's
 calls to functions (their slots are the program's too), print, longs and
-wider, floats, str, containers, drawing, beep and pause. A failure
-inside `frame` ends the program as any failure does. Off the Spectrum,
-the frames are the ones the model already counts: `pause(n)` runs
-`frame` n times, and `ticks()` once. So programs paced by frames agree
-everywhere, and what races the clock can differ, as `ticks()` already
-does. So **a program that never pauses runs its frame only on the 48K**:
-the interpreter and C never run that code, and `bly all` is its test
+wider, floats, str, containers, drawing (it patches its own code, which
+the program may be in the middle of), beep and pause. A failure inside
+`frame` ends the program as any failure does. Off the Spectrum, the
+frames are the ones the model already counts: `pause(n)` runs `frame` n
+times, and `ticks()` once. So programs paced by frames agree everywhere,
+and what races the clock can differ, as `ticks()` already does. So **a
+program that never pauses runs its frame only on the 48K**: the
+interpreter and C never run that code, and `bly all` is its test
 (Half-rows Fern planted a mistake there, and only the 48K found it). A
 program wanting to print from a frame counts in `frame`, and prints from
 the main program when it sees the count change.
@@ -807,12 +809,13 @@ FF58-FFFF  the UDGs, kept, so udg() works
 ```
 
 That's about 40K for program, input and data together, the top 32K of it
-at full speed. Most AoC days fit. Some don't, and the language should
-say so early and plainly (`free()`, and a checked build's "arena full"
-with the line that asked). Where a day doesn't fit, the Spectrum-shaped
-move is usually a smaller representation (`bit`, packed keys, `intern`)
-rather than a bigger machine. When that runs out, there's the 128K mode,
-CP/M, and C.
+at full speed. `grid()` copies the input into the arena (on the 48K, in
+CP/M and in C), so a grid of the input costs the input's size twice.
+Most AoC days fit. Some don't, and the language should say so early and
+plainly (`free()`, and a checked build's "arena full" with the line that
+asked). Where a day doesn't fit, the Spectrum-shaped move is usually a
+smaller representation (`bit`, packed keys, `intern`) rather than a
+bigger machine. When that runs out, there's the 128K mode, CP/M, and C.
 
 The runtime keeps interrupts on (IM 1), so FRAMES counts (except during
 a `beep`: the ROM's BEEPER turns them off, so the clock stands still
@@ -1034,7 +1037,7 @@ end
 
 func main()
   var g = grid()
-  var done = grid[bit](g.rows, g.cols)     -- 1.25K for 100 x 100
+  var done = grid[bit](g.rows, g.cols)     -- a byte a cell: 10K for 100 x 100
   var h = heap[Step](2048)
   var goal = pos(g.rows - 1, g.cols - 1)
   h.push(Step(0, pos(0, 0)))
@@ -1056,7 +1059,13 @@ func main()
 end
 ```
 
-On a 48K: the input 10K in place, `done` 1.25K, the heap 12K. Part 2
+On a 48K, as written, it doesn't fit, and it says so:
+`arena full at line 10`. The input is 10K, and `grid()` makes a copy of
+it, 10K more (it can't use the input in place, where line ends sit
+between the rows); `done` is 10K, a byte a cell, since only an array
+packs bits; and the heap is 12K: 42K, where the arena has about 17K with
+the input loaded. (This paragraph said 1.25K and "in place" until
+Barleycorn was read from outside, and measured, in October.) Part 2
 tiles the cave 5 x 5 into 250,000 cells, and even as bits that's 31K.
 It's a 128K or CP/M day, or a cleverer one: risks are 1-9, so a ring of
 ten buckets can replace the heap. Saying so is part of what the language

@@ -7,7 +7,7 @@ end
 
 func main()
   var g = grid()
-  var done = grid[bit](g.rows, g.cols)     -- 1.25K for 100 x 100
+  var done = grid[bit](g.rows, g.cols)     -- a byte a cell: 10K for 100 x 100
   var h = heap[Step](2048)
   var goal = pos(g.rows - 1, g.cols - 1)
   h.push(Step(0, pos(0, 0)))
