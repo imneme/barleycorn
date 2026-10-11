@@ -1652,6 +1652,22 @@ so it took a tie written in 31 to 40 digits, 1 + 2^-32 =
 (1,946 to 1,240,042; the ROM's DEC-TO-FP 10,000 to 125,000), after ÷5
 and ×5 were kept to the significant bytes (from 141,926).
 
+**The functions, as calculator scripts (exp and ln first):** as the
+ROM's are, scripts for a small stack machine (`bly_fk`) over our own
+exact `+ - * /`, with a Horner step; the constants exact rationals
+rounded once (the drafts' `coeffs.py`), Taylor terms to under 1e-12 on
+the reduced range. exp: k = round(x / ln 2), r = x - k ln 2 with ln 2 in
+two parts (k times the first is exact), e^r to r^11, and 2^k straight
+into the exponent byte; past ln(the biggest float) (88.0297, not a
+double's 709) it says `exp({x}) has no answer`, as the 48K, and under ln
+2^-129 it's 0. ln: m in [sqrt(1/2), sqrt 2), t = (m-1)/(m+1), the atanh
+series to t^13, and k ln 2 added last. **Worst relative error against
+Python: exp 2.5e-10, ln 2.33e-10, about one unit in the last place**
+(test_fp allows the ROM's ten times that). exp 153,434 T mean (the ROM
+144,461), ln 104,577 (the ROM 228,174). Two mutants, both caught: a
+truncated series hides under the tolerance by design, but a shifted
+coefficient table can't.
+
 ## Random numbers: Melissa's generator (random.asm, rndclock.asm)
 
 *Files: `random.asm`, `rndclock.asm` (the 48K's clock seed),

@@ -1,5 +1,6 @@
-;; provides: bly_fadd bly_fsub bly_fmul bly_fdiv bly_fsqrt bly_fc bly_pr_f bly_str_float
-;; needs: bly_fx bly_fail bly_div0 bly_i_mul16 bly_pr_cstr bly_pr_str bly_out
+;; provides: bly_fadd bly_fsub bly_fmul bly_fdiv bly_fsqrt bly_fc bly_pr_f bly_str_float bly_fk bly_fexp bly_fln
+;; needs: bly_fx bly_fail bly_div0 bly_i_mul16 bly_pr_cstr bly_pr_str bly_out bly_fcmp bly_fround bly_f_to_int
+;; needs: bly_f_from_i16 bly_fneg
 ;; targets: cpm test
 ;; Floats where there's no ROM (CP/M, and the bare Z80 the tests use): the ROM's 5-byte form all the same (ABI.md
 ;; section 11), with our own arithmetic, correctly rounded: the nearest 5 bytes, ties away from zero, as a literal is
@@ -10,6 +11,8 @@
 ;; bly_str_float  in: HL=&str DE=&dest   out: (DE) = the number the str starts with, its first 40 significant
 ;;                digits rounded exactly (so "x".float() is the literal x)
 ;;                fails: "{s}" doesn't start with a number; {number} doesn't fit in a float
+;; bly_fexp bly_fln   in: HL=&x BC=&r   within a few units of the last place (test_fpcpm.py prints the worst)
+;;                fails: exp({x}) has no answer (too big), ln({x}) has no answer (x <= 0)
 ;; bly_pr_f       in: HL=&x   prints x as the ROM's PRINT-FP lays a number out (8 digits, .0001, 1E+10), its digits
 ;;                exactly rounded, through bly_out (so print's column is kept)
 ;; Every routine clobbers AF BC DE HL IX.
@@ -1132,6 +1135,419 @@ bly_str_float:
 .span:  dw 0,0
 .n:     ds 32
 .w2:    ds 32
+
+; -- the functions: scripts for a small calculator over our own + - * /, as the ROM's are ---------------------------
+; A script is bytes: 1 add, 2 sub, 3 mul, 4 div (the top two: a op b), 5 dup, 6 swap, 7 drop, 8 + an address (push
+; the 5 bytes there), 9 i (push memory i), 10 i (store the top in memory i, keeping it), 11 n + an address (Horner:
+; the top x becomes c0 x^n + ... + cn, the n + 1 constants there highest first), 12 neg, 0 end. Each function does
+; its range reduction around a script or two. The constants are exact rationals rounded once (coeffs.py).
+bly_fk:
+.reset: ld hl,.stk-5                ; an empty stack
+        ld (.top),hl
+        ret
+.run:   ld (.pc),hl                 ; HL = a script
+.nx:    ld hl,(.pc)
+        ld a,(hl)
+        inc hl
+        ld (.pc),hl
+        or a
+        ret z
+        cp 5
+        jp c,.ar
+        cp 8
+        jp c,.st
+        jp z,.push
+        cp 10
+        jp c,.ldm
+        jp z,.stm
+        cp 11
+        jp z,.poly
+        ld hl,(.top)                ; 12: neg
+        ld b,h
+        ld c,l
+        call bly_fneg
+        jp .nx
+.ar:    ld hl,(.top)                ; a op b: b on top, a below, the answer into a's slot
+        ld d,h
+        ld e,l
+        ld bc,-5
+        add hl,bc
+        ld (.top),hl
+        ld b,h
+        ld c,l
+        dec a
+        jp z,.add
+        dec a
+        jp z,.sub
+        dec a
+        jp z,.mul
+        call bly_fdiv
+        jp .nx
+.add:   call bly_fadd
+        jp .nx
+.sub:   call bly_fsub
+        jp .nx
+.mul:   call bly_fmul
+        jp .nx
+.st:    ld hl,(.top)                ; 5 dup, 6 swap, 7 drop
+        cp 6
+        jp z,.swap
+        jp nc,.drop
+        ld d,h                      ; dup
+        ld e,l
+        inc de
+        inc de
+        inc de
+        inc de
+        inc de
+        push de
+        ld bc,5
+        ldir
+        pop hl
+        ld (.top),hl
+        jp .nx
+.swap:  ld d,h
+        ld e,l
+        ld bc,-5
+        add hl,bc
+        ld b,5
+.sw:    ld a,(de)
+        ld c,(hl)
+        ld (hl),a
+        ld a,c
+        ld (de),a
+        inc hl
+        inc de
+        djnz .sw
+        jp .nx
+.drop:  ld bc,-5
+        add hl,bc
+        ld (.top),hl
+        jp .nx
+.push:  call .addr                  ; 8: push the 5 bytes at an address
+.push5: ld de,(.top)                ; HL = where they are
+        inc de
+        inc de
+        inc de
+        inc de
+        inc de
+        ld (.top),de
+        ld bc,5
+        ldir
+        jp .nx
+.ldm:   call .mem                   ; 9 i
+        jp .push5
+.stm:   call .mem                   ; 10 i
+        ex de,hl
+        ld hl,(.top)
+        ld bc,5
+        ldir
+        jp .nx
+.poly:  ld hl,(.pc)                 ; 11 n addr: the top is x
+        ld a,(hl)
+        ld (.n),a
+        inc hl
+        ld (.pc),hl
+        call .addr
+        ld (.c),hl
+        ld hl,(.top)                ; x aside; the top becomes c0
+        ld de,.px
+        ld bc,5
+        ldir
+        ld hl,(.c)
+        ld de,(.top)
+        ld bc,5
+        ldir
+.pl:    ld hl,(.c)                  ; acc = acc x + the next constant
+        ld de,5
+        add hl,de
+        ld (.c),hl
+        ld hl,(.top)
+        ld de,.px
+        ld b,h
+        ld c,l
+        call bly_fmul
+        ld hl,(.top)
+        ld de,(.c)
+        ld b,h
+        ld c,l
+        call bly_fadd
+        ld hl,.n
+        dec (hl)
+        jp nz,.pl
+        jp .nx
+.addr:  ld hl,(.pc)                 ; the address that follows in the script, into HL
+        ld e,(hl)
+        inc hl
+        ld d,(hl)
+        inc hl
+        ld (.pc),hl
+        ex de,hl
+        ret
+.mem:   ld hl,(.pc)                 ; the memory whose number follows, its address into HL
+        ld a,(hl)
+        inc hl
+        ld (.pc),hl
+        ld l,a
+        ld h,0
+        ld d,h
+        ld e,l
+        add hl,hl
+        add hl,hl
+        add hl,de
+        ld de,.m
+        add hl,de
+        ret
+.out:   ld hl,(.top)                ; the top to (.r)
+        ld de,(.r)
+        ld bc,5
+        ldir
+        ret
+.no:    push de                     ; HL = the function's name, DE = &x: {name}({x}) has no answer
+        call bly_pr_cstr
+        ld a,'('
+        call bly_out
+        pop hl
+        call bly_pr_f
+        ld hl,.mno
+        jp bly_fail
+.mno:   db ") has no answer",0
+.pc:    dw 0
+.top:   dw 0
+.r:     dw 0
+.c:     dw 0
+.n:     db 0
+.px:    ds 5
+.m:     ds 20                       ; four memories
+.stk:   ds 40                       ; eight slots
+.ln2hi:  db 80h,31h,72h,18h,00h         ; ln 2, 24 bits: k x it is exact
+.ln2lo:  db 64h,82h,0E3h,08h,65h        ; the rest of ln 2
+.rln2:   db 81h,38h,0AAh,3Bh,29h        ; 1 / ln 2
+.pi2hi:  db 81h,49h,0Fh,0DBh,00h        ; pi/2, 24 bits
+.pi2lo:  db 68h,0BBh,0BDh,2Eh,7Ch       ; the rest of pi/2
+.rpi2:   db 80h,22h,0F9h,83h,6Eh        ; 2 / pi
+.pi2:    db 81h,49h,0Fh,0DAh,0A2h       ; pi/2
+.pi6:    db 80h,06h,0Ah,91h,0C1h        ; pi/6
+.sqrt3:  db 81h,5Dh,0B3h,0D7h,43h       ; sqrt 3
+.tan12:  db 7Fh,09h,30h,0A2h,0F5h       ; tan(pi/12)
+.half:   db 80h,00h,00h,00h,00h         ; 0.5
+.one:    db 81h,00h,00h,00h,00h         ; 1
+.two:    db 82h,00h,00h,00h,00h         ; 2
+.rt2:    db 80h,35h,04h,0F3h,34h        ; sqrt(1/2)
+.expmax: db 87h,30h,0Fh,33h,0C8h        ; ln of the biggest float
+.expmin: db 87h,0B2h,0D4h,0FCh,28h      ; ln 2^-129: below, exp is 0
+; exp: 1/n!, n = 11 down to 0 (Horner)
+.e11:    db 67h,57h,32h,2Bh,40h         ; 2.50521083854e-08
+.e10:    db 6Bh,13h,0F2h,7Dh,0BCh       ; 2.7557319224e-07
+.e9:     db 6Eh,38h,0EFh,1Dh,2Bh        ; 2.7557319224e-06
+.e8:     db 71h,50h,0Dh,00h,0D0h        ; 2.48015873016e-05
+.e7:     db 74h,50h,0Dh,00h,0D0h        ; 0.000198412698413
+.e6:     db 77h,36h,0Bh,60h,0B6h        ; 0.00138888888889
+.e5:     db 7Ah,08h,88h,88h,89h         ; 0.00833333333333
+.e4:     db 7Ch,2Ah,0AAh,0AAh,0ABh      ; 0.0416666666667
+.e3:     db 7Eh,2Ah,0AAh,0AAh,0ABh      ; 0.166666666667
+.e2:     db 80h,00h,00h,00h,00h         ; 0.5
+.e1:     db 81h,00h,00h,00h,00h         ; 1
+.e0:     db 81h,00h,00h,00h,00h         ; 1
+; ln: the atanh series in u = t^2: 1/(2k+1), k = 6 down to 0
+.l6:     db 7Dh,1Dh,89h,0D8h,9Eh        ; 0.0769230769231
+.l5:     db 7Dh,3Ah,2Eh,8Bh,0A3h        ; 0.0909090909091
+.l4:     db 7Dh,63h,8Eh,38h,0E4h        ; 0.111111111111
+.l3:     db 7Eh,12h,49h,24h,92h         ; 0.142857142857
+.l2:     db 7Eh,4Ch,0CCh,0CCh,0CDh      ; 0.2
+.l1:     db 7Fh,2Ah,0AAh,0AAh,0ABh      ; 0.333333333333
+.l0:     db 81h,00h,00h,00h,00h         ; 1
+; sin: (-1)^k / (2k+1)!, k = 6 down to 0, in u = r^2
+.s6:     db 60h,30h,92h,30h,9Dh         ; 1.60590438368e-10
+.s5:     db 67h,0D7h,32h,2Bh,40h        ; -2.50521083854e-08
+.s4:     db 6Eh,38h,0EFh,1Dh,2Bh        ; 2.7557319224e-06
+.s3:     db 74h,0D0h,0Dh,00h,0D0h       ; -0.000198412698413
+.s2:     db 7Ah,08h,88h,88h,89h         ; 0.00833333333333
+.s1:     db 7Eh,0AAh,0AAh,0AAh,0ABh     ; -0.166666666667
+.s0:     db 81h,00h,00h,00h,00h         ; 1
+; cos: (-1)^k / (2k)!, k = 7 down to 0, in u = r^2
+.c7:     db 5Ch,0C9h,0CBh,0A5h,46h      ; -1.14707455977e-11
+.c6:     db 64h,0Fh,76h,0C7h,80h        ; 2.08767569879e-09
+.c5:     db 6Bh,93h,0F2h,7Dh,0BCh       ; -2.7557319224e-07
+.c4:     db 71h,50h,0Dh,00h,0D0h        ; 2.48015873016e-05
+.c3:     db 77h,0B6h,0Bh,60h,0B6h       ; -0.00138888888889
+.c2:     db 7Ch,2Ah,0AAh,0AAh,0ABh      ; 0.0416666666667
+.c1:     db 80h,80h,00h,00h,00h         ; -0.5
+.c0:     db 81h,00h,00h,00h,00h         ; 1
+; atan: (-1)^k / (2k+1), k = 9 down to 0, in u = y^2
+.a9:     db 7Ch,0D7h,94h,35h,0E5h       ; -0.0526315789474
+.a8:     db 7Ch,70h,0F0h,0F0h,0F1h      ; 0.0588235294118
+.a7:     db 7Dh,88h,88h,88h,89h         ; -0.0666666666667
+.a6:     db 7Dh,1Dh,89h,0D8h,9Eh        ; 0.0769230769231
+.a5:     db 7Dh,0BAh,2Eh,8Bh,0A3h       ; -0.0909090909091
+.a4:     db 7Dh,63h,8Eh,38h,0E4h        ; 0.111111111111
+.a3:     db 7Eh,92h,49h,24h,92h         ; -0.142857142857
+.a2:     db 7Eh,4Ch,0CCh,0CCh,0CDh      ; 0.2
+.a1:     db 7Fh,0AAh,0AAh,0AAh,0ABh     ; -0.333333333333
+.a0:     db 81h,00h,00h,00h,00h         ; 1
+
+; exp: x past ln(the biggest float) has no answer; under ln 2^-129 it's 0. k = round(x / ln 2), r = x - k ln 2 (ln 2 in
+; two parts, the first so short that k times it is exact), e^r by its Taylor terms (|r| <= ln2/2: to r^11), and 2^k
+; straight into the exponent byte.
+bly_fexp:
+        ld (.x),hl
+        ld (bly_fk.r),bc
+        call .core
+        ret nc
+        ld hl,.name
+        ld de,(.x)
+        jp bly_fk.no
+.core:  ld de,bly_fk.expmax         ; (.x) -> (bly_fk.r); C if too big, as ** wants it
+        ld hl,(.x)
+        call bly_fcmp
+        dec a
+        scf
+        ret z                       ; past the biggest
+        ld hl,(.x)
+        ld de,bly_fk.expmin
+        call bly_fcmp
+        inc a
+        jr nz,.go
+        ld hl,(bly_fk.r)            ; under: 0
+        ld b,5
+.z:     ld (hl),a
+        inc hl
+        djnz .z
+        or a
+        ret
+.go:    ld hl,(.x)
+        ld de,bly_fk.m
+        ld bc,5
+        ldir
+        call bly_fk.reset
+        ld hl,.s1                   ; x / ln 2
+        call bly_fk.run
+        ld hl,(bly_fk.top)          ; rounded: n, a float, into memory 1, and k, its int
+        ld b,h
+        ld c,l
+        call bly_fround
+        ld hl,(bly_fk.top)
+        ld de,bly_fk.m+5
+        ld bc,5
+        ldir
+        ld hl,(bly_fk.top)
+        ld a,2
+        ld de,.k
+        call bly_f_to_int
+        call bly_fk.reset
+        ld hl,.s2                   ; r, then e^r
+        call bly_fk.run
+        ld hl,(bly_fk.top)          ; times 2^k: k added to the exponent byte
+        ld e,(hl)
+        ld d,0
+        push hl
+        ld hl,(.k)
+        add hl,de
+        ex de,hl
+        pop hl
+        ld a,d
+        or a
+        jr nz,.range
+        ld a,e
+        or a
+        jr z,.under
+        ld (hl),a
+        call bly_fk.out
+        or a
+        ret
+.range: bit 7,d
+        scf
+        ret z                       ; too big
+.under: ld hl,(bly_fk.r)
+        ld b,5
+        xor a
+.u:     ld (hl),a
+        inc hl
+        djnz .u
+        ret
+.s1:    db 9,0,8
+        dw bly_fk.rln2
+        db 3,0
+.s2:    db 9,0,9,1,8
+        dw bly_fk.ln2hi
+        db 3,2,9,1,8
+        dw bly_fk.ln2lo
+        db 3,2,11,11
+        dw bly_fk.e11
+        db 0
+.x:     dw 0
+.k:     dw 0
+.name:  db "exp",0
+
+; ln: x <= 0 has no answer. x = 2^k m with m in [sqrt(1/2), sqrt 2); t = (m - 1) / (m + 1); ln m = 2t(1 + t^2/3 +
+; ... + t^12/13); ln x = (ln m + k ln2lo) + k ln2hi, the big part last.
+bly_fln:
+        ld (.x),hl
+        ld (bly_fk.r),bc
+        ld de,.u
+        call bly_fx.unpack
+        ld a,(.u+1)
+        or a
+        jr z,.no                    ; 0
+        ld a,(.u)
+        or a
+        jr z,.pos                   ; negative
+.no:    ld hl,.name
+        ld de,(.x)
+        jp bly_fk.no
+.pos:   ld hl,.u+2                  ; m < sqrt(1/2)? (its mantissa against B504F334, sqrt(1/2)'s)
+        ld de,.rt
+        ld b,4
+.c:     ld a,(de)
+        cp (hl)
+        jr nz,.cd
+        inc hl
+        inc de
+        djnz .c
+.cd:    ld a,128                    ; m's exponent byte: 128, or 129 (m doubled) when it's under
+        jr c,.big                   ; (C: sqrt(1/2)'s byte < m's: m is the bigger)
+        jr z,.big
+        inc a
+.big:   ld (bly_fk.m),a             ; memory 0 = m, memory 1 = k = e - that byte
+        ld c,a
+        ld a,(.u+2)
+        and 7Fh
+        ld (bly_fk.m+1),a
+        ld hl,.u+3
+        ld de,bly_fk.m+2
+        ld a,c
+        ld bc,3
+        ldir
+        ld c,a
+        ld a,(.u+1)
+        ld l,a
+        ld h,0
+        ld b,0
+        or a
+        sbc hl,bc
+        ld bc,bly_fk.m+5
+        call bly_f_from_i16
+        call bly_fk.reset
+        ld hl,.s
+        call bly_fk.run
+        jp bly_fk.out
+.s:     db 9,0,8
+        dw bly_fk.one
+        db 2,9,0,8
+        dw bly_fk.one
+        db 1,4,10,2,5,3,11,6
+        dw bly_fk.l6
+        db 9,2,3,8
+        dw bly_fk.two
+        db 3,9,1,8
+        dw bly_fk.ln2lo
+        db 3,1,9,1,8
+        dw bly_fk.ln2hi
+        db 3,1,0
+.rt:    db 0B5h,04h,0F3h,34h        ; sqrt(1/2)'s mantissa, its top bit set
+.x:     dw 0
+.u:     ds 6
+.name:  db "ln",0
 
 ; -- the shared part ------------------------------------------------------------------------------------------------
 bly_fc:
