@@ -2,15 +2,21 @@
 """Build a Barley program into a Spectrum tape: a BASIC loader, the input, the
 code. Code lives high.
 
-The loader is one line: CLEAR 32767: LOAD "" CODE: LOAD "" CODE: CLS:
+The loader is line 10: CLEAR 32767: LOAD "" CODE: LOAD "" CODE: CLS:
 RANDOMIZE USR start. The CLS takes the loader's own words away, so a program
-starts on a clear screen, as it does in the interpreter and in C. The first
+starts on a clear screen, as it does in the interpreter and in C. A second
+line, numbered with the year the tape was made, has as many statements as
+the month's number (colons, which are empty statements, or a REM in
+January), so a program that ends well leaves BASIC saying 0 OK, 2026:10
+(Melissa's idea); a failure stops at line 10. SOURCE_DATE_EPOCH, if it's
+set, says when the tape was made, for a build that comes out the same. The first
 CODE block is the input at 8000h (a length word, then the
 text, so a missing input is just a zero), the second is the program, assembled
 twice so it sits flush under the UDGs at FF58h, with its slots just beneath
 it.
 """
 import argparse
+import datetime
 import os
 import re
 import subprocess
@@ -66,12 +72,23 @@ def number(n):
     return str(n).encode() + bytes([0x0E, 0, 0, n & 0xFF, n >> 8, 0])
 
 
-def loader(start, input_at=INPUT):
-    CLEAR, LOAD, CODE, CLS, RANDOMIZE, USR = 0xFD, 0xEF, 0xAF, 0xFB, 0xF9, 0xC0
+def made():
+    """the year and month the tape is made: SOURCE_DATE_EPOCH's (UTC) if it's set, or today's"""
+    t = os.environ.get('SOURCE_DATE_EPOCH')
+    d = datetime.datetime.fromtimestamp(int(t), datetime.timezone.utc) if t else datetime.datetime.now()
+    return d.year, d.month
+
+
+def loader(start, input_at=INPUT, when=None):
+    """line 10 loads and starts the program; line YEAR's last statement is the month's, for BASIC's 0 OK report"""
+    CLEAR, LOAD, CODE, CLS, RANDOMIZE, USR, REM = 0xFD, 0xEF, 0xAF, 0xFB, 0xF9, 0xC0, 0xEA
     line = (bytes([CLEAR]) + number(input_at - 1) + b':' + bytes([LOAD]) + b'""' + bytes([CODE]) + b':' +
             bytes([LOAD]) + b'""' + bytes([CODE]) + b':' + bytes([CLS]) + b':' +       # the loader's words away:
             bytes([RANDOMIZE, USR]) + number(start) + b'\r')                      # the program starts on a clear screen
-    return (10).to_bytes(2, 'big') + len(line).to_bytes(2, 'little') + line
+    year, month = when or made()
+    date = (b':' * (month - 1) if month > 1 else bytes([REM])) + b'\r'          # a line can't be empty: January's REM
+    return (10).to_bytes(2, 'big') + len(line).to_bytes(2, 'little') + line + \
+        year.to_bytes(2, 'big') + len(date).to_bytes(2, 'little') + date
 
 
 def build(src, text=b'', markers=True):
