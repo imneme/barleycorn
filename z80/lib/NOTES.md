@@ -1682,6 +1682,12 @@ three times tighter, **the worst is 0.4 of that** (acos; sin 0.07, cos
 ROM's 608,518 and 614,337). Two mutants (sin's quadrant, atan's pi/6),
 caught.
 
+**`**`:** fp.asm's rules (0 ** b is 1, 0, or no answer for b < 0; a
+negative a needs a whole b, an odd one negating), then exp(b ln a), too
+big saying `float overflow` as the 48K's does. Within 0.46 of test_fp's
+tolerance for the ROM's. Its own copy for now; a shared wrapper in
+fp_exact.asm one day (it would touch the 48K's tested path, so later).
+
 ## Random numbers: Melissa's generator (random.asm, rndclock.asm)
 
 *Files: `random.asm`, `rndclock.asm` (the 48K's clock seed),

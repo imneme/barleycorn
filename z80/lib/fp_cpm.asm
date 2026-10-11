@@ -1,5 +1,5 @@
 ;; provides: bly_fadd bly_fsub bly_fmul bly_fdiv bly_fsqrt bly_fc bly_pr_f bly_str_float bly_fk bly_fexp bly_fln
-;; provides: bly_fsin bly_fcos bly_ftan bly_fatan bly_fasin bly_facos
+;; provides: bly_fsin bly_fcos bly_ftan bly_fatan bly_fasin bly_facos bly_fpow
 ;; needs: bly_fx bly_fail bly_div0 bly_i_mul16 bly_pr_cstr bly_pr_str bly_out bly_fcmp bly_fround bly_f_to_int
 ;; needs: bly_f_from_i16 bly_fneg bly_fabs
 ;; targets: cpm test
@@ -16,6 +16,8 @@
 ;;                fails: exp({x}) has no answer (too big), ln({x}) has no answer (x <= 0)
 ;; bly_fsin bly_fcos bly_ftan bly_fatan bly_fasin bly_facos   in: HL=&x BC=&r   likewise
 ;;                fails: asin({x}) / acos({x}) has no answer (|x| > 1)
+;; bly_fpow       in: HL=&a DE=&b BC=&r   out: (BC) = a ** b, as exp(b ln a)
+;;                fails: float ** has no answer (0 ** b < 0; a < 0 with b not whole); float overflow
 ;; bly_pr_f       in: HL=&x   prints x as the ROM's PRINT-FP lays a number out (8 digits, .0001, 1E+10), its digits
 ;;                exactly rounded, through bly_out (so print's column is kept)
 ;; Every routine clobbers AF BC DE HL IX.
@@ -1819,6 +1821,88 @@ bly_facos:
 .r:     dw 0
 .a:     ds 5
 .name:  db "acos",0
+
+; **: 0 ** b is 1 for b = 0, 0 for b > 0, and has no answer for b < 0; a negative a needs a whole b (an odd one
+; negates); else exp(b ln a), too big being float overflow, as the 48K's ** says. (fp.asm's ** has the same rules
+; around the ROM's to-power; one day a shared wrapper in fp_exact.asm.)
+bly_fpow:
+        ld (.a),hl
+        ld (.b),de
+        ld (.r),bc
+        call bly_fx.zero
+        jp nz,.nz
+        ld hl,(.b)                  ; 0 ** b
+        call bly_fx.zero
+        jp z,.one
+        inc hl
+        bit 7,(hl)
+        jp nz,.no
+        ld hl,(.r)
+        ld b,5
+        xor a
+.z:     ld (hl),a
+        inc hl
+        djnz .z
+        ret
+.one:   ld hl,bly_fk.one
+        ld de,(.r)
+        ld bc,5
+        ldir
+        ret
+.nz:    xor a
+        ld (.odd),a
+        ld hl,(.a)
+        inc hl
+        bit 7,(hl)
+        jp z,.pos
+        ld hl,(.b)                  ; a < 0: b whole, and odd or even
+        call bly_fx.toint
+        ld a,(bly_fx.fr)
+        or a
+        jp nz,.no
+        ld a,(bly_fx.big)
+        or a
+        ld a,(bly_fx.mag)
+        jp z,.par
+        xor a
+.par:   and 1
+        ld (.odd),a
+        ld hl,(.a)
+        ld bc,.abs
+        call bly_fabs
+        ld hl,.abs
+        ld (.a),hl
+.pos:   ld hl,(.a)                  ; exp(b ln a)
+        ld bc,.t
+        call bly_fln
+        ld hl,.t
+        ld de,(.b)
+        ld bc,.t
+        call bly_fmul
+        ld hl,(.r)
+        ld (bly_fk.r),hl
+        ld hl,.t
+        ld (bly_fexp.x),hl
+        call bly_fexp.core
+        jp c,.ovf
+        ld a,(.odd)
+        or a
+        ret z
+        ld hl,(.r)
+        ld b,h
+        ld c,l
+        jp bly_fneg
+.ovf:   ld hl,bly_fc.movf
+        jp bly_fail
+.no:    ld hl,.mno
+        jp bly_fail
+.mno:   db "float ** has no answer",0
+.a:     dw 0
+.b:     dw 0
+.r:     dw 0
+.odd:   db 0
+.abs:   ds 5
+.t:     ds 5
 
 ; -- the shared part ------------------------------------------------------------------------------------------------
 bly_fc:

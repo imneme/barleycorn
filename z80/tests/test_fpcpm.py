@@ -44,7 +44,7 @@ rnd = random.Random(ARGS.seed)
 A, B, R = 0xE000, 0xE008, 0xE010
 run = Runner(['bly_fadd', 'bly_fsub', 'bly_fmul', 'bly_fdiv', 'bly_fsqrt', 'bly_pr_f', 'bly_str_float',
               'bly_fexp', 'bly_fln', 'bly_fsin', 'bly_fcos', 'bly_ftan', 'bly_fatan', 'bly_fasin',
-              'bly_facos'])
+              'bly_facos', 'bly_fpow'])
 wrong = checks = 0
 costs = {}
 
@@ -163,6 +163,7 @@ MUTANTS = [   # (the text, what it becomes, what that breaks)
     ('        db 1,4,10,2,5,3,11,6', '        db 1,4,10,2,5,3,11,5', "ln: its series one term short, shifted"),
     ('        ld hl,.q\n        add a,(hl)', '        ld hl,.q\n        add a,0', 'sin: the quadrant forgotten'),
     ('        ld a,1\n        ld (.far),a', '        ld a,0\n        ld (.far),a', "atan: the far reduction's pi/6 forgotten"),
+    ('.par:   and 1\n        ld (.odd),a', '.par:   and 0\n        ld (.odd),a', '**: an odd power of a negative, positive'),
     ('; The one trick:', '; The trick:', 'CONTROL: a comment'),
 ]
 
@@ -344,6 +345,48 @@ def main():
             print(f'  {word}: worst {w[0] / tol0:.3g} of its tolerance, at {w[1]}')
         else:
             print(f'  {word}: worst relative error {w[0]:.3g} at {w[1]}')
+    print('** against Python, within a tolerance, and its failures')
+    pw = [(2, 10), (2, -10), (0, 0), (0, 2), (0, -1), (-2, 3), (-2, 2), (-2, F(1, 2)), (2, 200), (2, -200), (10, 38),
+          (F(1, 2), F(1, 3)), (-1, 1000001), (3, F(1, 3)), (1, 1e30)]
+    pw += [(F(rnd.uniform(0, 100)), F(rnd.uniform(-20, 20))) for _ in range(N // 4)]
+    pw += [(F(rnd.uniform(-10, 0)), F(rnd.randint(-15, 15))) for _ in range(N // 8)]
+    worst_pow = 0.0
+    for a, b in pw:
+        checks += 1
+        xa, xb = fp5.pack(F(a)), fp5.pack(F(b))
+        va, vb = float(fp5.value(xa)), float(fp5.value(xb))
+        res = run.call('bly_fpow', regs={'hl': A, 'de': B, 'bc': R}, mem={A: xa, B: xb, R: b'\xAA' * 8})
+        got = bytes(res.mem[R:R + 8])
+        err = None
+        try:
+            want = va ** vb
+            if isinstance(want, complex):
+                err = b'float ** has no answer\n'
+        except ZeroDivisionError:
+            err = b'float ** has no answer\n'
+        except OverflowError:
+            err = b'float overflow\n'
+        if err is None and abs(want) >= 1.70141183e38:
+            err = b'float overflow\n'
+        if err is not None:
+            if not (res.failed and res.out == err):
+                say_wrong('**', va, vb, 'should fail', err, 'got', res.out, got.hex())
+            continue
+        if res.failed or got[5:] != b'\xAA' * 3:
+            say_wrong('**', va, vb, 'failed or wrote past', repr(res.out), got.hex())
+            continue
+        if res.t is not None:
+            costs.setdefault('bly_fpow', []).append(res.t)
+        g = float(fp5.value(got[:5]))
+        if abs(want) < 2.94e-39:
+            e = 0.0 if g == 0 else abs(g - want) / abs(want)
+        else:
+            e = abs(g - want) / abs(want)
+        tol = 1e-9 + 2 * 4e-10 * abs(vb * math.log(abs(va))) if va else 1e-9
+        worst_pow = max(worst_pow, e / tol)
+        if e > tol:
+            say_wrong('**', va, vb, 'gave', g, 'want', want, f'error {e:.2e}')
+    print(f'  **: worst {worst_pow:.3g} of its tolerance (test_fp\'s for the ROM)')
     print('printing against fp5.show, text for text')
     import z80gen as G
     shown = [0.5, 0.01, 1e-5, 1.2345678e-5, 1e-6, 99999999.0, 1e8, 123456789.0, 999999999.0, 12345.678, 1234.5,
@@ -360,7 +403,7 @@ def main():
         if res.failed or res.out != want:
             say_wrong('print', b.hex(), 'gave', res.out, 'want', want)
     for op in ops + ['bly_fsqrt', 'bly_str_float', 'bly_fexp', 'bly_fln', 'bly_fsin', 'bly_fcos', 'bly_ftan',
-                     'bly_fatan', 'bly_fasin', 'bly_facos', 'bly_pr_f']:
+                     'bly_fatan', 'bly_fasin', 'bly_facos', 'bly_fpow', 'bly_pr_f']:
         t = costs[op]
         print(f'  {op:9} {len(t)} cases, {min(t):,} to {max(t):,} T, mean {sum(t) // len(t):,}')
     print(f'{checks} checks, {wrong} wrong')
