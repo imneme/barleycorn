@@ -28,7 +28,8 @@ def omse_ready():
 
 
 SUITE = os.path.join(ROOT, 'interp', 'tests', 'run.py')
-FRAG = ['test_core', 'test_gen', 'test_int', 'test_num', 'test_text', 'test_containers', 'test_zxgfx', 'test_fp']
+FRAG = ['test_core', 'test_gen', 'test_int', 'test_num', 'test_text', 'test_containers', 'test_zxgfx', 'test_fp',
+        'test_random']
 
 
 def stages(quick):
@@ -47,6 +48,7 @@ def stages(quick):
          [[OPY, os.path.join(ROOT, 'z80', 'tests', t + '.py')] + (['--quick'] if quick and t not in ('test_core', 'test_gen', 'test_int') else [])
           for t in FRAG] + ([] if quick else [[OPY, os.path.join(ROOT, 'z80', 'tests', 'test_int_mutants.py')],
                                                [OPY, os.path.join(ROOT, 'z80', 'tests', 'test_fp_mutants.py')],
+                                               [OPY, os.path.join(ROOT, 'z80', 'tests', 'test_random.py'), '--mutants'],
                                                [OPY, os.path.join(ROOT, 'z80', 'tests', 'rom_text_check.py')],
                                                [OPY, os.path.join(ROOT, 'z80', 'tests', 'co_temp_check.py')],
                                                [OPY, os.path.join(ROOT, 'z80', 'tests', 'ula_check.py')],

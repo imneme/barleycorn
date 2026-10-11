@@ -113,6 +113,20 @@ Every fragment file starts with its header:
   them to the previous global label), so fragments can't collide.
 - No `ORG`, no `DEVICE`, no `INCLUDE`. Scratch data (`.tmp: ds 8`) may
   live inside the fragment.
+- `provides:`, `needs:` and `targets:` may share a line, as DESIGN.md's
+  example has them.
+
+**A program's own fragments**, the files its `asm` clauses name, are
+read with the same parser and pasted after the library, their `needs:`
+gathered with the program's. Their labels follow the same rules, except
+that they're the program's: a label named for the function is the entry,
+and none may start with `bly_`, `f_`, `fr_`, `rv_` or `fsz_`. The
+function becomes a wrapper (z80gen.py's `wrapper`): it sets `bly_line`
+to the clause's line, loads the parameters from their slots into HL, DE,
+BC and IX as section 2 says, with a wide result's address after them,
+calls the entry, and puts HL or A into `rv_` for a narrow result.
+Callers call it as any function. A fragment whose `targets:` leave this
+target out isn't used for it, and the twin is compiled instead.
 
 ## 4. Failing: the line, and the messages
 

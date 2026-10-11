@@ -17,6 +17,7 @@
 #include <string.h>
 #include <math.h>
 #include <unistd.h>               /* isatty: typed keys, or a terminal */
+#include <time.h>                 /* randomize(): the clock */
 
 typedef uint8_t u8;
 typedef uint16_t u16;
@@ -109,7 +110,10 @@ static void bly_nl(void) { bly_out("\n", 1); }
 
 /* -- failure: what happened, then " at line N", as the Spectrum would print it -------------------------------- */
 
+static int bly_asm_line;              /* inside an asm function's twin: its clause's line, where a failure is */
+
 _Noreturn static void bly_fail_end(int line) {
+    if (bly_asm_line) line = bly_asm_line;
     if (line > 0) {
         bly_pr_cstr(" at line ");
         bly_pr_int(line);
@@ -134,6 +138,49 @@ _Noreturn static void bly_overflow(const char *tname, i128 v, int line) {
 }
 
 _Noreturn static void bly_divzero(int line) { bly_fail("division by zero", line); }
+
+/* -- random numbers: Melissa's chaotic generator, as barley.py's rng_ functions (DESIGN.md, "Random numbers") ---- */
+
+static u32 bly_rnd_s = 0x48300000u;   /* BCDE: perm32 permutes it */
+static u16 bly_rnd_h;                 /* HL: each step's BC and DE feed it, and it's the output */
+
+static u16 bly_rand16(void) {
+    u8 b = (u8)(bly_rnd_s >> 24), c = (u8)(bly_rnd_s >> 16), d = (u8)(bly_rnd_s >> 8), e = (u8)bly_rnd_s;
+    d = (u8)(((b << 1) | (b >> 7)) ^ d);
+    c = (u8)(((d << 1) | (d >> 7)) + c);
+    e = (u8)(((c >> 3) | (c << 5)) ^ e);
+    b = (u8)(((e >> 1) | (e << 7)) - b);
+    bly_rnd_s = (u32)b << 24 | (u32)c << 16 | (u32)d << 8 | e;
+    u16 h = (u16)(bly_rnd_h + (bly_rnd_s >> 16));
+    h ^= h >> 8;
+    bly_rnd_h = (u16)(h + (u16)bly_rnd_s);
+    return bly_rnd_h;
+}
+
+static i64 bly_random(i64 n, int line) {   /* 0..n-1: 1, 2 or 4 words a try, by n - 1's size, masked, kept if below n */
+    if (n <= 0) { bly_pr_cstr("random("); bly_pr_int(n); bly_fail(") has nothing to choose from", line); }
+    u64 m = (u64)n - 1, mask = 0;
+    while (mask < m) mask = mask << 1 | 1;
+    int k = m < 1ull << 16 ? 1 : m < 1ull << 32 ? 2 : 4;
+    for (;;) {
+        u64 v = 0;
+        for (int i = 0; i < k; i++) v = v << 16 | bly_rand16();
+        v &= mask;
+        if (v <= m) return (i64)v;
+    }
+}
+
+static void bly_randomize(i64 seed) {    /* its low 36 bits: 20 into BCDE, inside the long cycles' run, 16 into HL */
+    u64 s = (u64)seed & ((1ull << 36) - 1);
+    bly_rnd_s = 0x48300000u | (u32)(s >> 16);
+    bly_rnd_h = (u16)s;
+}
+
+static void bly_randomize_clock(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    bly_randomize((i64)ts.tv_sec * 1000000 + ts.tv_nsec / 1000);
+}
 
 /* -- integers ------------------------------------------------------------------------------------------------ */
 

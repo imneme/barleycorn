@@ -1509,17 +1509,6 @@ end
 --- expect
 a long where an int is needed: sq's x is an int, and j is a long (var j took its value's type at line 5: var j: int = ... makes it an int) at line 6
 
-=== an asm clause parses, and its function runs its Barleycorn body
-func twice(n: int): int
-  return n * 2
-asm "nothere.asm"
-end
-func main()
-  print twice(21)
-end
---- expect
-42
-
 === mod() on 16-bit numbers: m's sign, every corner, by zero (the Z80 keeps it in 16 bits)
 const MS = int[-7, 7, -32768, 32767, 0, -1, 1, 100, -100]
 const DS = int[2, -2, 5, -5, 32767, -32768, 1, -1, 7]
@@ -1610,6 +1599,156 @@ end
 65295
 255 -6 4
 5
+
+=== an asm clause's fragment runs on the Z80 in place of its twin: each way ABI.md section 2 passes a value (clauses.asm), a fragment for the 48K alone (CP/M runs the twin), and a failure inside at the clause's line
+func bump(b: byte): byte
+  return byte(b + 1)
+asm "clauses.asm"
+end
+func add3(a: word, b: word, c: word): word
+  return a + b + c
+asm "clauses.asm"
+end
+func lsum(a: long, b: long): long
+  return a + b
+asm "clauses.asm"
+end
+func odd(n: int): bool
+  return n & 1 == 1
+asm "clauses.asm"
+end
+func word2(hi: byte, lo: byte): word
+  return word(hi) * 256 + word(lo)
+asm "clauses.asm"
+end
+func fortytwo(): int
+  return 42
+asm "zxonly.asm"
+end
+func main()
+  print bump(41); " "; add3(65535, 2, 7); " "; odd(-7); " "; odd(10); " "; word2(0x12, 0x34); " "; fortytwo()
+  print lsum(2000000000, 147483647)
+  print lsum(2147483647, 1)
+end
+--- expect
+42 8 true false 4660 42
+2147483647
+long overflow at line 11
+
+=== a failure in a library routine a fragment calls is at the clause's line too, on every backend
+func nonneg(n: int)
+  assert n >= 0
+asm "clauses.asm"
+end
+func check(n: int)
+  nonneg(n)
+  print n; " is fine"
+end
+func main()
+  check(5)
+  check(-1)
+end
+--- expect
+5 is fine
+assertion failed at line 3
+
+=== the numbers me's divmod: Jörg Pleumann's __divmod rewritten for Barleycorn, run in place of its twin
+record QR  q: int; r: int  end
+func divmod(divisor: int, dividend: int): QR
+  return QR(dividend / divisor, dividend % divisor)
+asm "divmod.asm"
+end
+func test(divisor: int, dividend: int)
+  var qr = divmod(divisor, dividend)
+  print dividend; " div "; divisor; " = "; qr.q; " rem "; qr.r
+end
+func main()
+  test(3, 10)
+  test(3, -10)
+  test(-3, 10)
+  test(-3, -10)
+  test(7, 0)
+  test(1, 32767)
+  test(2, -32768)
+  test(-1, -32768)
+end
+--- expect
+10 div 3 = 3 rem 1
+-10 div 3 = -3 rem -1
+10 div -3 = -3 rem 1
+-10 div -3 = 3 rem -1
+0 div 7 = 0 rem 0
+32767 div 1 = 32767 rem 0
+-32768 div 2 = -16384 rem 0
+int overflow at line 4
+
+=== random(n) is 0..n-1 from Melissa's chaotic generator, the same numbers on every backend: dice, a word, every width, repeatable seeds, a tally, and randomize() from the clock
+func main()
+  var gap = ""
+  for i in 0..10 do
+    print gap; random(6) + 1;
+    gap = " "
+  end
+  print
+  print random(); " "; random(1); " "; random(65535); " "; random(word(40000)); " "; random(byte(200))
+  print random(100000); " "; random(5000000000); " "; random(dword(4000000000)); " "; random(quad(1) << 62)
+  randomize(42)
+  var a = random(1000)
+  randomize(42)
+  print a == random(1000); " "; a
+  randomize(-7)
+  print random(1000)
+  var tally: int[6]
+  for i in 0..6000 do tally[random(6)] += 1 end
+  print tally[0]; " "; tally[1]; " "; tally[2]; " "; tally[3]; " "; tally[4]; " "; tally[5]
+  randomize()
+  var x = random(10)
+  print x >= 0 and x < 10
+end
+--- expect
+2 3 6 1 6 5 5 3 6 3
+29098 0 15230 7901 37
+65476 2972325924 331166856 1031837582400204599
+true 480
+588
+993 1055 984 968 1041 959
+true
+
+=== random(0) has nothing to choose from
+func main()
+  print random(3)
+  print random(0)
+end
+--- expect
+2
+random(0) has nothing to choose from at line 3
+
+=== nor has random of a negative int
+func main()
+  var n = -3
+  print random(n)
+end
+--- expect
+random(-3) has nothing to choose from at line 3
+
+=== nor a negative quad, said in full
+func main()
+  var q: quad = -5000000000
+  print random(q)
+end
+--- expect
+random(-5000000000) has nothing to choose from at line 3
+
+=== frame can't use random(): its numbers would depend on where the frames fell
+var spin = 0
+frame do
+  spin = random(8)
+end
+func main()
+  frames(true)
+end
+--- expect
+frame can't use random(): its numbers would depend on where the frames fell at line 3
 
 === dword: unsigned 32 bits, which wrap (+ - * / % >> << - ~, min, max, a hash), and its widenings and casts
 func hash(s: str): dword

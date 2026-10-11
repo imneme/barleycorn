@@ -198,7 +198,21 @@ class Gen:
             protos.append(self.signature(f) + ';')
             self.out, self.depth, self.ntemp, self.func = [], 1, 0, f
             self.block(f.body)
-            fbodies.append(self.signature(f) + ' {\n' + '\n'.join(self.out) + '\n}\n')
+            if getattr(f, 'asm', None) is None:
+                fbodies.append(self.signature(f) + ' {\n' + '\n'.join(self.out) + '\n}\n')
+                continue
+            twin = self.signature(f).replace(f' f_{f.name}(', f' f_{f.name}__twin(')     # the body is the twin
+            protos.append(twin + ';')
+            fbodies.append(twin + ' {\n' + '\n'.join(self.out) + '\n}\n')
+            args = ', '.join(f'v_{pn}' for pn, _ in f.params)
+            call = f'f_{f.name}__twin({args})'
+            keep = f'{self.ctype(f.rty)} r = {call};' if f.rty is not B.VOID else f'{call};'
+            fbodies.append(self.signature(f) + ' {\n'            # on the Z80 the fragment runs, and a failure
+                           f'    int outer = bly_asm_line;\n'    # inside it is at the clause's line: so here
+                           f'    if (!outer) bly_asm_line = {f.asm_line};\n'
+                           f'    {keep}\n'
+                           f'    bly_asm_line = outer;\n' +
+                           ('    return r;\n' if f.rty is not B.VOID else '') + '}\n')
         self.out, self.depth, self.ntemp, self.func = [], 1, 0, None
         ginit = []
         gdecls = []
@@ -929,6 +943,13 @@ class Gen:
         if name in B.FLOAT_FUNCS:
             fn = {'ln': 'log', 'round': 'bly_round_', 'floor': 'bly_floor_'}.get(name, name)
             return self.temp('f64', f'bly_ffun("{name}", {fn}, (f64){args[0]}, {line})')
+        if name == 'random':
+            if not args:
+                return self.temp('u16', 'bly_rand16()')
+            return self.temp(self.ctype(t), f'({self.ctype(t)})bly_random((i64){args[0]}, {line})')
+        if name == 'randomize':
+            self.emit(f'bly_randomize((i64){args[0]});' if args else 'bly_randomize_clock();')
+            return None
         ct = self.ctype(t)
         if name in ('min', 'max'):
             r = self.temp(ct, f'({ct}){args[0]}')

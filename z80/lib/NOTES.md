@@ -1498,3 +1498,46 @@ printing a float is up to a tenth. Day 6 needs one sqrt.
   got each other's programs: my first Spectrum run was a dozen failures
   that were another `--c` run's. (Fixed since: each run builds in a
   directory of its own.)
+
+## Random numbers: Melissa's generator (random.asm, rndclock.asm)
+
+*Files: `random.asm`, `rndclock.asm` (the 48K's clock seed),
+`rndclock_cpm.asm` (CP/M's). Tests: `../tests/test_random.py`
+(`--mutants`). The meaning: `interp/barley.py`'s `rng_` functions.*
+
+The generator is Melissa's, given as a C++ model of her Z80 code
+(`prng-test.cpp`, `-s`): BCDE is permuted by four byte swizzles
+(`D = rlca(B) ^ D`, `C = rlca(D) + C`, `E = rrca3(C) ^ E`,
+`B = rrca(E) - B`, each feeding the next through A), and HL takes
+`HL += BC; L ^= H; HL += DE` and is the output. The swizzles go into
+fifteen instructions almost as she wrote them. Before any Z80 was
+written, a Python model of the step was held to her binary's first
+100,000 words, and so was the interpreter's (both the same).
+
+| Routine | T-states | Notes |
+|---|---|---|
+| `bly_rand16` | 233 | one step, the word in HL |
+| `bly_random_u16` | 680-1,350 (`random(6)`: 770 on average) | the mask is grown a bit at a time, 16 steps at most: the cheap thing to make faster |
+| `bly_random_u16` | 992 / 1,304 | `random(1000)`, `random(65535)`: one try |
+| `bly_random_q` | 3,400-10,600 (4,090 on average) | `random(100000)`, two words a try |
+| `bly_random_q` | 4,100-14,300 (6,045 on average) | `random(5000000000)`, two words a try |
+
+**Tested:** `bly_rand16` 64 steps at a time from states anywhere in the
+2^32; `random(n)` for n at every edge of the mask and of one, two and
+four words a try (1, 2, 3, the powers of two and one either side, 65535,
+2^16, 2^32 and 2^48 and either side, 2^62, 2^63 - 1) and at random; its
+failures word for word (0, negative ints, negative quads); and
+`randomize` for seeds anywhere in the 64 bits. Each is compared on the
+value and on **the state it leaves**, which says the Z80 drew exactly
+the words the meaning draws, the thing every backend's agreement rests
+on. **Mutants:** the last swizzle turning left, or adding; the xor into
+H, not L; the mask never growing; a draw past m kept (16 bits and 64);
+two words a try where one or four belong; the first word put at the
+bottom; the seed outside the long cycles' run, or its low 16 bits in the
+wrong place; a negative int let through; the message misspelt: **13 of
+13 caught**, and the control (a comment) passes.
+
+**Found on the way:** an asm function can't be called `pair`: sjasmplus
+takes it, and `mod`, `high`, `low`, `abs`, `z`, `c` and a dozen others,
+as its own words even as labels. Asking sjasmplus each word in turn gave
+the list, which `z80gen.py` keeps as `ASM_WORDS`.

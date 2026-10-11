@@ -380,15 +380,15 @@ class Parser:
             self.next()
             ret = self.type_()
         body = self.block(BLOCK_END + ('asm',))            # a body ends at its asm clause, if it has one
-        asm = None
+        asm = asm_line = None
         if self.at('asm', 'kw'):
-            self.next()
+            asm_line = self.next().line
             if self.t.kind != 'str':
                 raise BarleyError('asm takes a file name in quotes', self.t.line)
             asm = self.next().val.decode()
             self.skip_nl()
         self.expect('end')
-        return N('func', line, name=name, params=params, retx=ret, body=body, asm=asm)
+        return N('func', line, name=name, params=params, retx=ret, body=body, asm=asm, asm_line=asm_line)
 
     def type_(self):
         line = self.t.line
@@ -739,7 +739,55 @@ FLOAT_FUNCS = {'sqrt': math.sqrt, 'sin': math.sin, 'cos': math.cos, 'tan': math.
                'trunc': lambda x: float(math.trunc(x)), 'floor': lambda x: float(math.floor(x)),
                'round': lambda x: float(math.floor(x + 0.5))}
 BUILTIN_FUNCS = {'lines', 'grid', 'input', 'intern', 'name', 'chr', 'min', 'max', 'abs', 'sign', 'gcd', 'lcm', 'mod',
-                 'rev', 'pos', 'ask'}
+                 'rev', 'pos', 'ask', 'random', 'randomize'}
+
+
+# -- random numbers: Melissa's chaotic generator (her prng-test.cpp, -s; DESIGN.md, "Random numbers") --------------
+# Its state is a 32-bit BCDE, which perm32 (four byte swizzles, each invertible) permutes, and a 16-bit HL, which
+# each step's BC and DE feed; HL is the output. Seeding puts 0x48300000 | (20 bits) in BCDE, all inside a run of
+# states on the permutation's two long cycles (3,244,470,814 and 1,050,471,109), and 16 bits in HL: 36 bits.
+RNG_BASE = 0x48300000
+
+
+def perm32(s):
+    rl = lambda a: ((a << 1) | (a >> 7)) & 0xFF
+    rr = lambda a, k: ((a >> k) | (a << (8 - k))) & 0xFF
+    b, c, d, e = s >> 24, (s >> 16) & 0xFF, (s >> 8) & 0xFF, s & 0xFF
+    d = rl(b) ^ d
+    c = (rl(d) + c) & 0xFF
+    e = rr(c, 3) ^ e
+    b = (rr(e, 1) - b) & 0xFF
+    return (b << 24) | (c << 16) | (d << 8) | e
+
+
+def rng_seed(n):
+    """the state randomize(n) gives: n's low 36 bits (two's complement), 20 into BCDE and 16 into HL"""
+    n &= (1 << 36) - 1
+    return [RNG_BASE | (n >> 16), n & 0xFFFF]
+
+
+def rng_word(st):
+    """the next 16 bits, and the state stepped"""
+    st[0] = perm32(st[0])
+    h = (st[1] + (st[0] >> 16)) & 0xFFFF
+    h ^= h >> 8
+    st[1] = (h + (st[0] & 0xFFFF)) & 0xFFFF
+    return st[1]
+
+
+def rng_below(st, n):
+    """0..n-1, the same on every backend: each try draws 1, 2 or 4 words (as n - 1 needs 16, 32 or 64 bits), the
+    first the most significant, masks them to n - 1's bits, and keeps them if they're below n"""
+    m = n - 1
+    k = 1 if m < 1 << 16 else 2 if m < 1 << 32 else 4
+    mask = (1 << m.bit_length()) - 1
+    while True:
+        v = 0
+        for _ in range(k):
+            v = (v << 16) | rng_word(st)
+        v &= mask
+        if v <= m:
+            return v
 TARGET_CONSTS = ('ZX', 'CPM', 'C')
 EMBED_DIR = None                                   # where @embed finds files: beside the program (each tool's main)
 
@@ -1109,7 +1157,8 @@ class Checker:
                        'ticks': 'it turns interrupts back on, from inside the interrupt',
                        'beep': "the ROM's BEEPER keeps interrupts off for as long as it sounds",
                        'key': "it's the program's (frame has inkey())", 'ask': "it's the program's",
-                       'frames': "it's the program's"}.get(x.name)
+                       'frames': "it's the program's", 'random': "its numbers would depend on where the frames fell",
+                       'randomize': "it's the program's"}.get(x.name)
                 if why is None and x.name in SCREEN_FUNCS:
                     why = 'drawing keeps its place, and patches its own code, which the program may be in the middle of'
                 raise BarleyError(f"frame can't use {x.name}(): " + (why or "it isn't safe in the middle of the "
@@ -1861,6 +1910,16 @@ class Checker:
                     self.flex_with(a, t, e.line)
                     t = self.unify(t, a.ty, e.line)
             return t
+        if name in ('random', 'randomize'):
+            if len(args) > 1:
+                raise BarleyError(f'{name} takes one whole number, or none', e.line)
+            if not args:
+                return WORD if name == 'random' else VOID
+            t = tys[0] if tys[0] is not FLEX else self.settle_default(args[0])
+            if not is_int(t):
+                raise BarleyError(f'{name} takes a whole number' + (': random(n) is 0..n-1' if name == 'random'
+                                                                    else ', its seed'), e.line)
+            return t if name == 'random' else VOID
         if name in ('abs', 'sign'):
             if len(args) != 1:
                 raise BarleyError(f'{name} takes one number', e.line)
@@ -2032,6 +2091,8 @@ class Return(Exception):
 class Interp:
     def __init__(self, checker, text, out, need_rom=False):
         self.ck, self.out = checker, out
+        self.asm_line = None                            # inside an asm function's twin: its clause's line
+        self.rng = rng_seed(0)                          # random()'s state: as randomize(0), until it's seeded
         self.text = text
         self.input_lines = re.split(rb'\r\n|\n|\r', text)
         if self.input_lines and self.input_lines[-1] == b'':
@@ -2144,10 +2205,19 @@ class Interp:
     # -- calls and statements
     def call(self, f, args):
         env = {pname: a for (pname, _), a in zip(f.params, args)}
+        outer = self.asm_line
+        if f.asm is not None and outer is None:
+            self.asm_line = f.asm_line                  # a failure inside is the clause's: the fragment runs there
         try:
             self.block(f.body, env)
         except Return as r:
             return r.v
+        except BarleyError as err:
+            if self.asm_line is not None and outer is None:
+                err.line = self.asm_line
+            raise
+        finally:
+            self.asm_line = outer
         return None
 
     def block(self, stmts, env):
@@ -2678,6 +2748,16 @@ class Interp:
             if args[1] == 0:
                 raise BarleyError('mod by zero', e.line)
             return args[0] % args[1]
+        if name == 'random':
+            if not args:
+                return rng_word(self.rng)
+            if args[0] <= 0:
+                raise BarleyError(f'random({args[0]}) has nothing to choose from', e.line)
+            return rng_below(self.rng, args[0])
+        if name == 'randomize':
+            import time
+            self.rng[:] = rng_seed(args[0] if args else time.time_ns() // 1000)      # none: the clock, so each run
+            return None                                                             # is its own
         if name == 'gcd':
             a, b = abs(args[0]), abs(args[1])
             while b:

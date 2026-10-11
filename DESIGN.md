@@ -194,6 +194,9 @@ NUMBERS     byte word dword: unsigned 8, 16, 32
             float: the machine's own (the ROM's on a Spectrum).  1.5 2e9
             float(i) trunc floor round sqrt sin cos tan asin acos atan ln
             exp x ** y.  You use them, you get what you get.
+            random(n): 0..n-1, n's type   random(): a word
+            randomize(seed)   randomize() (from the clock)   Melissa's
+            generator, the same numbers everywhere from the same seed
 
 TEXT        str: bytes, sliced   s.len (a word)  s[i] (a byte: chr(s[i])
             prints it as a letter)  s[a..b]  ==  <   for ch in s
@@ -255,7 +258,7 @@ MACHINE     peek(a)  poke(a, v)  inp(port)  outp(port, v)   (call later)
             your own called C hides it)
             const F = @embed("font.fzx")   a file's bytes, read as it compiles
             func f(...) ... asm "f.asm" end    the body is f's reference
-            twin (the Z80 running the fragment: later)
+            twin, which the interpreter and C run; the Z80 runs f.asm
 ```
 
 ## 5. The pieces, and why each one is there
@@ -301,6 +304,40 @@ totals need more than 16 bits and much less than 64, and on a Z80 a
   without one doesn't carry it.
 - **`bool`** is a byte that's 0 or 1, with `true` and `false`. Barley's
   comparisons were already 0 or 1.
+
+### Random numbers: Melissa's generator
+
+**`random(n)` is a whole number from 0 to n - 1**, of n's own type, so
+`random(6) + 1` is a die and `random(5000000000)` a long one; `random()`
+is a raw `word`. **`randomize(seed)` starts the sequence again from a
+seed**, any whole number, so a run can be repeated, and `randomize()`
+seeds it from the clock (FRAMES and the R register on the Spectrum, the
+time in the interpreter and C; CP/M has no clock, so R is all it gets).
+With neither, every run starts from the same seed, which is what lets
+`./bly all` compare a program that rolls dice. `random(0)` fails: it has
+nothing to choose from.
+
+The generator is Melissa's, from her Spectrum code. In her words: "the
+speccy is tough, so I'd use a chaotic PRNG." Its state is 32 bits
+(BCDE), which each step permutes with four byte swizzles, a rotate and
+an xor, add or subtract each, all of them invertible; and 16 bits (HL),
+which the new BC and DE feed, and which is the output. A step is 233
+T-states on the Z80. Her cycle map of the permutation (all 2^32 states,
+in `prng-test.cpp`) finds two long cycles, of 3,244,470,814 and
+1,050,471,109 states, holding all but 25,373 of them, and a run of
+1,803,591 consecutive states that all lie on those two. So a seed goes
+in as `48300000h | (20 bits)` in BCDE, inside that run, and 16 bits in
+HL: 36 bits of seed, every one on a long cycle.
+
+**`random(n)` draws the same words on every backend**: each try takes 1,
+2 or 4 words (as n - 1 needs 16, 32 or 64 bits, by its value, not its
+type), the first the most significant, masks them to n - 1's bits, and
+keeps them if they're below n, so there's no bias and fewer than two
+tries on average. A 16-bit one costs about 800 T-states. The
+interpreter's `rng_` functions are the meaning, held to Melissa's own
+output (100,000 words of `prng-test -s`), and `z80/tests/test_random.py`
+holds `random.asm` to them. `frame` can't use it: its numbers would
+depend on where the frames fell.
 
 ### Floats: you get what you get
 
@@ -680,24 +717,47 @@ asm "isqrt.asm"               -- on the Z80, this runs instead
 end
 ```
 
-The fragment starts with a header the compiler reads: what it provides,
-which other fragments it needs, which targets it's for, where its
-arguments and result live, and what it clobbers (which the save rule
-needs):
+The fragment is beside the program, and starts with a header the
+compiler reads, as the library's own do: what it provides (a label named
+for the function, its entry), which of the library's routines it needs,
+and which targets it's for. On a target it doesn't list, the twin runs
+instead. The rest of the header is for the reader: where the arguments
+and the result are, and what it clobbers:
 
 ```
-;; provides: isqrt   needs: (none)   targets: zx48 zx128 cpm
-;; in: DEHL = n (long)   out: HL   clobbers: AF BC DE HL
+;; provides: isqrt   needs: (none)   targets: zx48 cpm
+;; in: HL = &n (a long)   out: HL   clobbers: AF BC DE HL
 ```
 
-**On the target, the build checks the fragment against its twin**, over
-the program's own inputs and a fuzzer's (as the first Barley's fuzzer
-found the `x + (-7)` bug). "Only testable on the target" becomes
-"testable everywhere, verified on the target". A fragment could also
-bring a `c "isqrt.c"` for the C backend, when there's a faster native
-way. (The library's own fragments work this way already, with Python
-models as their twins; `asm` clauses in programs are parsed, and their
-bodies run, but the Z80 doesn't yet run the fragment in their place.)
+**It's called as the library's routines are** (z80/ABI.md, section 2),
+so where everything goes follows from the function's own signature: the
+arguments in HL, DE, BC and IX, in order; anything of 16 bits or less by
+value (a byte in the low half, and the first byte in A too), and
+anything wider by address; a 16-bit result back in HL, a byte or bool in
+A, and a wider one written to an address passed after the arguments. So
+it takes at most four, the wide result's address among them. It may use
+any routine of the library it names in `needs:`, and destroy AF, BC, DE,
+HL and IX, but not IY or the alternate set. Its labels are its own: each
+one is in `provides:` (or `.local`), and none starts with `bly_`, `f_`,
+`fr_`, `rv_` or `fsz_`, which are the compiler's and the library's. A
+function whose name is one of the assembler's own words (`mod`, `high`,
+`pair`, `z`...) can't have one, and the build says so.
+
+**A failure inside is at the clause's line**, on every backend: the
+fragment can't know which line of the twin it's on, so the interpreter
+and C say the same when the twin fails, wherever in it (or in what it
+calls) that happens.
+
+**The fragment is held to its twin** wherever the program runs on all of
+them: `./bly all` runs the twin in the interpreter and C and the
+fragment on CP/M and the 48K, and the suite has cases that do the same
+(`interp/tests/clauses.asm`, and the numbers me's `divmod.asm`, written
+in the Pasta/80 bake-off from Jörg Pleumann's own). The next step is the
+build checking it over the program's own inputs and a fuzzer's (as the
+first Barley's fuzzer found the `x + (-7)` bug). "Only testable on the
+target" becomes "testable everywhere, verified on the target". A
+fragment could also bring a `c "isqrt.c"` for the C backend, when
+there's a faster native way.
 
 ## 6. Memory: what fits where
 

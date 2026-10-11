@@ -25,13 +25,15 @@ SBC); anything wider is a call into the library (ABI.md), by address.
 
 import argparse
 import os
+import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', 'interp'))
 sys.path.insert(0, HERE)
 import barley as B                                                     # noqa: E402
-from link import gather                                                # noqa: E402
+from link import gather, Frag                                          # noqa: E402
+ASM_WORDS = set('and or xor not mod shl shr low high pair abs norel exist sizeof c nz z nc po pe p m'.split())
 import peephole                                                        # noqa: E402
 PEEP = os.environ.get('BLY_PEEP', '1') != '0'        # BLY_PEEP=0 turns the register cache off, to compare
 
@@ -151,6 +153,7 @@ class Gen:
         self.nlabel = 0
         self.strings = {}
         self.calls = set(['bly_start', 'bly_exit', 'bly_fail'])
+        self.user_frags = []                            # the asm clauses' fragments this program runs
         self.helpers = {}                    # name -> lines: generated cmp and print routines
         self.cur_line = None
         self.func = None
@@ -558,7 +561,11 @@ class Gen:
                 self.lsize[pn] = max(size(pt), 1)
             self.place(f'f_{f.name}')
             self.locals = dict(self.params)
-            self.block(f.body)
+            frag = self.fragment(f)
+            if frag is not None:
+                self.wrapper(f, frag)                   # the fragment runs here, and the body is its twin
+            else:
+                self.block(f.body)
             self.emit('ret')
             if PEEP:
                 self.code = peephole.optimise(self.code, self.cold_code, self.temps)
@@ -595,8 +602,11 @@ class Gen:
             data = ', '.join(str(x) for x in b) if b else ''
             out.append(f'{name}: dw {name}d, {len(b)}')
             out.append(f'{name}d:' + (f' db {data}' if data else ''))
-        _, lib = gather(sorted(c for c in self.calls if c not in self.helpers), self.target)
+        needs = {n for fr in self.user_frags for n in fr.needs}
+        _, lib = gather(sorted(c for c in self.calls | needs if c not in self.helpers), self.target)
         out.append(lib)
+        for fr in self.user_frags:                      # included, not pasted, so the assembler's errors name it
+            out.append(f'; ---- {fr.name} (an asm clause\'s)\n        include "{os.path.abspath(fr.path)}"')
         bss_at = getattr(self, 'bss_at', None)
         out.append('bly_bss:' if bss_at is None else f'bly_code_end:\nbly_bss equ {bss_at}')
         off = 0
@@ -611,6 +621,73 @@ class Gen:
         out += self.equs
         out.append(f'bly_bss_end equ bly_bss+{off}')
         return '\n'.join(out) + '\n'
+
+    # -- asm clauses -------------------------------------------------------------------------------------------
+    # (ASM_WORDS: what sjasmplus 1.24 won't take as a called label, in lower case or upper: found by asking it)
+    def fragment(self, f):
+        """the fragment f's asm clause names, read beside the program, or None: no clause, or one whose fragment
+        isn't for this target (the twin runs there). DESIGN.md section 5, "The machine"; ABI.md section 2"""
+        if getattr(f, 'asm', None) is None:
+            return None
+        where = f'{f.name}\'s asm clause, line {f.asm_line}'
+        path = os.path.join(B.EMBED_DIR or '.', f.asm)
+        try:
+            fr = Frag(path)
+        except OSError:
+            raise GenError(f'{f.asm} isn\'t there ({where}): a fragment is beside the program')
+        except ValueError as err:
+            raise GenError(f'{err} ({where})')
+        if self.target not in fr.targets:
+            return None
+        if f.name not in fr.provides:
+            raise GenError(f'{f.asm} provides {" ".join(fr.provides)}, not {f.name} ({where}): its entry is a '
+                           f'label named for the function')
+        if f.name.lower() in ASM_WORDS and f.name in (f.name.lower(), f.name.upper()):
+            raise GenError(f'{f.name} is one of the assembler\'s own words ({where}): an asm function needs '
+                           f'another name, as a label called {f.name} can\'t be called')
+        theirs = [p for p in fr.provides if p.startswith(('bly_', 'f_', 'fr_', 'rv_', 'fsz_')) or p == 'gs']
+        if theirs:
+            raise GenError(f'{f.asm} provides {" ".join(theirs)} ({where}): bly_, f_, fr_, rv_ and fsz_ are the '
+                           f'compiler\'s and the library\'s')
+        labels = set(re.findall(r'^([A-Za-z_]\w*):', fr.text, re.M)) - set(fr.provides)
+        if labels:
+            raise GenError(f'{f.asm} has labels its provides: doesn\'t list ({where}): {" ".join(sorted(labels))} '
+                           f'(a .local one is its own)')
+        regs = len(f.params) + (f.rty is not B.VOID and size(f.rty) > 2)
+        if regs > 4:
+            raise GenError(f'{f.name} would need {regs} registers ({where}): an asm function takes at most four, '
+                           f'in HL, DE, BC and IX, a wide result\'s address among them')
+        if fr not in self.user_frags and not any(u.path == fr.path for u in self.user_frags):
+            self.user_frags.append(fr)
+        return fr
+
+    def wrapper(self, f, fr):
+        """a function whose fragment runs in its place: its parameters from their slots into HL, DE, BC and IX as
+        the library's routines take them (ABI.md section 2: 16 bits or less by value, a byte in the low half and,
+        for the first, in A too; anything wider by its slot's address), a wide result's address after them, the
+        call, and the result into rv_ (HL, or A for a byte or bool). A failure inside is at the clause's line"""
+        self.emit(f'ld hl,{f.asm_line}')
+        self.emit('ld (bly_line),hl')                   # first, while HL is free
+        regs = ['hl', 'de', 'bc', 'ix']
+        loads = []
+        for i, ((pn, _), pt) in enumerate(zip(f.params, f.ptys)):
+            r, slot = regs[i], self.params[pn]
+            if size(pt) > 2:
+                loads.append([f'ld {r},{slot}'])
+            elif size(pt) == 2:
+                loads.append([f'ld {r},({slot})'])
+            else:
+                lo, hi = {'hl': ('l', 'h'), 'de': ('e', 'd'), 'bc': ('c', 'b'), 'ix': ('ixl', 'ixh')}[r]
+                loads.append([f'ld a,({slot})', f'ld {lo},a', f'ld {hi},0'])
+        wide = f.rty is not B.VOID and size(f.rty) > 2
+        if wide:
+            loads.append([f'ld {regs[len(f.params)]},rv_{f.name}'])
+        for ins in reversed(loads):                     # the first last, so A holds it if it's a byte
+            for i in ins:
+                self.emit(i)
+        self.emit(f'call {f.name}')
+        if f.rty is not B.VOID and not wide:
+            self.emit(f'ld (rv_{f.name}),a' if size(f.rty) == 1 else f'ld (rv_{f.name}),hl')
 
     # -- names -------------------------------------------------------------------------------------------------
     def var_addr(self, e):
@@ -2233,6 +2310,36 @@ class Gen:
             self.emit(f'ld de,{r.val}')
             self.call('bly_input')
             return r
+        if name == 'random':                                # Melissa's generator (random.asm)
+            if not args:
+                r = self.temp(B.WORD)
+                self.call('bly_rand16')
+                self.emit(f'ld ({r.val}),hl')
+                return r
+            if t in (B.BYTE, B.WORD, B.INT):                # one word a try, in registers
+                r = self.temp(t)
+                self.load_hl(args[0])
+                self.call('bly_random_i16' if t is B.INT else 'bly_random_u16')
+                self.emit(f'ld ({r.val}),hl' if t is not B.BYTE else 'ld a,l')
+                if t is B.BYTE:
+                    self.emit(f'ld ({r.val}),a')
+                return r
+            q = self.conv(args[0], B.QUAD) if args[0].kind != 'imm' else self.materialize(Op('imm', args[0].val, B.QUAD))
+            v = self.temp(B.QUAD)
+            self.emit(f'ld hl,{q.val}')
+            self.emit(f'ld bc,{v.val}')
+            self.call('bly_random_q')
+            r = self.temp(t)                                # below n, so n's own type holds it: its low bytes
+            self.copy(r.val, v.val, size(t))
+            return r
+        if name == 'randomize':
+            if not args:
+                self.call('bly_randomize_now')
+                return None
+            q = self.conv(args[0], B.QUAD) if args[0].kind != 'imm' else self.materialize(Op('imm', args[0].val, B.QUAD))
+            self.emit(f'ld hl,{q.val}')
+            self.call('bly_randomize_q')
+            return None
         if name == 'ask':                                   # zxask.asm on the 48K, cpmask.asm on CP/M
             p = self.mem(args[0]) if args else self.materialize(Op('imm', 0, B.LONG))     # no prompt: an empty str
             r = self.temp(B.STR)

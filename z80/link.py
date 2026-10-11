@@ -17,9 +17,12 @@ class Frag:
         for line in self.text.splitlines():
             if not line.startswith(';;'):
                 break
-            m = re.match(r';;\s*(provides|needs|targets|uses):(.*)', line)
-            if m:
-                words = [w for w in m.group(2).split() if w != '(none)']
+            keys = list(re.finditer(r'\b(provides|needs|targets|uses):', line))     # one a line, or several, as
+            for k, m in enumerate(keys):                                            # DESIGN.md's example has
+                if k == 0 and line[2:m.start()].strip():
+                    break                                     # a line of prose that mentions a key: not a header
+                end = keys[k + 1].start() if k + 1 < len(keys) else len(line)
+                words = [w for w in line[m.end():end].split() if w != '(none)']
                 getattr(self, m.group(1)).extend(words)
         if not self.provides or not self.targets:
             raise ValueError(f'{self.name}: a fragment needs provides: and targets: lines')
