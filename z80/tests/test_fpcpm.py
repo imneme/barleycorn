@@ -8,10 +8,11 @@ text (PRINT-FP's layout, its 8 digits exactly rounded). Cases: random over
 the whole exponent range; the edges where rounding and alignment break
 (exponents 0, 1, 31-33 and 63-65 apart, equal magnitudes, powers of two,
 all-ones mantissas, ties, the short form, zero); answers whose exponent
-lands at its edges; and the failures word for word (float overflow,
-division by zero). --mutants breaks fp_cpm.asm on purpose (a copy of the
-library) and checks these tests notice. Run it with omse-ai's Python
-($OMSE_AI_PYTHON).
+lands at its edges; divisions aimed at /'s rare path (a remainder's high
+word equal to the divisor's); and the failures word for word (float
+overflow, division by zero). --mutants breaks fp_cpm.asm on purpose (a
+copy of the library) and checks these tests notice. Run it with omse-ai's
+Python ($OMSE_AI_PYTHON).
 """
 import argparse
 import os
@@ -81,6 +82,22 @@ def edge_pair(op):
     return mk(ea, m()), mk(eb, m())
 
 
+def div_paths():
+    """a and b whose long division (the mantissas A / D) meets a remainder whose high word is D's at its first bit,
+    the low word below D's, equal to it, or above: the rare path that compares the low words"""
+    while True:
+        d = rnd.randrange(1 << 31, 1 << 32, 2)
+        lo = d & 0xFFFF
+        t = rnd.choice([lo, (lo - 2) & 0xFFFF, (lo + 2) & 0xFFFF, rnd.randrange(0, 1 << 16, 2)])
+        r = ((d & 0xFFFF0000) | t) >> 1                 # the remainder before the first bit doubles it
+        a = rnd.choice([d + r, (d + r) // 2 if (d + r) % 2 == 0 else 0])   # R = A - D, or 2A - D when A < D
+        if (1 << 31) <= a < (1 << 32):
+            break
+    mk = lambda m: bytes([rnd.randint(100, 156), (m >> 24) & 0x7F | (0x80 if rnd.random() < 0.5 else 0),
+                          (m >> 16) & 255, (m >> 8) & 255, m & 255])
+    return mk(a), mk(d)
+
+
 def near(a):
     """b a chosen number of binary places below a: the alignment's edges"""
     va = fp5.value(a)
@@ -135,9 +152,16 @@ MUTANTS = [   # (the text, what it becomes, what that breaks)
      '* with the bias off by one'),
     ('        inc (ix+4)\n        ret nz\n        inc (ix+5)', '        inc (ix+4)\n        ret nz\n        nop\n        nop\n        nop',
      "*'s partial product carries one byte"),
-    ('        ld a,0\n        rra\n        ld (bly_fc.w+3),a\n        ld hl,bly_fc.q',
-     '        ld a,0\n        and a\n        ld (bly_fc.w+3),a\n        ld hl,bly_fc.q', "/ forgets the quotient's last bit"),
-    ('        ld b,32\n        ld hl,(bly_fc.ex)', '        ld b,33\n        ld hl,(bly_fc.ex)', '/ takes one bit too many'),
+    ("        ld a,0\n        rra\n        ld (bly_fc.w+3),a           ; (/'s",
+     "        ld a,0\n        and a\n        ld (bly_fc.w+3),a           ; (/'s", "/ forgets the quotient's last bit"),
+    ('        inc bc\n        ld (bly_fc.ex),bc', '        nop\n        ld (bly_fc.ex),bc', "/: A >= D, the exponent not raised"),
+    ('.byte:  ld a,1 ', '.byte:  ld a,2 ', '/: seven bits a byte'),
+    ('        jr c,.big                   ; 2^32', '        nop\n        nop                         ; 2^32',
+     '/: a remainder past 2^32 unseen'),
+    ("        dec hl                      ; the low words' borrow", "        nop                         ; the low words' borrow",
+     "/: the low words' borrow forgotten"),
+    ('        jr nc,.eq1', '        jr .eq1', '/: equal high words always taken as R >= D'),
+    ('        scf                         ; a 0, as', '        or a                        ; a 0, as', '/: equal high words, less, gives a 1'),
     ('.movf:  db "float overflow",0', '.movf:  db "float overflov",0', 'the message misspelt'),
     ('        jr z,.zero                  ; under', '        jr z,.range                 ; under', 'underflow as overflow'),
     ('        cp 5\n        jr c,.nr', '        cp 6\n        jr c,.nr', 'print: rounds up only from 6'),
@@ -221,6 +245,8 @@ def main():
     for _ in range(N // 2):
         for op in ('bly_fmul', 'bly_fdiv'):
             case(op, *edge_pair(op))
+    for _ in range(N // 4):
+        case('bly_fdiv', *div_paths())
     print('sqrt against fp5, bit for bit')
     roots = [rand_float() for _ in range(N)] + [fp5.pack(F(n * n)) for n in (1, 2, 3, 255, 256, 65535, 65536, 3037000499)]
     roots += [fp5.pack(F(n * n, 4 ** k)) for n, k in ((3, 1), (5, 7), (12345, 20))]

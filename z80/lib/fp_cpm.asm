@@ -29,7 +29,7 @@
 ; rounding's scale when adding, and when subtracting they take exactly one more unit off (the true difference lies
 ; strictly between two integers of the window, and rounding's boundaries are integers there).
 ; bly_fc is the shared part: .pack rounds the window (.w, its top bit set) by its bit 31 and writes the answer.
-; Scratch: bly_fc's .res .flip .sg .lost .ex .ua .ub .w .v .r .d .q.
+; Scratch: bly_fc's .res .flip .sg .lost .ex .ua .ub .w .v.
 
 ; -- + and - ---------------------------------------------------------------------------------------------------------
 bly_fsub:
@@ -309,6 +309,12 @@ bly_fmul:
         ret
 
 ; -- / ----------------------------------------------------------------------------------------------------------------
+; Restoring division, in registers: the remainder R in HL (high word) and DE (low), D's high word in BC throughout,
+; and D's low word patched into the loop's `ld bc` (self-modifying, and .dl .dh are scratch inside the
+; fragment: code runs from RAM, ABI.md section 0); no alternate registers. Most bits are settled by the high words alone: R's below D's means R < D (one sbc, undone);
+; above means R > D, and only then are the low words subtracted. Equal high words, rarely, compare the low ones.
+; Each quotient byte grows in A behind a marker bit that rla pushes out into carry after the eighth; its bits go in
+; as their complements (the undoing's carry is set exactly when the bit is 0), and cpl puts them right.
 bly_fdiv:
         call bly_fc.both
         ld a,(bly_fc.ub+1)
@@ -332,59 +338,64 @@ bly_fdiv:
         ld de,128
         add hl,de
         ld (bly_fc.ex),hl
-        ld hl,bly_fc.ua+2           ; .r = a's mantissa, .d = b's, .q = 0 (five bytes each, little-endian)
-        ld de,bly_fc.r+3
-        call .ld4
-        ld hl,bly_fc.ub+2
-        ld de,bly_fc.d+3
-        call .ld4
-        xor a
-        ld (bly_fc.r+4),a
-        ld (bly_fc.d+4),a
-        ld hl,bly_fc.q
-        ld b,5
-.qz:    ld (hl),a
-        inc hl
-        djnz .qz
-        ld b,33                     ; 33 quotient bits: the top one at 2^32
-        call .cmp
-        jr c,.loop                  ; a's mantissa < b's: the first step finds it
-        call .sub                   ; >= : the quotient's 1 now, 32 more, and the exponent one up
-        ld a,1
-        ld (bly_fc.q),a
-        ld b,32
-        ld hl,(bly_fc.ex)
-        inc hl
-        ld (bly_fc.ex),hl
-.loop:  ld hl,bly_fc.r              ; R = 2R
-        sla (hl)
-        inc hl
-        rl (hl)
-        inc hl
-        rl (hl)
-        inc hl
-        rl (hl)
-        inc hl
-        rl (hl)
-        call .cmp                   ; NC if R >= D
-        ccf
-        jr nc,.q0
-        call .sub
-        scf
-.q0:    ld hl,bly_fc.q              ; Q = 2Q + the bit
-        rl (hl)
-        inc hl
-        rl (hl)
-        inc hl
-        rl (hl)
-        inc hl
-        rl (hl)
-        inc hl
-        rl (hl)
-        djnz .loop
-        ld hl,bly_fc.q+4            ; 33 bits: the mantissa is Q >> 1, and Q's last bit decides
-        srl (hl)
-        dec hl
+        ld a,(bly_fc.ub+5)          ; D's low word, into the loop's code and .dl
+        ld l,a
+        ld a,(bly_fc.ub+4)
+        ld h,a
+        ld (.lo1+1),hl
+        ld (.lo2+1),hl
+        ld (.dl),hl
+        ld a,(bly_fc.ub+3)          ; D's high word likewise
+        ld l,a
+        ld a,(bly_fc.ub+2)
+        ld h,a
+        ld (.hi1+1),hl
+        ld (.hi2+1),hl
+        ld (.dh),hl
+        ld a,(bly_fc.ua+5)          ; a's mantissa, A, in HL DE
+        ld e,a
+        ld a,(bly_fc.ua+4)
+        ld d,a
+        ld a,(bly_fc.ua+3)
+        ld l,a
+        ld a,(bly_fc.ua+2)
+        ld h,a
+        push hl
+        push de
+        ex de,hl                    ; R = A - D
+        ld bc,(.dl)
+        or a
+        sbc hl,bc
+        ex de,hl
+        ld bc,(.dh)
+        sbc hl,bc
+        pop bc
+        jr c,.less
+        pop bc                      ; A >= D: A/D is in [1, 2), the quotient's top bit is 2^32's, and the exponent
+        ld bc,(bly_fc.ex)           ; one up (floor(A x 2^32 / D))
+        inc bc
+        ld (bly_fc.ex),bc
+        jr .go
+.less:  ex de,hl                    ; A < D: R = 2A - D = (A - D) + A, under D, and 2A/D is in [1, 2) (floor(A x 2^33 /
+        add hl,bc                   ; D))
+        ex de,hl
+        pop bc
+        adc hl,bc
+.go:    ld bc,(.dh)                 ; 32 more bits below the top one, a byte at a time, high first
+        call .byte
+        cpl
+        ld (bly_fc.w+7),a
+        call .byte
+        cpl
+        ld (bly_fc.w+6),a
+        call .byte
+        cpl
+        ld (bly_fc.w+5),a
+        call .byte
+        cpl
+        ld (bly_fc.w+4),a
+        scf                         ; 33 bits, the top one 1: the mantissa is them >> 1, and the last decides
+        ld hl,bly_fc.w+7
         rr (hl)
         dec hl
         rr (hl)
@@ -394,44 +405,54 @@ bly_fdiv:
         rr (hl)
         ld a,0
         rra
-        ld (bly_fc.w+3),a
-        ld hl,bly_fc.q
-        ld de,bly_fc.w+4
-        ld bc,4
-        ldir
+        ld (bly_fc.w+3),a           ; (/'s rounding bit)
         jp bly_fc.pack
-.ld4:   ld b,4                      ; HL = big-endian m3..m0 -> DE down to DE-3 (little-endian)
-.l4:    ld a,(hl)
-        ld (de),a
-        inc hl
-        dec de
-        djnz .l4
+.byte:  ld a,1                      ; the marker
+.bit:   sla e                       ; R = 2R
+        rl d
+        adc hl,hl
+        jr c,.big                   ; 2^32 or more: certainly at least D
+        sbc hl,bc                   ; the high words (carry clear)
+        jr c,.no
+        jr z,.eq
+        ex de,hl                    ; R's above: R > D, so the low words too
+.lo1:   ld bc,0                     ; (D's low word, patched)
+        sbc hl,bc                   ; (carry clear)
+        ex de,hl
+.hi1:   ld bc,0                     ; (D's high word, patched)
+        jr nc,.one
+        dec hl                      ; the low words' borrow (the high difference is at least 1)
+.one0:  or a                        ; a 1, as its complement
+.one:   rla
+        jr nc,.bit
         ret
-.cmp:   push bc                     ; C if R < D (five bytes, high first)
-        ld hl,bly_fc.d+4
-        ld de,bly_fc.r+4
-        ld b,5
-.c1:    ld a,(de)
-        cp (hl)
-        jr nz,.c2
-        dec hl
-        dec de
-        djnz .c1
-.c2:    pop bc
+.no:    add hl,bc                   ; R < D: undone, and the undoing's carry out is set, a 0's complement
+        rla
+        jr nc,.bit
         ret
-.sub:   push bc                     ; R -= D
-        ld hl,bly_fc.d
-        ld de,bly_fc.r
-        ld b,5
+.big:   ex de,hl                    ; R - D, the 2^32 taking the borrow
+.lo2:   ld bc,0                     ; (patched)
         or a
-.s1:    ld a,(de)
-        sbc a,(hl)
-        ld (de),a
-        inc hl
-        inc de
-        djnz .s1
-        pop bc
-        ret
+        sbc hl,bc
+        ex de,hl
+.hi2:   ld bc,0                     ; (patched)
+        sbc hl,bc
+        jr .one0
+.eq:    ex de,hl                    ; the high words equal: R >= D just when R's low word is at least D's
+        ld bc,(.dl)
+        sbc hl,bc                   ; (carry clear)
+        jr nc,.eq1
+        add hl,bc                   ; less: undone, and R's high word is D's again
+        ex de,hl
+        ld bc,(.dh)
+        add hl,bc
+        scf                         ; a 0, as its complement
+        jr .one
+.eq1:   ex de,hl                    ; at least: R - D is the low words' difference alone (HL is already 0)
+        ld bc,(.dh)
+        jr .one0
+.dl:    dw 0
+.dh:    dw 0
 
 ; -- sqrt: exact, by the bit-pair method ---------------------------------------------------------------------------
 ; x = f x 2^p, f in [1/2, 1): the root is sqrt(f) x 2^(p/2) for an even p, sqrt(f/2) x 2^((p+1)/2) for an odd one, and
@@ -2011,9 +2032,6 @@ bly_fc:
 .ub:    ds 6
 .w:     ds 8                        ; .v follows .w: + and - clear both at once
 .v:     ds 8
-.r:     ds 5
-.d:     ds 5
-.q:     ds 5
 .movf:  db "float overflow",0
 
 ; -- printing: PRINT-FP's layout, the 8 digits exactly rounded -------------------------------------------------------

@@ -1614,9 +1614,9 @@ and in the other 8 it's the ROM's last digit that's wrong.
 **Costs** (T, the call included, `--quick`): `+` 3,013 mean, `-` 3,081,
 `*` 4,938, `/` 18,301, printing 63,859 (557 to 370,531). The ROM's `+`,
 `*` and `/`: 2,713, 6,183 and 9,400, and printing 53,000 to 266,000. `/`
-wants a faster divide; printing went from 204,000 to 64,000 mean by
-shifting whole bytes first and keeping x10 and /10 to the significant
-bytes.
+wants a faster divide (it got one: "A faster `/`", below); printing went
+from 204,000 to 64,000 mean by shifting whole bytes first and keeping
+x10 and /10 to the significant bytes.
 
 **Testing:** bit for bit and text for text, 1,895 checks in `--quick`, 0
 wrong. **Mutants: 19 of 19 caught, and the CONTROL left alone**: never
@@ -1687,6 +1687,22 @@ negative a needs a whole b, an odd one negating), then exp(b ln a), too
 big saying `float overflow` as the 48K's does. Within 0.46 of test_fp's
 tolerance for the ROM's. Its own copy for now; a shared wrapper in
 fp_exact.asm one day (it would touch the 48K's tested path, so later).
+
+**A faster `/` (the same day, later):** the first divide walked five
+bytes of memory three times a bit (shift, compare, subtract), 18,301 T
+against the ROM's 9,400. Now the remainder lives in HL and DE, the
+divisor's high word in BC, and its low word is patched into the loop's
+code; the alternate registers stay untouched, as ABI.md section 0 asks.
+Most bits are settled by one `sbc` on the high words: R's below D's is a
+0, undone with one `add`, and only a 1 touches the low words. Equal high
+words compare the low ones, a path one uniform division in about 3,000
+meets (dividing by round numbers meets it often), so the tests aim at it
+(`div_paths`: low word below, equal and above, at the first bit; a model
+of the branches confirmed all three are reached). Each quotient byte
+grows in A behind a marker bit, so there's no counter. **5,449 T mean on
+uniform mantissas** (5,049 to 5,823; 5,191 on the test's mix), under our
+`*` on the same inputs (6,202) and the ROM's `/`; tan, atan, asin, acos
+and ln got 6 to 13% quicker with it. Seven mutants for `/`, all caught.
 
 ## Random numbers: Melissa's generator (random.asm, rndclock.asm)
 
