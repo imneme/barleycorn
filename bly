@@ -151,7 +151,9 @@ def run_all(prog, inp, work, minutes, keys):
     ok = True
     for k in ('c', 'cpm', 'zx'):
         want = outs['interp-cpm'] if k == 'cpm' else outs['interp']
-        if outs[k] == want:
+        if k == 'cpm' and outs[k] == want and 'Spectrum-only' in outs[k]:     # agreeing, but neither ran to the end
+            print(f'  cpm: both stop the same way: {outs[k].strip().splitlines()[-1]}')
+        elif outs[k] == want:
             print(f'  {k}: the same text' + (' (as the interpreter prints it --as cpm)' if k == 'cpm' and want != outs['interp'] else ''))
         elif k == 'cpm' and 'Spectrum-only' in outs[k]:
             print(f'  cpm: not run (the program uses the Spectrum outside if ZX)')
