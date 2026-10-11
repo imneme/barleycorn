@@ -1,0 +1,248 @@
+-- Advent of Code 2022, day 22 (Monkey Map), part 2: Melissa O'Neill's ZX Spectrum BASIC, ported to Barley by Fern.
+-- Her program folds the board into a 50 x 50 x 50 cube and draws it twice in isometric (faces 1-3 on the left
+-- cube, 4-6 on the right), with every wall a dot on its face, then walks the path, a 200-point worm following
+-- the walker. The input is one string a line: the face adjacency (which face is beyond each edge, and how it's
+-- turned), the six faces' rows, then the path, a character a move. monkey_d22.txt comes from make_monkey.py, with
+-- walls and a path of our own (a puzzle's input isn't ours to share). Ported as literally as I could; the names
+-- are hers where Barley allows.
+
+var adj: byte[24]                   -- F$(f, d): the face beyond edge d of face f
+var rot: byte[24]                   -- R$(f, d): how that face is turned (1 = 0 degrees ... 4 = 270)
+var rows: str[300]                  -- M$((row - 1) * 6 + face): the faces' rows, slices of the input
+var f: int = 1                      -- the face, the position in its plane, the direction
+var mx: int = 1
+var my: int = 1
+var dx: int = 1
+var dy: int = 0
+var s: int = 1                      -- which side of its cube the face is drawn on, and that cube's origin
+var ox: int = 0
+var oy: int = 0
+var sx: int = 0                     -- the last point plotted, relative to the origin
+var sy: int = 0
+var tx: byte[200]                   -- the worm: the last 200 points plotted
+var ty: byte[200]
+var b: int = 0
+
+func floor_div(a: int, d: int): int     -- BASIC's INT(a / d)
+  var q = a / d
+  if a % d != 0 and (a < 0) != (d < 0) then q -= 1 end
+  return q
+end
+
+func screen_x(x: int, z: int): int
+  return ox + floor_div((x - z) * 155, 128)
+end
+
+func screen_y(x: int, y: int, z: int): int
+  return oy + floor_div(160 * y, 128) + x + z
+end
+
+func point_xyz(x: int, y: int, z: int)
+  sx = screen_x(x, z) - ox
+  sy = screen_y(x, y, z) - oy
+  plot(ox + sx, oy + sy)
+end
+
+func edge(x0: int, y0: int, z0: int, x1: int, y1: int, z1: int)
+  line(screen_x(x0, z0), screen_y(x0, y0, z0), screen_x(x1, z1), screen_y(x1, y1, z1))
+end
+
+func cube(which: int)
+  if which == 1 then
+    ox = 128 - 65
+    oy = 10
+  else
+    ox = 128 + 65
+    oy = 0
+  end
+end
+
+func draw_cube()                    -- the visible edges
+  edge(0, 0, 0, 0, 51, 0)
+  edge(0, 0, 51, 0, 51, 51)
+  edge(51, 0, 0, 51, 51, 0)
+  edge(0, 0, 0, 51, 0, 0)
+  edge(0, 51, 0, 51, 51, 0)
+  edge(0, 51, 51, 51, 51, 51)
+  edge(0, 0, 0, 0, 0, 51)
+  edge(0, 51, 0, 0, 51, 51)
+  edge(51, 51, 0, 51, 51, 51)
+end
+
+func place(face: int)               -- which cube, and which side of it
+  if face < 4 then
+    s = face
+    cube(1)
+  else
+    s = face - 3
+    cube(2)
+  end
+end
+
+func set_face()
+  place(f)
+  ink(4)
+  bright(false)
+  print at 20, 11; "On face "; f;
+  ink(6)
+  bright(true)
+end
+
+func plot_mxmy()
+  case s
+    when 1 then point_xyz(51 - my, 51, 51 - mx)       -- the top
+    when 2 then point_xyz(0, 51 - my, 51 - mx)        -- the left-hand side
+    else point_xyz(mx, 51 - my, 0)                     -- the right-hand side
+  end
+end
+
+func rotate(r: int)
+  var t = 0
+  case r
+    when 2 then
+      t = mx
+      mx = 51 - my
+      my = t
+      t = dx
+      dx = -dy
+      dy = t
+    when 3 then
+      mx = 51 - mx
+      my = 51 - my
+      dx = -dx
+      dy = -dy
+    when 4 then
+      t = mx
+      mx = my
+      my = 51 - t
+      t = dx
+      dx = dy
+      dy = -t
+  end
+  if dx < 0 and mx == 0 then
+    mx = 50
+  elif dx > 0 and mx == 51 then
+    mx = 1
+  elif dy < 0 and my == 0 then
+    my = 50
+  elif dy > 0 and my == 51 then
+    my = 1
+  end
+end
+
+func cross(k: int)                  -- off edge k of the face, onto its neighbour
+  var i = (f - 1) * 4 + k - 1
+  rotate(rot[i])
+  f = adj[i]
+  set_face()
+end
+
+func step(): bool                   -- one step forward; false (and nothing moved) at a wall
+  var px = mx
+  var py = my
+  var pe = f
+  var qx = dx
+  var qy = dy
+  mx += dx
+  my += dy
+  if my == 0 then
+    cross(1)
+  elif mx == 51 then
+    cross(2)
+  elif my == 51 then
+    cross(3)
+  elif mx == 0 then
+    cross(4)
+  end
+  if rows[(my - 1) * 6 + f - 1][mx - 1] == '#' then
+    mx = px
+    my = py
+    f = pe
+    dx = qx
+    dy = qy
+    set_face()
+    return false
+  end
+  inverse(true)                     -- the worm's tail goes...
+  plot(tx[b], ty[b])
+  inverse(false)
+  plot_mxmy()                       -- ...and its head arrives
+  tx[b] = byte(sx + ox)
+  ty[b] = byte(sy + oy)
+  b = (b + 1) % 200
+  return true
+end
+
+func main()
+  paper(0)
+  border(0)
+  ink(6)
+  bright(true)
+  cls()
+  paper(1)
+  ink(5)
+  bright(false)
+  print at 21, 0; " AoC 2022, Day 22 ";
+  paper(0)
+  ink(6)
+  bright(true)
+  var input = lines()
+  for k in 0..6 do
+    var g = input.next()
+    var u = input.next()
+    for d in 0..4 do
+      adj[k * 4 + d] = g[d] - '0'
+      rot[k * 4 + d] = u[d] - '0'
+    end
+  end
+  cube(1)
+  draw_cube()
+  cube(2)
+  draw_cube()
+  for face in 1..7 do               -- the faces, with every wall a dot
+    place(face)
+    for p in 1..51 do
+      var row = input.next()
+      rows[(p - 1) * 6 + face - 1] = row
+      for q in 0..50 do
+        if row[q] == '#' then
+          mx = q + 1
+          my = p
+          plot_mxmy()
+        end
+      end
+    end
+  end
+  mx = 1
+  my = 1
+  f = 1
+  dx = 1
+  dy = 0
+  set_face()
+  plot_mxmy()
+  for path in input do              -- the walk
+    for ch in path do
+      if ch == '0' then
+        ink(5)
+        print at 0, 0; "Ended"; at 0, 9; " at "; mx; ","; my; "; facing ";
+        if dx == 1 then print "right" end
+        if dx == -1 then print "left" end
+        if dy == 1 then print "down" end
+        if dy == -1 then print "up" end
+        return
+      elif ch == '1' then
+        var t = dx
+        dx = dy
+        dy = -t
+      elif ch == '2' then
+        var t = dx
+        dx = -dy
+        dy = t
+      else
+        for j in 0..int(ch) - 50 do
+          if not step() then break end
+        end
+      end
+    end
+  end
+end

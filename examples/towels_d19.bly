@@ -1,0 +1,117 @@
+-- Advent of Code 2024, day 19 (Linen Layout), part 2: Melissa O'Neill's ZX Spectrum BASIC, ported to Barley by
+-- Fern. Her program counts the ways each design can be made from the towel patterns, with her Perl's DP: dp[left]
+-- is the number of ways to make the design's last `left` stripes. It shows each design as its stripes (two to a
+-- character cell, in ink and paper) with a magenta rule above and below that thickens from the right as the DP eats
+-- the design from its end, the ways so far, and the running total. towels_d19.txt comes from make_towels.py, with
+-- towels and designs of our own (a puzzle's input isn't ours to share). Ported as literally as I could, with one
+-- change: her BASIC keeps the big counts as two numbers in base 10^8, because a Spectrum float is exact only to
+-- 2^32, and Barley has quad, so they're one number each.
+
+var patterns: str[500]              -- the towels, slices of the input's first line
+var color_map: byte[8]              -- colour of a stripe, by (CODE c - 91) / 4: b 1, g 3, r 5, u 6, w 7
+var colors: byte[62]                -- the design's stripes as colours, and a white one past the end
+var dp: quad[61]                    -- dp[left]: the ways to make the last `left` stripes
+
+func show_banner(b: str, after: int)  -- her temporary PAPER 1 and INKs, then back to the permanent ink
+  paper(1)
+  ink(7)
+  print "\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83"
+  ink(6)
+  print " "; b,
+  ink(7)
+  print "\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C"
+  paper(7)
+  ink(after)
+end
+
+func show_design(design: str)       -- eight rows of stripes, two to a cell: ink the left, paper the right
+  var q = int(design.len)
+  for iv in 0..q do
+    colors[iv] = color_map[(int(design[iv]) - 91) / 4]
+  end
+  colors[q] = 7
+  for jv in 0..8 do
+    for c in 0..(q + 1) / 2 do
+      ink(colors[c * 2])
+      paper(colors[c * 2 + 1])
+      print "\x8A";
+    end
+    ink(1)
+    paper(7)
+    print "", "\n";
+  end
+end
+
+func main()
+  paper(7)
+  ink(0)
+  border(7)
+  cls()
+  show_banner("   AoC Day 19: Linen Layout", 0)
+  color_map[1] = 0
+  color_map[2] = 6
+  color_map[3] = 4
+  color_map[4] = 6
+  color_map[5] = 2
+  color_map[6] = 1
+  color_map[7] = 7
+  var np = 0
+  var nd = -2                       -- every line but the patterns and the blank one
+  for line in lines() do
+    nd += 1
+  end
+  var input = lines()
+  for p in input.next().split(',') do
+    patterns[np] = p.trim()
+    np += 1
+  end
+  input.next()
+  print np; " patterns and "; nd; " designs"; "\n\n";
+  ink(1)
+  print "Design:     / "; nd;
+  print at 16, 11; "Ways: "; "\n\n\n";
+  show_banner("   TOTAL:       ", 1)
+  var total: quad = 0
+  for i in 1..nd + 1 do
+    print at 5, 8; i; "\n", "", "\n\n\n\n\n\n\n\n\n", "", at 7, 0;
+    var design = input.next()
+    var q = int(design.len)
+    show_design(design)
+    print at 16, 18; "",
+    ink(3)
+    line(0, 120, 4 * q - 1, 120)
+    line(0, 55, 4 * q - 1, 55)
+    for k in 0..61 do
+      dp[k] = 0
+    end
+    dp[0] = 1
+    for left in 1..q + 1 do
+      var ways: quad = 0
+      for j in 0..np do
+        var pattern = patterns[j]
+        var r = int(pattern.len)
+        if r <= left then
+          if design[q - left..q - left + r] == pattern then
+            ways += dp[left - r]
+          end
+        end
+      end
+      dp[left] = ways
+      var n = (q - left) * 4
+      ink(3)
+      line(n, 121, n + 3, 121)
+      line(n, 54, n + 3, 54)
+      ink(1)
+      print at 16, 17; ways,
+    end
+    total += dp[q]
+    print at 20, 11;
+    paper(1)
+    ink(5)
+    bright(true)
+    print total;
+    paper(7)
+    ink(1)
+    bright(false)
+  end
+end

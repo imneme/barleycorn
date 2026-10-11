@@ -242,6 +242,56 @@ picture or the sound.
   ![The hill climb on a 48K, with both
   answers](../docs/hill-on-a-48k.png)
 
+## Melissa's Advent of Code
+
+Two programs Melissa wrote in ZX Spectrum BASIC for Advent of Code,
+ported to Barley by Fern as literally as Barley allows. A puzzle's own
+input isn't ours to share, so each comes with one of our own, made by a
+small Python script that also works out the answer, for checking. Like
+the hill, they use the screen outside `if ZX`, so they're for the
+Spectrum (and the interpreter and C) only.
+
+- `monkey_d22.bly`: Advent of Code 2022, day 22 (Monkey Map), part 2. A
+  board folded into a 50 x 50 x 50 cube, drawn twice in isometric with
+  every wall a dot on its face, then walked: a 200-point worm follows
+  the walker over the edges from face to face, and at the end it says
+  where it stopped and which way it faced. The cube's geometry (which
+  face lies beyond each edge, and how it's turned) is as her Perl,
+  `cubeinfo.pl`, worked it out from the puzzle's net. The board,
+  `monkey_d22.txt`, comes from `make_monkey.py`, with walls and 2,001
+  moves of our own, and on top of the left-hand cube the walls draw a
+  cat. About a minute on a 48K. On her own board it took 87 seconds,
+  where her HiSoft-compiled BASIC took 210.
+
+      ./bly zx examples/monkey_d22.bly examples/monkey_d22.txt
+      ./bly run --screen monkey.png examples/monkey_d22.bly examples/monkey_d22.txt
+
+  ![Two yellow isometric cubes on black, their faces dotted with walls,
+  a cat's face drawn in walls on top of the left one, and the walker's
+  trail on the right one](../docs/monkey-d22.png)
+
+- `towels_d19.bly`: Advent of Code 2024, day 19 (Linen Layout), part 2.
+  In how many ways can a heap of striped towels, laid end to end, make
+  each design? It counts them as her Perl did, and her BASIC after it:
+  working in from the design's end, the ways to make its last 1, 2, 3
+  and more stripes, each from the counts before it. Each design shows as
+  its stripes, two to a character cell (one in ink, one in paper), with
+  a magenta rule above and below that thickens from the right as the
+  count eats in. Her BASIC kept the big counts as two numbers in base
+  10^8, because a Spectrum float is exact only up to 2^32; Barley has
+  `quad`, so they're one number each. The heap, `towels_d19.txt`, comes
+  from `make_towels.py`: 120 towels and 30 designs, the most ways for
+  one design 31,099,988,700, and 46,145,737,803 in all. Under two
+  minutes on a 48K. On her own heap it took 66 minutes, where her
+  compiled BASIC took 147.
+
+      ./bly zx examples/towels_d19.bly examples/towels_d19.txt
+      ./bly run --screen towels.png examples/towels_d19.bly examples/towels_d19.txt
+
+  ![A design's stripes in red, blue, black, white and green between
+  magenta rules, with its ways and the total,
+  46145737803](../docs/towels-d19.png)
+
 The benchmark programs in `../z80/bench/` (fib, tak, Ackermann, queens,
 a sieve, two sorts, a tree, an expression evaluator, Life, a CRC, Hanoi
 and some argument shuffles) are small and readable too, and the Advent
