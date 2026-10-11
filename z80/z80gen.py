@@ -2066,6 +2066,12 @@ class Gen:
                     self.emit(f'ld de,{r.val}')
                     self.call('bly_str_int')
                 return r
+            if name == 'float':                           # the ROM's DEC-TO-FP reads it (fp_read.asm)
+                r = self.temp(B.FLOAT)
+                self.emit(f'ld hl,{sa}')
+                self.emit(f'ld de,{r.val}')
+                self.call('bly_str_float')
+                return r
             if name in ('find', 'starts'):
                 ta = self.text(e.args[0], args[0] if e.args[0].ty is B.BYTE else self.mem(args[0]))
                 self.emit(f'ld hl,{sa}')

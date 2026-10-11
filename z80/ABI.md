@@ -153,7 +153,7 @@ target out isn't used for it, and the twin is compiled instead.
 | indices | `index {i} is outside 0..{n}`; `slice {a}..{b} is outside 0..{n}` |
 | containers | `a {kind} needs a capacity of at least 1`; `a {kind} holds at most 65535`; `{kind} full ({cap})`; `list empty`; `queue empty`; `heap empty`; `no key {k} in the map`; `the {kind} changed while for was walking it` |
 | grids | `a grid has no negative sides`; `a grid side is at most 32767`; `({r}, {c}) is off the grid ({rows} x {cols})`; `{v} is not on the grid` |
-| text | `"{s}" doesn't start with an integer`; `there is no integer {k} in "{s}"`; `{digits} doesn't fit in {a type}` ("an int", "a word"); `split needs a separator`; `no name has the number {n}`; `too many names: intern holds 65536` |
+| text | `"{s}" doesn't start with an integer`; `there is no integer {k} in "{s}"`; `{digits} doesn't fit in {a type}` ("an int", "a word"); `"{s}" doesn't start with a number` and `{number} doesn't fit in a float` (s.float()); `split needs a separator`; `no name has the number {n}`; `too many names: intern holds 65536` |
 | input | `no more input lines`; `the input is not a grid: line {r} is {len} long, not {cols}`; `input line {n} is longer than 65535`; `the input is longer than 65535, too long for one str` |
 | memory | `arena full`; at start-up, `the input doesn't fit in memory` (both platforms) and `can't read the input` (CP/M) |
 | other | `assertion failed` |
@@ -635,6 +635,7 @@ own slot):
 | `bly_f_from_i64` | HL=&q (a quad: the generator widens a long), BC=&r | rounded to 32 bits, half away from zero |
 | `bly_f_to_int` | HL=&x, A = the type code (0 byte … 4 quad, as `bly_num`), DE=&dest | truncates; `{x} doesn't fit in {a type}` |
 | `bly_pr_f` | HL=&x | prints x as BASIC's PRINT would; also a header `pr` |
+| `bly_str_float` (`fp_read.asm`) | HL=&str DE=&dest | (dest) = the number the str starts with, as the ROM's DEC-TO-FP reads it; `"{s}" doesn't start with a number`; `{number} doesn't fit in a float` |
 
 - **Who does the work.** `+ - * / **` and the nine functions are the
   ROM's calculator (RST 28h, one operation a call). Compare, negate,
@@ -664,8 +665,20 @@ own slot):
   `fp.asm` saves BASIC's ERR_SP, X_PTR and HL' (the calculator borrows
   HL'; an error leaves it borrowed), and the handler puts all three back
   and sets ERR_NR to FFh. **This is the one place the library reads an
-  alternate register**, and only to put HL' back as BASIC needs it;
-  nothing passes through the alternates.
+  alternate register** (with `fp_read.asm`, which catches the same way),
+  and only to put HL' back as BASIC needs it; nothing passes through the
+  alternates.
+- **Reading (`s.float()`) is the ROM's DEC-TO-FP** (2C9Bh), BASIC's
+  reader for a typed number and `VAL`. `fp_read.asm` finds the number
+  itself (the interpreter's pattern), points CH_ADD past its sign
+  (DEC-TO-FP takes none: a minus is the calculator's negate after), and
+  makes the byte after it an ENTER while the ROM reads, because the ROM
+  skips spaces and would read `2.5 3` as 2.53. The byte and CH_ADD are
+  put back, failure or not. Its "6 Number too big" is
+  `{number} doesn't fit in a float`; the ROM can't make 10^64, so an
+  exponent of 64 or more either way is too big, even for a tiny number.
+  It rounds at each digit, so it can differ from a literal's nearest 5
+  bytes in the last bit (DESIGN.md, "Floats: you get what you get").
 - **Printing** is the ROM's PRINT-FP (2DE3h): 8 significant digits,
   `0.5`, `.0001`, `1E+10`, `1.2345679E+8`. Its characters are caught in
   a buffer through a channel of our own and then printed through

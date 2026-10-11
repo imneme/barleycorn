@@ -96,10 +96,13 @@ def card():
     design = open(os.path.join(ROOT, 'DESIGN.md')).read()
     text = design.split('## 4. The whole language, on one page', 1)[1].split('```', 2)[1]
     words = set(re.findall(r'[A-Za-z_][A-Za-z_0-9]*', text))
+    dotted = set(re.findall(r'\.([A-Za-z_][A-Za-z_0-9]*)', text))
     funcs = set(B.BUILTIN_FUNCS) | set(B.SCREEN_FUNCS) | set(B.MACHINE_FUNCS) | set(B.FLOAT_FUNCS)
     methods = set(re.findall(r"'([a-z_]+)': \(", inspect.getsource(B.Checker.method_sig)))
-    bad = [f'the card leaves out {k} {n}' for k, names in (('the function', funcs), ('the method', methods))
-           for n in sorted(names) if n not in words]
+    named = funcs | set(B.INTS) | {'float', 'bool', 'bit', 'str', 'pos'}   # a method named like these is on the card
+    bad = [f'the card leaves out the function {n}' for n in sorted(funcs) if n not in words] + \
+          [f'the card leaves out the method {n}' for n in sorted(methods)    # after a dot: float(i) isn't s.float()
+           if n not in (dotted if n in named else words)]
     return len(funcs) + len(methods), bad
 
 

@@ -1813,7 +1813,8 @@ class Checker:
     def method_sig(self, ot, name, e):
         if ot is STR:
             return {'int': (['int'], FLEX), 'ints': ([], Gen('iter', FLEX)), 'split': (['text'], Gen('iter', STR)),
-                    'find': (['text'], INT), 'starts': (['text'], BOOL), 'trim': ([], STR)}.get(name)
+                    'find': (['text'], INT), 'starts': (['text'], BOOL), 'trim': ([], STR),
+                    'float': ([], FLOAT)}.get(name)
         if ot is LINES:
             return {'next': ([], STR)}.get(name)
         if isinstance(ot, Gen):
@@ -2078,6 +2079,7 @@ def arith(op, a, b, t, line):
 # -- the runtime's containers and text ---------------------------------------------------------------------------
 
 NUM_RE = re.compile(rb'\d+')
+FLOAT_RE = re.compile(rb'\s*([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)')   # s.float(): what a number can be
 
 
 def ints_in(s):
@@ -2626,6 +2628,14 @@ class Interp:
                     v = int(m.group(1))
                 if not (e.ty.lo <= v <= e.ty.hi):
                     raise BarleyError(f"{v} doesn't fit in {article(e.ty.name)}", line)
+                return v
+            if name == 'float':                               # the machine's own float, so too big is its own too
+                m = FLOAT_RE.match(obj)
+                if not m:
+                    raise BarleyError(f'"{obj.decode("latin-1")}" doesn\'t start with a number', line)
+                v = float(m.group(1))
+                if math.isinf(v):
+                    raise BarleyError(f"{m.group(1).decode('latin-1')} doesn't fit in a float", line)
                 return v
             if name == 'ints':
                 return ints_in(obj)

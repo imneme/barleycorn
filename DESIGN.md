@@ -204,7 +204,7 @@ TEXT        str: bytes, sliced   s.len (a word)  s[i] (a byte: chr(s[i])
             prints it as a letter)  s[a..b]  ==  <   for ch in s
             "ASCII, \n and \x90"   s.int()  s.int(k) (the k-th integer)
             s.ints() (all)  s.split(c)  s.find(t) (an int: -1 if it isn't
-            there)  s.starts(t)  s.trim()
+            there)  s.starts(t)  s.trim()  s.float() (a leading number)
             intern(s) -> word (0, 1, 2...)   name(id) -> str   chr(b)
 
 ARRAYS      T[N]: global, or local.  a[i] a.len
@@ -360,6 +360,23 @@ no floats yet. So **floats are the exception to "three implementations
 agree"**. Programs that print floats are compared to a tolerance, and
 the card says so: you use them, you get what you get.
 
+**Reading one from text is the machine's reading too.** On a Spectrum,
+`s.float()` hands the number to the ROM's own DEC-TO-FP (2C9Bh), the
+routine BASIC reads a typed number and `VAL` with, so it's what the 48K
+makes of it, roundings and limits included. A literal is rounded to the
+nearest 5 bytes by the compiler; the ROM builds the number a digit at a
+time and rounds at every step. Measured on the ROM's own code (4,500
+everyday decimals, through [pyhsb](https://github.com/imneme/pyhsb)'s
+little Z80), between six and nine in ten come out the same as the
+literal, depending on their shape, and nearly all the rest are one bit
+off in the last place: `"0.1".float()` is 7D 4C CC CC CC, where `0.1` is
+7D 4C CC CC CD. Whole numbers always agree. So compare a float read from
+text with a tolerance, as any float. The ROM also can't reach an
+exponent of 64 or more either way (it makes 10^64 on the way there), so
+on a Spectrum `1e-64` doesn't fit, while `1e-50` quietly becomes 0. The
+interpreter could one day borrow the same routine (pyhsb's `romfp` runs
+it, on your own ROM), and then the two would agree to the bit.
+
 The way to use them in AoC is to **aim with floats and land with
 integers**. In section 8, 2023 day 6 finds the roots of a quadratic in
 floats, then steps to the exact answer in `quad`s. That's correct even
@@ -420,6 +437,13 @@ The parsing helpers are the ones AoC solutions reach for first:
   literal does: `sum += line.int()` reads a `long` if `sum` is one. With
   nothing to say, it's a `long`. A number too big for its type stops a
   checked build with the number and the line.
+- `s.float()` reads a leading number as a float: `-2.5`, `.5`, `5.`,
+  `1e-3`, `6.02E23`, after any spaces. What follows it doesn't matter,
+  so `3east` is 3 (an `e` is an exponent only with digits). It's the
+  machine's own reading, so on a Spectrum it's the ROM's, as BASIC's
+  `VAL` (see "Floats: you get what you get"). No number at all stops
+  with `"{s}" doesn't start with a number`, and one too big for the
+  machine's floats with `{number} doesn't fit in a float`.
 
 **A string is bytes, and the language never translates them.** What
 changes between machines is only what printing a byte shows:
@@ -1160,6 +1184,7 @@ run them on inputs made for this repository
 | `m[k]`, a `word` key that hits | ~300-500 | hash, probe, compare |
 | `h.push` / `h.pop`, 1,000 six-byte records | ~2,000 | ten levels of compare and move |
 | `s.int()` | ~150 a digit | |
+| `s.float()` | ~7,500 a whole digit, ~20,000 after the point | the ROM's DEC-TO-FP, as `VAL`: `"3.25"` is 56,000 |
 | `plot` | the ROM's: slow; a fast fragment later | |
 | one statement, on average (Barley's Sieve) | ~75 | so about 50,000 a second at 3.5 MHz |
 

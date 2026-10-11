@@ -1,18 +1,20 @@
 """fp.asm on a real ROM: floats through the Spectrum's calculator, against Python
-and the interpreter's words.
+and the interpreter's words; and fp_read.asm, s.float(), the ROM reading text.
 
 Every routine is called on omse-ai's 48K through fprig.Rig, which also checks
 after every call that BASIC's state survived (IY, HL', ERR_SP, ERR_NR, X_PTR,
-an empty calculator stack, MEM). The model is Python: exact Fractions where
-the routine is exact (compare, trunc, floor, round, conversions, negate, abs),
-floats with a tolerance where the ROM computes (arithmetic, the functions).
-Each tolerance is printed with the worst error seen, so the notes can say what
-held. Failure messages are compared word for word with the interpreter's
-(barley.py's farith, its function and cast messages), with the value printed
-as the ROM prints it. Run it with omse-ai's Python ($OMSE_AI_PYTHON).
+CH_ADD, an empty calculator stack, MEM). The model is Python: exact Fractions
+where the routine is exact (compare, trunc, floor, round, conversions, negate,
+abs), floats with a tolerance where the ROM computes (arithmetic, the
+functions, reading). Each tolerance is printed with the worst error seen, so
+the notes can say what held. Failure messages are compared word for word with
+the interpreter's (barley.py's farith, its function, cast and s.float()
+messages), with the value printed as the ROM prints it. Run it with omse-ai's
+Python ($OMSE_AI_PYTHON).
 """
 import argparse
 import math
+import re
 import os
 import random
 import sys
@@ -44,7 +46,7 @@ WIDTH = {'byte': 1, 'word': 2, 'int': 2, 'long': 4, 'quad': 8}
 ROUTINES = ['bly_fadd', 'bly_fsub', 'bly_fmul', 'bly_fdiv', 'bly_fpow', 'bly_fneg', 'bly_fabs', 'bly_fcmp',
             'bly_fsqrt', 'bly_fsin', 'bly_fcos', 'bly_ftan', 'bly_fasin', 'bly_facos', 'bly_fatan', 'bly_fln',
             'bly_fexp', 'bly_ftrunc', 'bly_ffloor', 'bly_fround', 'bly_f_from_u16', 'bly_f_from_i16',
-            'bly_f_from_i64', 'bly_f_to_int', 'bly_pr_f']
+            'bly_f_from_i64', 'bly_f_to_int', 'bly_pr_f', 'bly_str_float']
 wrong = 0
 worst = {}                                            # routine -> the worst error seen, against its tolerance
 
@@ -374,6 +376,57 @@ def test_literals(rig):
         check(f'the ROM reads rom5({x!r})', rel_err(p, x) <= 6e-8, p)
 
 
+# -- reading: s.float() ----------------------------------------------------------------------------------------------
+TEXT = 0x9000                                         # the str's bytes go here (free in the rig), its 4 bytes at X
+FLOAT_RE = re.compile(rb'\s*([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)')     # barley.py's: what a number can be
+
+
+def strfloat(rig, t, after=b'Z#'):
+    """bly_str_float on the str t, whose bytes are followed in memory by `after`: (the call, the bytes kept)"""
+    r = rig.call('bly_str_float', hl=rig.X, de=rig.R,
+                 mem={TEXT: t + after, rig.X: TEXT.to_bytes(2, 'little') + len(t).to_bytes(2, 'little'),
+                      rig.R: b'\xAA' * 8})
+    return r, r.mem(TEXT, len(t) + len(after)) == t + after
+
+
+def test_strfloat(rig):
+    print("s.float(): the str's number, read by the ROM's DEC-TO-FP, against Python's reading of the same text")
+    cases = [b'0', b'1', b'-1', b'+2', b'65535', b'65536', b'-65535', b'-65536', b'3.25', b'-3.25e2xyz', b'5.',
+             b'.5', b'-.5', b'+.5e-1', b'1e', b'1e+', b'3east', b'\t 42 and more', b'-0', b'1E+05', b'007.50',
+             b'0.1', b'123456789012', b'1.7e38', b'-1.7e38', b'1e-38', b'1e-50', b'1e-63', b'12,7', b'1e5e5',
+             b'2.5 3', b'5. 3', b'3 5', b'1.5e3 3']          # the ROM skips spaces: the ENTER after the number stops it
+    for _ in range(N // 2):
+        w = rnd.choice([b'', b' ', b'  \t'])
+        n = rnd.choice([f'{rnd.uniform(-1e6, 1e6):.{rnd.randint(0, 6)}f}', f'{rnd.randint(0, 99)}.{rnd.randint(0, 99):02d}',
+                        f'{rnd.uniform(1, 10):.{rnd.randint(1, 8)}f}e{rnd.randint(-30, 30)}', str(rnd.randint(-10**9, 10**9)),
+                        f'.{rnd.randint(0, 99999)}'])
+        cases.append(w + n.encode() + rnd.choice([b'', b' ', b',', b'x', b'e', b'.', b' 7', b'e+']))
+    for t in cases:
+        want = float(FLOAT_RE.match(t).group(1))
+        r, kept = strfloat(rig, t)
+        check(f'{t!r}: the str and the byte after it are as they were', kept)
+        got = r.mem(rig.R, 8)
+        check(f'{t!r}', not r.failed and got[5:] == b'\xAA' * 3, repr(r.out), got.hex())
+        if r.failed:
+            continue
+        v = float(val(got[:5]))
+        if abs(want) < MINF:                              # too small for the ROM: its underflow is zero
+            check(f'{t!r} is 0 on a Spectrum', v == 0, v)
+            continue
+        err = rel_err(v, want)
+        note('s.float', err, 2e-9, t.decode('latin-1'))
+        check(f'{t!r} is near {want!r}', err <= 2e-9, v, err)
+    for t in [b'', b'.', b'-', b'abc', b' +x', b'e5', b'.e5', b'+-1', b'- 1']:
+        r, kept = strfloat(rig, t)
+        check(f'{t!r} fails', r.failed and r.out == f'"{t.decode()}" doesn\'t start with a number\n', repr(r.out))
+        check(f'{t!r}: the str is as it was', kept)
+    for t in [b'1e39', b'-1e39', b'  4e38 and more', b'1e-64', b'1e-100', b'1e200', b'9' * 40, b'1e999']:
+        span = FLOAT_RE.match(t).group(1).decode()        # too big for the ROM, or an exponent it can't reach (64+)
+        r, kept = strfloat(rig, t)
+        check(f'{t!r} fails', r.failed and r.out == f"{span} doesn't fit in a float\n", repr(r.out))
+        check(f'{t!r}: the str and the byte after it are as they were', kept)
+
+
 # -- costs ---------------------------------------------------------------------------------------------------------
 def costs(rig):
     print('\ncosts (T-states, interrupts off, the call included):')
@@ -406,6 +459,8 @@ def costs(rig):
     for x in (3.5, 1 / 3, 123456789.0, -1.2345e-20):
         r = rig.call('bly_pr_f', hl=rig.X, mem={rig.X: G.rom5(x)})
         out.append((f'bly_pr_f {x:g} -> {r.out}', r.t))
+    for t in (b'7', b'42', b'3.25', b'-17.5', b'0.001', b'123456.789', b'2.5e-3', b'6.02E23'):
+        out.append((f'bly_str_float "{t.decode()}"', strfloat(rig, t)[0].t))
     for k, t in out:
         print(f'  {k:42} {t:8,}')
 
@@ -414,7 +469,7 @@ def main():
     rig = Rig(ROUTINES, lib_dir=LIB)
     s = rig.sym
     print(f"fp.asm: {s['bly_pr_f.buf'] + 16 - s['bly_fadd']} bytes (code and its scratch)")
-    for t in (test_literals, test_cmp, test_whole, test_conv, test_arith, test_funcs, test_print):
+    for t in (test_literals, test_cmp, test_whole, test_conv, test_arith, test_funcs, test_print, test_strfloat):
         t(rig)
     if ARGS.costs:
         costs(rig)

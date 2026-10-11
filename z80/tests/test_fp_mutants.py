@@ -1,6 +1,7 @@
 """Watching test_fp.py fail: break fp.asm on purpose, one way at a time, and see the tests notice.
 
-Each mutant is a copy of lib/ with one change to fp.asm; test_fp.py --quick runs against the copy (--lib), so lib/
+Each mutant is a copy of lib/ with one change to fp.asm (or, where it says, fp_read.asm, s.float()'s reading);
+test_fp.py --quick runs against the copy (--lib), so lib/
 itself is never touched. A mutant is caught when the run reports anything WRONG or blows up (the rig refuses a
 call that leaves BASIC's state broken).
 
@@ -14,8 +15,9 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 LIB = os.path.join(HERE, '..', 'lib')
+FR = 'fp_read.asm'
 
-# (the text to change, what it becomes, what the change breaks)
+# (the text to change, what it becomes, what the change breaks[, the file: fp.asm unless it says])
 MUTANTS = [
     ('        ld (hl),91h\n        inc hl\n        ld (hl),80h\n        ret', '        ret\n        nop\n        nop\n        nop',
      'keep the ROM\'s slipped -65536 (00 FF 00 00 00)'),
@@ -51,17 +53,34 @@ MUTANTS = [
     ('        cp 4\n        jr c,.tok', '        cp 3\n        jr c,.tok', 'toint: 2^56..2^64 called too big'),
     ('        cp 34\n        jr c,.tn', '        cp 31\n        jr c,.tn', 'toint: tiny fractions cut short'),
     ('        cp 5\n        ld hl,.movf', '        cp 9\n        ld hl,.movf', 'overflow reported as no answer'),
+    ('        ld (hl),0Dh                 ; an ENTER', '        nop\n        nop                 ; an ENTER',
+     's.float: the ROM reads on past the number (2.5 3 is 2.53)', FR),
+    ('        ld a,(.saved)\n        ld (hl),a\n        ret', '        ld a,(.saved)\n        nop\n        ret',
+     's.float: the byte after the number left an ENTER', FR),
+    ('.put:   ld hl,(.chadd)              ; CH_ADD, and the byte after the number, as they were\n        ld (5C5Dh),hl',
+     '.put:   nop\n        nop\n        nop\n        nop\n        nop\n        nop', 's.float: CH_ADD left in the str', FR),
+    ('        or a\n        jr z,.pos', '        or a\n        jr .pos', 's.float: a minus ignored', FR),
+    ('        ld (5C3Dh),hl               ; and its ERR_SP', '        nop\n        nop\n        nop               ; and its ERR_SP',
+     's.float: an error leaves ERR_SP at our handler', FR),
+    ('        ld a,0FFh\n        ld (5C3Ah),a', '        nop\n        nop\n        nop\n        nop\n        nop',
+     's.float: ERR_NR left holding the report', FR),
+    ("        or 20h\n        cp 'e'", "        or 20h\n        cp 'x'", 's.float: an exponent never read (1E+05 is 1)', FR),
+    ("        cp ' '\n        jr z,.skip", "        cp '!'\n        jr z,.skip", 's.float: spaces in front not skipped', FR),
+    ('.whole: inc d\n        dec d\n        jp z,.bad', '.whole: nop\n        nop\n        nop\n        nop\n        nop',
+     's.float: a point alone handed to the ROM', FR),
+    ('.edig:  call .dig\n        jr nc,.noexp', '.edig:  call .dig\n        nop\n        nop',
+     's.float: an e with no digits taken as an exponent (3east)', FR),
 ]
 
 
 def main():
     py = sys.executable
     caught = 0
-    for i, (old, new, what) in enumerate(MUTANTS):
+    for i, (old, new, what, *where) in enumerate(MUTANTS):
         with tempfile.TemporaryDirectory() as d:
             lib = os.path.join(d, 'lib')
             shutil.copytree(LIB, lib)
-            p = os.path.join(lib, 'fp.asm')
+            p = os.path.join(lib, where[0] if where else 'fp.asm')
             s = open(p).read()
             if s.count(old) != 1:
                 print(f'?? mutant {i} ({what}): its text is found {s.count(old)} times')

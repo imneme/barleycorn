@@ -821,6 +821,8 @@ class Gen:
                 else:
                     call = f'bly_str_int({obj}, {lo}, {hi}, "{t.name}", {line})'
                 return self.temp(self.ctype(t), f'({self.ctype(t)}){call}')
+            if name == 'float':
+                return self.temp('f64', f'bly_str_float({obj}, {line})')
             if name == 'find':
                 return self.temp('i16', f'bly_find({obj}, {self.argtext(e.args[0], args[0])}, {line})')
             if name == 'starts':

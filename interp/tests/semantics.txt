@@ -2065,6 +2065,34 @@ end
 1024 1.414213562 -8 1.5 -1 0 -0.3333333333
 -2 -3 -2 3 -3 7
 
+=== s.float(): the number a str starts with, as the machine reads it
+func main()
+  print "  -3.25e2xyz".float(); " "; "5.".float(); " "; ".5".float(); " "; "+.5e-1".float(); " "; "1e".float(); " "; "3east".float()
+  print "42 and more".float(); " "; "-0".float(); " "; "1E+05".float(); " "; "007.50".float(); " "; "2.5 3".float(); " "; "5. 3".float()
+  var total = 0.0
+  for w in "1.5,2.25,-0.75".split(",") do total += w.float() end
+  print total; " "; "6.02E23".float() / 1e23
+end
+--- expect
+-325 5 0.5 0.05 1 3
+42 0 100000 7.5 2.5 5
+3 6.02
+
+=== s.float() with no number stops
+func main()
+  print " .e5".float()
+end
+--- expect
+" .e5" doesn't start with a number at line 2
+
+=== s.float() too big for the machine's floats stops
+func main()
+  var big = "-1e999 and then some".float()
+  print big
+end
+--- expect
+-1e999 doesn't fit in a float at line 2
+
 === floats: conversions from every integer type, and back, truncating
 func main()
   var b: byte = 200

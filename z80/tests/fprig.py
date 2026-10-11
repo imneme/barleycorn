@@ -10,7 +10,7 @@ address Python poked in, and stores A back. Python stops it at rig_ready with a 
 and runs it on to rig_ready again. Interrupts are off around the call, so the T-states are the routine's own.
 A routine that fails ends in bly_exit, whose return to BASIC is pointed back at rig_ready (bly_basic_sp is poked,
 and its RST 8, the report after a failure, made a RET), so failures cost nothing either. After every call the rig checks what BASIC needs kept: IY, HL', ERR_SP, ERR_NR,
-an empty calculator stack, and MEM.
+an empty calculator stack, MEM, X_PTR and CH_ADD.
 Run with a Python that can import omse-ai (paths.py's OMSE_AI_PYTHON).
 """
 import os
@@ -31,7 +31,7 @@ import zxbuild                                          # noqa: E402
 SJASM = paths.SJASMPLUS
 ORG = 0xC000
 BSS = 0xBF00
-ERR_SP, ERR_NR, STKBOT, STKEND, MEM = 0x5C3D, 0x5C3A, 0x5C63, 0x5C65, 0x5C68
+ERR_SP, ERR_NR, STKBOT, STKEND, MEM, CH_ADD = 0x5C3D, 0x5C3A, 0x5C63, 0x5C65, 0x5C68, 0x5C5D
 
 RIG = f"""
         org {ORG}
@@ -128,7 +128,7 @@ class Rig:
         r = z.regs()
         return {'iy': r['iy'], "hl'": r["hl'"], 'ERR_SP': z.peek16(ERR_SP), 'ERR_NR': z.peek(ERR_NR),
                 'STKEND-STKBOT': z.peek16(STKEND) - z.peek16(STKBOT), 'MEM': z.peek16(MEM),
-                'X_PTR_hi': z.peek(0x5C60)}
+                'X_PTR_hi': z.peek(0x5C60), 'CH_ADD': z.peek16(CH_ADD)}
 
     def call(self, routine, hl=0, de=0, bc=0, a=0, mem=None, frames=200):
         z, s = self.zx, self.sym

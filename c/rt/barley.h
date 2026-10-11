@@ -461,6 +461,45 @@ static i64 bly_str_int(bly_str s, i64 lo, i64 hi, const char *tname, int l) {
     return bly_num(s.p + st, i - st, neg, lo, hi, tname, l);
 }
 
+/* s.float(): \s*[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?, as the interpreter's FLOAT_RE, and strtod of just that */
+static f64 bly_str_float(bly_str s, int l) {
+    u32 i = 0;
+    while (i < s.n && bly_isspace(s.p[i])) i++;
+    u32 st = i;
+    if (i < s.n && (s.p[i] == '-' || s.p[i] == '+')) i++;
+    u32 d = i;
+    while (i < s.n && bly_isdigit(s.p[i])) i++;
+    u32 nd = i - d;                   /* digits, before the point and after: a point alone isn't a number */
+    if (i < s.n && s.p[i] == '.') {
+        u32 f = ++i;
+        while (i < s.n && bly_isdigit(s.p[i])) i++;
+        nd += i - f;
+    }
+    if (nd == 0) {
+        bly_pr_cstr("\"");
+        bly_pr_str(s);
+        bly_fail("\" doesn't start with a number", l);
+    }
+    if (i < s.n && (s.p[i] == 'e' || s.p[i] == 'E')) {   /* an exponent only if it has digits: 3east is 3 */
+        u32 j = i + 1;
+        if (j < s.n && (s.p[j] == '-' || s.p[j] == '+')) j++;
+        u32 e = j;
+        while (j < s.n && bly_isdigit(s.p[j])) j++;
+        if (j > e) i = j;
+    }
+    u32 n = i - st;
+    char buf[64], *b = n < sizeof buf ? buf : (char *)malloc(n + 1);
+    memcpy(b, s.p + st, n);
+    b[n] = 0;
+    f64 v = strtod(b, 0);
+    if (b != buf) free(b);
+    if (isinf(v)) {                   /* too big for the machine's float: a double's, here */
+        bly_out(s.p + st, n);
+        bly_fail(" doesn't fit in a float", l);
+    }
+    return v;
+}
+
 /* ints(): every run of digits; a minus is a sign unless it follows a digit, so 2-4 is two numbers */
 typedef struct { bly_str s; u32 i; u32 st, n; int neg; } bly_ints_it;
 static inline void bly_ints_init(bly_ints_it *it, bly_str s) { it->s = s; it->i = 0; }

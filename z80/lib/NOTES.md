@@ -1506,6 +1506,74 @@ printing a float is up to a tenth. Day 6 needs one sqrt.
   that were another `--c` run's. (Fixed since: each run builds in a
   directory of its own.)
 
+## Reading a float: s.float() through the ROM's DEC-TO-FP (11 Oct 2026)
+
+*Files: `fp_read.asm` (target `zx48`), `bly_str_float` in
+`../../c/rt/barley.h`, `FLOAT_RE` and `e_dot` in
+`../../interp/barley.py`. Tests: `test_strfloat` in
+`../tests/test_fp.py`, ten mutants in `../tests/test_fp_mutants.py`,
+three cases in the suite.* Melissa's idea: let the ROM read it, as BASIC
+does.
+
+**What it is.** The interpreter's pattern finds the number
+(`\s*[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?`), and then each machine
+reads that span its own way: Python's `float()`, C's `strtod`, and on
+the 48K the ROM's DEC-TO-FP at 2C9Bh. The public spectrum-minilib has no
+VAL to borrow, and DEC-TO-FP is the part of VAL that matters. Its bytes,
+read out of the ROM rather than remembered, open with `CP C4h` (the BIN
+token) before the decimal path at 2CB8h; it takes A = the character at
+CH_ADD and no sign. pyhsb's `romfp.py` (Melissa's pointer, mid-build)
+sets it up the same way, which confirmed the contract.
+
+**The traps, and what's done about them:**
+- **The ROM skips spaces as it reads** (after the point, through RST 18h
+  and 20h), so `2.5 3` would be 2.53 and `5. 3` would be 5.3. The byte
+  after the number is made an ENTER while the ROM reads and put back
+  after, failure or not: no copy, however long the number.
+- **CH_ADD is BASIC's.** Saved and put back; the rig now checks it after
+  every call, which is how the mutant that leaves it in the str is
+  caught.
+- **Errors** are caught exactly as `fp.asm` catches them (Melissa's
+  `call_with_errhandler`). A number the pattern found can only raise "6
+  Number too big": `{number} doesn't fit in a float`.
+- **The ROM's limits are its own.** E-TO-FP makes 10^(2^k) by squaring,
+  so any exponent of 64 or more either way needs 10^64 and is too big:
+  `1e-64` fails on the 48K while `1e-50` quietly underflows to 0. The
+  interpreter and C read `1e-400` as 0 and fail only past a double's
+  range. That's DESIGN's "you get what you get", and DESIGN says so.
+
+**The seam with literals, measured.** `rom5` rounds a literal to the
+nearest 5 bytes; DEC-TO-FP rounds at every digit. Through pyhsb's
+z80mini running the real ROM's code, by value, 1,500 of each shape:
+`d.d` 93% the same as the literal and 7% one bit off; `0.ddd` 61% the
+same, 39% one bit, 0.5% two; `d.ddEe` 61% the same, 33% one bit, 5% two,
+0.5% more. Whole numbers always agree. `"0.1".float()` is
+`7D 4C CC CC CC`, the literal `0.1` is `…CD` (test_fp.py's literal check
+already said the ROM's own 1/10 ends in CC).
+
+**Costs** (T-states, on the ROM, the call included): `"7"` 9,972; `"42"`
+17,481; `"3.25"` 55,997; `"-17.5"` 43,560; `"0.001"` 64,618;
+`"123456.789"` 124,340; `"2.5e-3"` 74,337; `"6.02E23"` 125,855. About
+7,500 a whole digit and 20,000 a digit after the point: at 3.5 MHz,
+about 60 numbers like `3.25` a second (350 single digits), so a thousand
+floats in an input take a quarter of a minute.
+
+**Testing:** `test_strfloat` reads 34 chosen strings and 75 random ones
+(`--quick`; 400 in full) on the ROM against Python's reading of the same
+span, within 2e-9 (worst seen 9.8e-10, on `4.34639984e23`), and checks
+every failure word for word and that the str and the byte after it come
+back unchanged. **Mutants: 10 of 10 caught** (the ENTER, the byte put
+back, CH_ADD, the minus, ERR_SP, ERR_NR, the exponent, leading spaces, a
+point alone, an `e` without digits). Two first didn't apply (their lines
+start with a label) and said so rather than passing.
+
+**Found on the way:** `tools/check_docs.py`'s card check looked for
+every method name as a word anywhere on the card, so a method named like
+a function or a type (`float`, `int`) passed on the strength of
+`float(i)`. It now wants those after a dot. It caught `s.float()`
+missing; the container methods the card writes bare (`push pop`) are
+still fine.
+
 ## Random numbers: Melissa's generator (random.asm, rndclock.asm)
 
 *Files: `random.asm`, `rndclock.asm` (the 48K's clock seed),
