@@ -1,6 +1,6 @@
 ;; provides: bly_ftrunc bly_ffloor bly_fround bly_fneg bly_fabs bly_fcmp bly_f_from_u16 bly_f_from_i16 bly_f_from_i64 bly_f_to_int bly_fx
 ;; needs: bly_pr_f bly_pr_cstr bly_fail
-;; targets: cpm zx48
+;; targets: cpm zx48 test
 ;; Floats, the part that's exact in Z80 and needs no ROM: the 48K's and CP/M's alike (ABI.md section 11). The form
 ;; is the ROM's 5 bytes on both: the short form 00 s lo hi 00, or e m3 m2 m1 m0, 0.1mmm... x 2^(e-128).
 ;; bly_ftrunc bly_ffloor bly_fround   in: HL=&x BC=&r   (exact: not the ROM's INT, which has a bug at -65536)

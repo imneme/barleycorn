@@ -616,6 +616,13 @@ float can't be a map or set key, which the checker already refuses). On
 CP/M there's no ROM, and the generator stops with
 `floats are not on the Z80 yet: the CP/M target has no ROM calculator`.
 
+**Where there's no ROM** (CP/M; the generator doesn't use it there yet),
+`lib/fp_cpm.asm` gives the same routines the same 5 bytes: `+ - * /`
+correctly rounded (the nearest, ties away from zero, as a literal), and
+`bly_pr_f` laid out as PRINT-FP lays a number out, its digits exactly
+rounded. They're held to a model of exact Fractions (`z80/fp5.py`) bit
+for bit and text for text (`tests/test_fpcpm.py`).
+
 **Constants** are made by the generator (`z80gen.rom5`): the nearest 5
 bytes, rounded half away from zero, the short form when the value is
 whole and fits. A literal too big for the ROM is an error at compile

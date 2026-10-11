@@ -1574,6 +1574,59 @@ a function or a type (`float`, `int`) passed on the strength of
 missing; the container methods the card writes bare (`push pop`) are
 still fine.
 
+## Floats without a ROM: fp_cpm.asm, the first half (11 Oct 2026)
+
+*Files: `fp_cpm.asm` (targets `cpm`, `test`), `fp_exact.asm` (now
+`cpm zx48 test`), `../fp5.py` (the model). Tests:
+`../tests/test_fpcpm.py [--quick] [--mutants]`. The design, with its
+measurements, is in the drafts' `FLOATS-CPM.md`.* Melissa's next after
+`stop`: floats for CP/M. Not yet used by the generator: sqrt, the
+functions and reading come first.
+
+**The form is the ROM's own 5 bytes on CP/M too** (Melissa: every 32-bit
+integer exact), so the generator and everything `fp_exact.asm` does are
+shared with the 48K, and only what the ROM did needs our own code.
+**Rounding is one rule everywhere: the nearest, ties away from zero**,
+as `rom5` rounds a literal and `bly_f_from_i64` a quad.
+
+**The one trick:** rounding x with ties away is floor(x + 1/2) =
+(floor(2x) + 1) >> 1, so an operation needs only the floor of its exact
+answer to 33 bits, and no sticky bits at all. `*` keeps the whole 64-bit
+product (four `bly_i_mul16`s); `/` is restoring division to 33 quotient
+bits; `+` and `-` work in a 64-bit window with the larger number at its
+top. What the smaller loses below the window can matter only to a
+subtraction, and only when the exponents are exactly 33 apart: from 34
+on, what's left of it is between 1 and 2^30, so the difference can't sit
+on a rounding boundary. (A first version also tracked whole bytes lost
+below the window; its mutant couldn't be caught, because bytes are lost
+only from 40 apart. The dead code went, the argument went into the
+comment.)
+
+**Printing** is `fp5.show`: PRINT-FP's layout, measured on the ROM (8
+digits; a leading 0 only for 0.1 to 0.99...; positional from 10^7 down
+to 10^-5, E notation outside), with the digits exactly rounded: q =
+floor(x x 10^(8-k)) in a 24-byte integer, by x10 then the binary shift,
+or the shift then /10 (nested floors of positive divisions are exact),
+with k's guess checked by q's range, not by the rounded digits. Against
+the ROM's own PRINT-FP over 2,000 random floats, 1,992 print the same,
+and in the other 8 it's the ROM's last digit that's wrong.
+
+**Costs** (T, the call included, `--quick`): `+` 3,013 mean, `-` 3,081,
+`*` 4,938, `/` 18,301, printing 63,859 (557 to 370,531). The ROM's `+`,
+`*` and `/`: 2,713, 6,183 and 9,400, and printing 53,000 to 266,000. `/`
+wants a faster divide; printing went from 204,000 to 64,000 mean by
+shifting whole bytes first and keeping x10 and /10 to the significant
+bytes.
+
+**Testing:** bit for bit and text for text, 1,895 checks in `--quick`, 0
+wrong. **Mutants: 19 of 19 caught, and the CONTROL left alone**: never
+rounding, rounding on the wrong bit, a subtraction forgetting what was
+lost, an addition its carry, the exponent bias, a partial product's
+carry, the quotient's last bit, underflow as overflow, and seven ways to
+print wrongly. Two first missed for the test's sake: one mutant's text
+began with a label, and underflow at exactly exponent 0 needed cases
+aimed at the exponent's edges.
+
 ## Random numbers: Melissa's generator (random.asm, rndclock.asm)
 
 *Files: `random.asm`, `rndclock.asm` (the 48K's clock seed),

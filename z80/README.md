@@ -43,7 +43,8 @@ on CP/M) counts as **n/a**, not failed.
   - `fp.asm`: floats, through the Spectrum ROM's calculator;
     `fp_exact.asm`: what's exact in Z80 (compare, round, the
     conversions); `fp_read.asm`: `s.float()`, the ROM reading a number
-    from text
+    from text; `fp_cpm.asm`: floats without a ROM (CP/M), our own
+    arithmetic and printing, correctly rounded
   - `zxgfx.asm`, `zxline.asm`, `zxcircle.asm`: plotting, lines and
     circles; `zxbeep.asm`: the beeper
   - `plat_zx.asm`, `plat_cpm.asm`, `plat_test.asm`: the start, output,
