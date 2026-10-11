@@ -1668,6 +1668,20 @@ Python: exp 2.5e-10, ln 2.33e-10, about one unit in the last place**
 truncated series hides under the tolerance by design, but a shifted
 coefficient table can't.
 
+**sin, cos, tan, atan, asin, acos, the same way:** sin and cos reduce by
+pi/2 in two parts and take n mod 4 from `bly_fx.toint` (exact under
+2^64; past it n is a multiple of 4), cos being sin a quarter on; tan is
+sin r / cos r, or -cos r / sin r in an odd quadrant. atan goes through
+1/x past 1 and through (y sqrt3 - 1)/(y + sqrt3) past tan(pi/12), then
+its series to y^19; asin is atan(x / sqrt(1 - x^2)) with +-1 exactly
++-pi/2, acos pi/2 less it; past 1 they say `{name}({x}) has no answer`.
+Held to test_fp's tolerance shapes for the ROM with constants about
+three times tighter, **the worst is 0.4 of that** (acos; sin 0.07, cos
+0.15, tan 0.07, atan 0.29, asin 0.26). Means: sin and cos 115,000 T, tan
+215,000, atan 100,000 (the ROM 213,410), asin and acos 240,000 (the
+ROM's 608,518 and 614,337). Two mutants (sin's quadrant, atan's pi/6),
+caught.
+
 ## Random numbers: Melissa's generator (random.asm, rndclock.asm)
 
 *Files: `random.asm`, `rndclock.asm` (the 48K's clock seed),

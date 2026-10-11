@@ -1,6 +1,7 @@
 ;; provides: bly_fadd bly_fsub bly_fmul bly_fdiv bly_fsqrt bly_fc bly_pr_f bly_str_float bly_fk bly_fexp bly_fln
+;; provides: bly_fsin bly_fcos bly_ftan bly_fatan bly_fasin bly_facos
 ;; needs: bly_fx bly_fail bly_div0 bly_i_mul16 bly_pr_cstr bly_pr_str bly_out bly_fcmp bly_fround bly_f_to_int
-;; needs: bly_f_from_i16 bly_fneg
+;; needs: bly_f_from_i16 bly_fneg bly_fabs
 ;; targets: cpm test
 ;; Floats where there's no ROM (CP/M, and the bare Z80 the tests use): the ROM's 5-byte form all the same (ABI.md
 ;; section 11), with our own arithmetic, correctly rounded: the nearest 5 bytes, ties away from zero, as a literal is
@@ -13,6 +14,8 @@
 ;;                fails: "{s}" doesn't start with a number; {number} doesn't fit in a float
 ;; bly_fexp bly_fln   in: HL=&x BC=&r   within a few units of the last place (test_fpcpm.py prints the worst)
 ;;                fails: exp({x}) has no answer (too big), ln({x}) has no answer (x <= 0)
+;; bly_fsin bly_fcos bly_ftan bly_fatan bly_fasin bly_facos   in: HL=&x BC=&r   likewise
+;;                fails: asin({x}) / acos({x}) has no answer (|x| > 1)
 ;; bly_pr_f       in: HL=&x   prints x as the ROM's PRINT-FP lays a number out (8 digits, .0001, 1E+10), its digits
 ;;                exactly rounded, through bly_out (so print's column is kept)
 ;; Every routine clobbers AF BC DE HL IX.
@@ -1140,7 +1143,7 @@ bly_str_float:
 ; A script is bytes: 1 add, 2 sub, 3 mul, 4 div (the top two: a op b), 5 dup, 6 swap, 7 drop, 8 + an address (push
 ; the 5 bytes there), 9 i (push memory i), 10 i (store the top in memory i, keeping it), 11 n + an address (Horner:
 ; the top x becomes c0 x^n + ... + cn, the n + 1 constants there highest first), 12 neg, 0 end. Each function does
-; its range reduction around a script or two. The constants are exact rationals rounded once (coeffs.py).
+; its range reduction around a script or two. 13 is sqrt. The constants are exact rationals rounded once (coeffs.py).
 bly_fk:
 .reset: ld hl,.stk-5                ; an empty stack
         ld (.top),hl
@@ -1162,10 +1165,17 @@ bly_fk:
         jp z,.stm
         cp 11
         jp z,.poly
+        cp 12
+        jp nz,.sqrt
         ld hl,(.top)                ; 12: neg
         ld b,h
         ld c,l
         call bly_fneg
+        jp .nx
+.sqrt:  ld hl,(.top)                ; 13: sqrt
+        ld b,h
+        ld c,l
+        call bly_fsqrt
         jp .nx
 .ar:    ld hl,(.top)                ; a op b: b on top, a below, the answer into a's slot
         ld d,h
@@ -1548,6 +1558,267 @@ bly_fln:
 .x:     dw 0
 .u:     ds 6
 .name:  db "ln",0
+
+; sin, cos, tan: n = round(x / (pi/2)), r = x - n pi2hi - n pi2lo (pi/2 in two parts); n mod 4 (from bly_fx.toint:
+; exact under 2^64, and past it n is a multiple of 4) picks sin r or cos r and the sign. cos is sin a quarter on.
+bly_fsin:
+        xor a
+        jp bly_ftan.go
+bly_fcos:
+        ld a,1
+        jp bly_ftan.go
+bly_ftan:
+        ld a,4                      ; 4: tan
+.go:    ld (.q0),a
+        ld (.x),hl
+        ld (bly_fk.r),bc
+        ld de,bly_fk.m
+        ld bc,5
+        ldir
+        call bly_fk.reset
+        ld hl,.s1                   ; n = round(x 2/pi) into memory 1
+        call bly_fk.run
+        ld hl,(bly_fk.top)
+        ld b,h
+        ld c,l
+        call bly_fround
+        ld hl,(bly_fk.top)
+        ld de,bly_fk.m+5
+        ld bc,5
+        ldir
+        ld hl,bly_fk.m+5            ; q = n mod 4
+        call bly_fx.toint
+        ld a,(bly_fx.mag)
+        and 3
+        ld b,a
+        ld a,(bly_fx.neg)
+        or a
+        ld a,b
+        jp z,.qp
+        neg
+        and 3
+.qp:    ld (.q),a
+        call bly_fk.reset
+        ld hl,.s2                   ; r into memory 2
+        call bly_fk.run
+        ld a,(.q0)
+        cp 4
+        jp z,.tan
+        ld hl,.q
+        add a,(hl)
+        and 3
+        ld (.q),a
+        rra                         ; odd: cos r, even: sin r
+        ld hl,.ss
+        jp nc,.f
+        ld hl,.sc
+.f:     call bly_fk.run
+        ld a,(.q)                   ; 2 and 3: the other sign
+        and 2
+        jp z,bly_fk.out
+        ld hl,.sn
+        call bly_fk.run
+        jp bly_fk.out
+.tan:   ld hl,.ss                   ; sin r, then cos r, on the stack
+        call bly_fk.run
+        ld hl,.sc
+        call bly_fk.run
+        ld a,(.q)                   ; even: sin / cos; odd: -cos / sin
+        rra
+        ld hl,.sd
+        jp nc,.t
+        ld hl,.sdi
+.t:     call bly_fk.run
+        jp bly_fk.out
+.s1:    db 9,0,8
+        dw bly_fk.rpi2
+        db 3,0
+.s2:    db 9,0,9,1,8
+        dw bly_fk.pi2hi
+        db 3,2,9,1,8
+        dw bly_fk.pi2lo
+        db 3,2,10,2,7,0
+.ss:    db 9,2,5,3,11,6             ; sin r = r (1 - r^2/3! + ... )
+        dw bly_fk.s6
+        db 9,2,3,0
+.sc:    db 9,2,5,3,11,7             ; cos r = 1 - r^2/2! + ...
+        dw bly_fk.c7
+        db 0
+.sn:    db 12,0
+.sd:    db 4,0
+.sdi:   db 6,4,12,0
+.x:     dw 0
+.q0:    db 0
+.q:     db 0
+
+; atan: |x| > 1 through 1/x (then pi/2 less), past tan(pi/12) through (y sqrt3 - 1)/(y + sqrt3) (then pi/6 more), and
+; the series y(1 - y^2/3 + ...) to y^19; the sign last. asin x = atan(x / sqrt(1 - x^2)), +-1 exactly +-pi/2;
+; acos = pi/2 - asin. Past 1, asin and acos have no answer.
+bly_fatan:
+        ld (bly_fk.r),bc
+        ld (.x),hl
+        ld bc,bly_fk.m              ; memory 0 = |x|
+        call bly_fabs
+        xor a
+        ld (.inv),a
+        ld (.far),a
+        ld hl,bly_fk.m
+        ld de,bly_fk.one
+        call bly_fcmp
+        dec a
+        jp nz,.le1
+        ld (.inv),a                 ; (A is 0 here: set it to 1)
+        ld hl,.inv
+        inc (hl)
+        call bly_fk.reset
+        ld hl,.sinv
+        call bly_fk.run
+.le1:   ld hl,bly_fk.m
+        ld de,bly_fk.tan12
+        call bly_fcmp
+        dec a
+        jp nz,.near
+        ld a,1
+        ld (.far),a
+        call bly_fk.reset
+        ld hl,.sfar
+        call bly_fk.run
+.near:  call bly_fk.reset
+        ld hl,.sser
+        call bly_fk.run
+        ld a,(.far)
+        or a
+        ld hl,.spi6
+        call nz,bly_fk.run
+        ld a,(.inv)
+        or a
+        ld hl,.spi2
+        call nz,bly_fk.run
+        ld hl,(.x)                  ; negative x: negative answer
+        inc hl
+        bit 7,(hl)
+        jp z,bly_fk.out
+        ld hl,.sneg
+        call bly_fk.run
+        jp bly_fk.out
+.sinv:  db 8
+        dw bly_fk.one
+        db 9,0,4,10,0,0
+.sfar:  db 9,0,8
+        dw bly_fk.sqrt3
+        db 3,8
+        dw bly_fk.one
+        db 2,9,0,8
+        dw bly_fk.sqrt3
+        db 1,4,10,0,0
+.sser:  db 9,0,5,3,11,9
+        dw bly_fk.a9
+        db 9,0,3,0
+.spi6:  db 8
+        dw bly_fk.pi6
+        db 1,0
+.spi2:  db 8
+        dw bly_fk.pi2
+        db 6,2,0
+.sneg:  db 12,0
+.x:     dw 0
+.inv:   db 0
+.far:   db 0
+
+bly_fasin:
+        ld (.x),hl
+        ld (.r),bc
+        ld de,.name
+        call .check                 ; |x| > 1: no answer; |x| = 1: +-pi/2
+        ret c
+        call bly_fk.reset           ; y = x / sqrt(1 - x^2), then atan y
+        ld hl,(.x)
+        ld de,bly_fk.m
+        ld bc,5
+        ldir
+        ld hl,.sy
+        call bly_fk.run
+        ld hl,(bly_fk.top)
+        ld de,.y
+        ld bc,5
+        ldir
+        ld hl,.y
+        ld bc,(.r)
+        jp bly_fatan
+.check: push de                     ; C if done: |x| = 1 gives +-pi/2 at (.r); past 1 fails with the name at DE
+        ld hl,(.x)
+        ld bc,.y
+        call bly_fabs
+        ld hl,.y
+        ld de,bly_fk.one
+        call bly_fcmp
+        pop de
+        dec a
+        jp z,.no
+        inc a
+        jp z,.one
+        or a
+        ret
+.no:    ex de,hl
+        ld de,(.x)
+        jp bly_fk.no
+.one:   ld hl,bly_fk.pi2            ; +-pi/2
+        ld de,(.r)
+        ld bc,5
+        ldir
+        ld hl,(.x)
+        inc hl
+        bit 7,(hl)
+        scf
+        ret z
+        ld hl,(.r)
+        ld b,h
+        ld c,l
+        call bly_fneg
+        scf
+        ret
+.sy:    db 9,0,5,3,8
+        dw bly_fk.one
+        db 6,2,13,9,0,6,4,0
+.x:     dw 0
+.r:     dw 0
+.y:     ds 5
+.name:  db "asin",0
+
+bly_facos:
+        ld (bly_fasin.x),hl
+        ld (.r),bc
+        ld (bly_fasin.r),bc
+        ld de,.name
+        call bly_fasin.check
+        jp c,.one
+        ld hl,(bly_fasin.x)         ; asin, into .a; then pi/2 - it
+        ld bc,.a
+        call bly_fasin
+        call bly_fk.reset
+        ld hl,.s
+        call bly_fk.run
+        ld hl,(.r)
+        ld (bly_fk.r),hl
+        jp bly_fk.out
+.one:   ld hl,(.r)                  ; asin was +-pi/2 there: acos is pi/2 less it
+        ld de,.a
+        ld bc,5
+        ldir
+        call bly_fk.reset
+        ld hl,.s
+        call bly_fk.run
+        ld hl,(.r)
+        ld (bly_fk.r),hl
+        jp bly_fk.out
+.s:     db 8
+        dw bly_fk.pi2
+        db 8
+        dw .a
+        db 2,0
+.r:     dw 0
+.a:     ds 5
+.name:  db "acos",0
 
 ; -- the shared part ------------------------------------------------------------------------------------------------
 bly_fc:

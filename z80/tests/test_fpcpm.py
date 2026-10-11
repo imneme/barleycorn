@@ -43,7 +43,8 @@ N = 300 if ARGS.quick else 2000
 rnd = random.Random(ARGS.seed)
 A, B, R = 0xE000, 0xE008, 0xE010
 run = Runner(['bly_fadd', 'bly_fsub', 'bly_fmul', 'bly_fdiv', 'bly_fsqrt', 'bly_pr_f', 'bly_str_float',
-              'bly_fexp', 'bly_fln'])
+              'bly_fexp', 'bly_fln', 'bly_fsin', 'bly_fcos', 'bly_ftan', 'bly_fatan', 'bly_fasin',
+              'bly_facos'])
 wrong = checks = 0
 costs = {}
 
@@ -160,6 +161,8 @@ MUTANTS = [   # (the text, what it becomes, what that breaks)
     ('        ld hl,161', '        ld hl,160', "read: a small number's exponent one low"),
     ('        ld hl,(.k)\n        add hl,de', '        ld hl,(.k)\n        inc hl\n        add hl,de', 'exp: 2^k one too many'),
     ('        db 1,4,10,2,5,3,11,6', '        db 1,4,10,2,5,3,11,5', "ln: its series one term short, shifted"),
+    ('        ld hl,.q\n        add a,(hl)', '        ld hl,.q\n        add a,0', 'sin: the quadrant forgotten'),
+    ('        ld a,1\n        ld (.far),a', '        ld a,0\n        ld (.far),a', "atan: the far reduction's pi/6 forgotten"),
     ('; The one trick:', '; The trick:', 'CONTROL: a comment'),
 ]
 
@@ -280,12 +283,27 @@ def main():
         want = b'"' + t + b'" doesn\'t start with a number\n'
         if not (res.failed and res.out == want):
             say_wrong('read', t, 'should fail', want, 'got', res.out)
-    print('the functions against Python, within a tolerance (relative), and their failures word for word')
+    print('the functions against Python, within a tolerance, and their failures word for word')
     import math
     FUNCS = {'bly_fexp': ('exp', math.exp, lambda: F(rnd.uniform(-89.6, 88.2)).limit_denominator(1 << 40), 2e-9),
-             'bly_fln': ('ln', math.log, lambda: F(abs(float(fp5.value(rand_float()))) or 1), 2e-9)}
+             'bly_fln': ('ln', math.log, lambda: F(abs(float(fp5.value(rand_float()))) or 1), 2e-9),
+             'bly_fsin': ('sin', math.sin, lambda: F(rnd.uniform(-300, 300)), None),
+             'bly_fcos': ('cos', math.cos, lambda: F(rnd.uniform(-300, 300)), None),
+             'bly_ftan': ('tan', math.tan, lambda: F(rnd.uniform(-10, 10)), None),
+             'bly_fatan': ('atan', math.atan, lambda: F(fp5.value(rand_float())), None),
+             'bly_fasin': ('asin', math.asin, lambda: F(rnd.uniform(-1.02, 1.02)), None),
+             'bly_facos': ('acos', math.acos, lambda: F(rnd.uniform(-1.02, 1.02)), None)}
+    ABS = {   # an absolute tolerance, for x and the right answer (test_fp's shapes for the ROM, its constants tighter)
+        'sin': lambda x, w: 1e-9 * max(1, abs(x)), 'cos': lambda x, w: 1e-9 * max(1, abs(x)),
+        'tan': lambda x, w: (1e-9 * max(1, abs(x)) + 3e-9 * abs(w)) * (1 + w * w), 'atan': lambda x, w: 1e-9,
+        'asin': lambda x, w: 1e-9 + 2e-10 / math.sqrt(max(1 - x * x, 1e-18)),
+        'acos': lambda x, w: 1e-9 + 2e-10 / math.sqrt(max(1 - x * x, 1e-18))}
+    tol0 = 2e-9                                     # ABS errors are scaled to this: under it is within
     for name, (word, fn, draw, tol) in FUNCS.items():
+        tol = tol or tol0
         xs = [fp5.pack(draw()) for _ in range(N // 2)] + [fp5.pack(F(v)) for v in (1, 2, F(1, 2), 10, -1, 0, 88, 89, -89, -90)]
+        if word in ('asin', 'acos'):
+            xs = [x for x in xs if abs(fp5.value(x)) <= 2]
         for x in xs:
             checks += 1
             v = float(fp5.value(x))
@@ -294,6 +312,8 @@ def main():
             try:
                 want = fn(v)
                 ok_domain = not (name == 'bly_fln' and v <= 0) and abs(want) < 1.70141183e38
+                if word in ('asin', 'acos') and abs(v) > 1:
+                    ok_domain = False
             except (ValueError, OverflowError):
                 ok_domain = False
             if not ok_domain:
@@ -307,7 +327,9 @@ def main():
             if res.t is not None:
                 costs.setdefault(name, []).append(res.t)
             g = float(fp5.value(got[:5]))
-            if abs(want) < 2.94e-39:                  # under the smallest 5-byte float: 0 is right
+            if word in ABS:
+                err = abs(g - want) / ABS[word](v, want) * tol0
+            elif abs(want) < 2.94e-39:                  # under the smallest 5-byte float: 0 is right
                 err = 0.0 if g == 0 else abs(g - want) / abs(want)
             else:
                 err = abs(g - want) / abs(want)
@@ -316,9 +338,12 @@ def main():
                 worst[0], worst[1] = err, f'{v!r}'
             if err > tol:
                 say_wrong(word, x.hex(), v, 'gave', g, 'want', want, f'error {err:.2e}')
-    for word in ('exp', 'ln'):
+    for word in ('exp', 'ln', 'sin', 'cos', 'tan', 'atan', 'asin', 'acos'):
         w = costs.pop('worst ' + word)
-        print(f'  {word}: worst relative error {w[0]:.3g} at {w[1]}')
+        if word in ABS:
+            print(f'  {word}: worst {w[0] / tol0:.3g} of its tolerance, at {w[1]}')
+        else:
+            print(f'  {word}: worst relative error {w[0]:.3g} at {w[1]}')
     print('printing against fp5.show, text for text')
     import z80gen as G
     shown = [0.5, 0.01, 1e-5, 1.2345678e-5, 1e-6, 99999999.0, 1e8, 123456789.0, 999999999.0, 12345.678, 1234.5,
@@ -334,7 +359,8 @@ def main():
             costs.setdefault('bly_pr_f', []).append(res.t)
         if res.failed or res.out != want:
             say_wrong('print', b.hex(), 'gave', res.out, 'want', want)
-    for op in ops + ['bly_fsqrt', 'bly_str_float', 'bly_fexp', 'bly_fln', 'bly_pr_f']:
+    for op in ops + ['bly_fsqrt', 'bly_str_float', 'bly_fexp', 'bly_fln', 'bly_fsin', 'bly_fcos', 'bly_ftan',
+                     'bly_fatan', 'bly_fasin', 'bly_facos', 'bly_pr_f']:
         t = costs[op]
         print(f'  {op:9} {len(t)} cases, {min(t):,} to {max(t):,} T, mean {sum(t) // len(t):,}')
     print(f'{checks} checks, {wrong} wrong')
