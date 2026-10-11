@@ -1,0 +1,25 @@
+-- stop ends the program where it is, as the end of main does: what's printed stays printed, and nothing more
+
+func digit(ch: byte): int
+  if ch < '0' or ch > '9' then
+    print "not a digit: "; chr(ch)
+    stop                                     -- from down here, with no flag for every caller to check
+  end
+  return ch - '0'
+end
+
+func main()
+  var total = 0
+  for ch in "1987x6" do
+    total = total * 10 + digit(ch)
+    print total
+  end
+  print "never printed"
+end
+
+-- prints:
+-- > 1
+-- > 19
+-- > 198
+-- > 1987
+-- > not a digit: x

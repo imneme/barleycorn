@@ -200,6 +200,8 @@ class Gen:
             protos.append(self.signature(f) + ';')
             self.out, self.depth, self.ntemp, self.func = [], 1, 0, f
             self.block(f.body)
+            if f.rty is not B.VOID:                                   # run off its end, it has nothing to give
+                self.emit(f'bly_fail("{f.name} ended without returning {B.article(f.rty)}", {f.end_line});')
             if getattr(f, 'asm', None) is None:
                 fbodies.append(self.signature(f) + ' {\n' + '\n'.join(self.out) + '\n}\n')
                 continue
@@ -368,6 +370,8 @@ class Gen:
             self.emit('break;')
         elif k == 'continue':
             self.emit('continue;')
+        elif k == 'stop':
+            self.emit('bly_stop();')
         elif k == 'return':
             if s.e is None:
                 self.emit('return;')

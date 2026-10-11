@@ -178,7 +178,8 @@ STATEMENTS  x = e   x += e   (-= *= /= %= &= |= ^= <<= >>=)   a; b on a line
             while c do ... end         for x in xs do ... end
             for i in a..b do ... end   (half-open; rev(a..b) counts down)
             for k, v in m do ... end  case e when v1, v2 then ... else ... end
-            break  continue  return [e]  assert c
+            break  continue  return [e]  assert c  stop (the program
+            ends, as at main's end)
             (no repeat: while true do ... if c then break end end)
             A line carries on after an operator or a comma, or inside
             brackets: it can't start with the operator
@@ -545,6 +546,22 @@ The first Barley's `for i = a to b` and `downto` are retired. The
 thirteen programs of its benchmark suite converted mechanically, and
 they're the benchmark the Z80 backend is measured with (`z80/bench/`,
 and HISTORY.md).
+
+### Ending: `stop`, and a function that runs out
+
+**`stop` ends the program where it is**, as reaching the end of `main`
+does: what's printed stays printed, nothing more is said, and on the 48K
+it's back to BASIC with 0 OK. It's Pascal's `Halt`, asked for by a
+porter whose recursive-descent calculator had to carry a `failed` flag
+up through every level to get out. A program that wants to say why
+prints first. (`assert` stops too, but it's a failure, and says so.)
+
+**A function with a result that reaches its `end` fails there**:
+`sign_of ended without returning an int at line 4`. Requiring every path
+to `return` would refuse correct programs (a `for` that always returns
+from inside), and before this the interpreter handed back a value Barley
+doesn't have, and C whatever was in a register. A function whose last
+statement is `return` or `stop` pays nothing for the check.
 
 ### Programs in more than one file
 

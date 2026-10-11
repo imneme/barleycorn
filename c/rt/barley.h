@@ -698,6 +698,7 @@ _Noreturn static void bly_changed(const char *kind, int l) {
 
 static void bly_start(int argc, char **argv) { bly_zx_init(); bly_load(argc > 1 ? argv[1] : 0); }
 static int bly_finish(void) { bly_flush(); bly_zx_save(); return 0; }
+_Noreturn static void bly_stop(void) { exit(bly_finish()); }   /* stop: as the end of main */
 
 #include "bly_zx.h"
 

@@ -156,7 +156,7 @@ target out isn't used for it, and the twin is compiled instead.
 | text | `"{s}" doesn't start with an integer`; `there is no integer {k} in "{s}"`; `{digits} doesn't fit in {a type}` ("an int", "a word"); `"{s}" doesn't start with a number` and `{number} doesn't fit in a float` (s.float()); `split needs a separator`; `no name has the number {n}`; `too many names: intern holds 65536` |
 | input | `no more input lines`; `the input is not a grid: line {r} is {len} long, not {cols}`; `input line {n} is longer than 65535`; `the input is longer than 65535, too long for one str` |
 | memory | `arena full`; at start-up, `the input doesn't fit in memory` (both platforms) and `can't read the input` (CP/M) |
-| other | `assertion failed` |
+| other | `assertion failed`; `{f} ended without returning {a type}` (a function with a result, at its `end`) |
 
 `{kind}` is one of `list`, `queue`, `heap`, `map`, `set`. `{type}` is
 `byte`, `word`, `int`, `long` or `quad`.

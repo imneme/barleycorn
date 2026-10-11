@@ -567,7 +567,14 @@ class Gen:
                 self.wrapper(f, frag)                   # the fragment runs here, and the body is its twin
             else:
                 self.block(f.body)
-            self.emit('ret')
+            if f.rty is not B.VOID and frag is None and not (f.body and f.body[-1].k in ('return', 'stop')):
+                self.line(f.end_line)                   # run off its end, it has nothing to give
+                msg = self.string(f'{f.name} ended without returning {B.article(f.rty)}'.encode())
+                self.emit(f'ld hl,{msg.val}')
+                self.call('bly_pr_str')
+                self.jp('bly_fail_end')
+            else:
+                self.emit('ret')
             if PEEP:
                 self.code = peephole.optimise(self.code, self.cold_code, self.temps)
             bodies += self.code + self.cold_code + ['']
@@ -597,6 +604,7 @@ class Gen:
             out.append('        call bly_split_input')
             self.calls.add('bly_split_input')
         out.append('        call f_main')
+        out.append('bly_main_end:')                     # stop comes here too, from wherever it is
         out.append('        ld hl,0')
         out.append('        ld (bly_line),hl')
         out.append('        jp bly_exit')
@@ -725,7 +733,7 @@ class Gen:
         k = s.k
         heads = {'var': lambda: [s.e], 'assign': lambda: [s.target, s.e], 'expr': lambda: [s.e],
                  'return': lambda: [s.e], 'assert': lambda: [s.e], 'print': lambda: [s.items],
-                 'for': lambda: [s.it], 'case': lambda: [s.e]}.get(k)
+                 'for': lambda: [s.it], 'case': lambda: [s.e], 'stop': lambda: []}.get(k)
         self.stmt_calls = self.has_call(*heads()) if heads else True
         self.cur_stmt, self.temp_mark, self.dead_args = s, len(self.temps), []
         if k == 'var':
@@ -785,6 +793,8 @@ class Gen:
                 v = self.conv(self.ex(s.e), f.rty)
                 self.put(f'rv_{f.name}', v, f.rty)
             self.emit('ret')
+        elif k == 'stop':
+            self.emit('jp bly_main_end')                # as main's end: bly_exit resets the stack
         elif k == 'assert':
             ok = self.label()
             self.branch(s.e, ok, True)

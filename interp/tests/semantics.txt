@@ -1282,6 +1282,78 @@ end
 6
 8
 
+=== stop ends the program from anywhere, as main's end does: deep in calls, in the middle of a for
+func dig(depth: int): int
+  if depth == 5 then
+    print "5 deep: stop"
+    stop
+  end
+  return dig(depth + 1) + 1
+end
+
+func main()
+  var xs = list[int](8)
+  for i in 0..4 do xs.push(i) end
+  for x in xs do
+    print x;
+    if x == 2 then
+      print
+      print dig(0)
+    end
+  end
+  print "never"
+end
+--- expect
+012
+5 deep: stop
+
+=== stop inside frame ends the program too
+var tick: word = 0
+
+frame do
+  tick += 1
+  if tick == 5 then stop end
+end
+
+func main()
+  print "before"
+  frames(true)
+  pause(50)
+  print "never"
+end
+--- expect
+before
+
+=== a function with a result that runs off its end fails there
+func sign_of(x: int): int
+  if x > 0 then return 1 end
+  if x < 0 then return -1 end
+end
+
+func main()
+  print sign_of(5); " "; sign_of(-5)
+  print sign_of(0)
+end
+--- expect
+1 -1
+sign_of ended without returning an int at line 4
+
+=== a function that ends in stop needs nothing after it
+func pick(n: int): int
+  if n < 3 then return n * 10 end
+  print "too big"
+  stop
+end
+
+func main()
+  print pick(2)
+  print pick(7)
+  print "never"
+end
+--- expect
+20
+too big
+
 === a failure inside frame ends the program, as any failure does
 var tick: word = 0
 var a: byte[4]

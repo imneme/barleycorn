@@ -36,6 +36,8 @@ them, `-- keys:` with each line typed as `-- < text`, and
   values
 - [basics-recursion](basics-recursion.bly): a function calling itself,
   and main first
+- [basics-stop](basics-stop.bly): `stop`, from deep inside, as the end
+  of main
 - [basics-records](basics-records.bly): records, and comparing them
   field by field
 - [basics-tables](basics-tables.bly): a const table: Roman numerals

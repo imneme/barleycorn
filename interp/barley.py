@@ -171,7 +171,7 @@ def zero(t):
 
 KEYWORDS = {'const', 'var', 'func', 'record', 'end', 'if', 'then', 'elif', 'else', 'while', 'do', 'for', 'in',
             'break', 'continue', 'return', 'case', 'when', 'and', 'or', 'not', 'print', 'assert',
-            'true', 'false', 'asm'}
+            'true', 'false', 'asm', 'stop'}
 OPS = ['<<=', '>>=', '..', '**', '<<', '>>', '==', '!=', '<=', '>=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=',
        '+', '-', '*', '/', '%', '&', '|', '^', '~', '<', '>', '=', '(', ')', '[', ']', '{', '}', ',', ':', ';', '.', '#', '@']
 CONTINUES = {'<<', '>>', '==', '!=', '<=', '>=', '+', '-', '*', '/', '%', '&', '|', '^', '~', '<', '>', '=',
@@ -431,8 +431,9 @@ class Parser:
                 raise BarleyError('asm takes a file name in quotes', self.t.line)
             asm = self.next().val.decode()
             self.skip_nl()
-        self.expect('end')
-        return N('func', line, name=name, params=params, retx=ret, body=body, asm=asm, asm_line=asm_line)
+        end_line = self.expect('end').line                 # where a function with a result ends without one
+        return N('func', line, name=name, params=params, retx=ret, body=body, asm=asm, asm_line=asm_line,
+                 end_line=end_line)
 
     def include(self, name, line):
         """include "name": the file's declarations, here, the first time it's included (and nothing after, which
@@ -549,7 +550,7 @@ class Parser:
                 self.expect('end')
                 self.end_stmt()
                 return N('case', line, e=subject, whens=whens, else_=else_)
-            if t.val in ('break', 'continue'):
+            if t.val in ('break', 'continue', 'stop'):          # stop: the program ends, as at main's end
                 self.next()
                 self.end_stmt()
                 return N(t.val, line)
@@ -1357,7 +1358,7 @@ class Checker:
                     self.coerce(v, t)
                 self.block(body)
             self.block(s.else_)
-        elif k in ('break', 'continue'):
+        elif k in ('break', 'continue', 'stop'):
             pass
         elif k == 'return':
             rty = self.func.rty
@@ -2169,6 +2170,10 @@ class Return(Exception):
         self.v = v
 
 
+class Stop(Exception):
+    """stop: the program ends here, as it does at main's end"""
+
+
 class Interp:
     def __init__(self, checker, text, out, need_rom=False):
         self.ck, self.out = checker, out
@@ -2201,10 +2206,13 @@ class Interp:
         self.screen.mem, self.screen.udgs = mem[0x4000:0x5B00], mem[0xFF58:0x10000]
 
     def run(self):
-        for d in self.ck.decls:
-            if d.k == 'var':
-                self.globals[d.name] = self.ev(d.e, {}) if d.e is not None else zero(d.ty)
-        self.call(self.ck.funcs['main'], [])
+        try:
+            for d in self.ck.decls:
+                if d.k == 'var':
+                    self.globals[d.name] = self.ev(d.e, {}) if d.e is not None else zero(d.ty)
+            self.call(self.ck.funcs['main'], [])
+        except Stop:
+            pass
 
     # -- output, as BASIC prints
     def write(self, s, screen_only=False):
@@ -2291,6 +2299,8 @@ class Interp:
             self.asm_line = f.asm_line                  # a failure inside is the clause's: the fragment runs there
         try:
             self.block(f.body, env)
+            if f.rty is not VOID:                       # run off the end of a function that has a result to give
+                raise BarleyError(f'{f.name} ended without returning {article(f.rty)}', f.end_line)
         except Return as r:
             return r.v
         except BarleyError as err:
@@ -2345,6 +2355,8 @@ class Interp:
             raise Break()
         elif k == 'continue':
             raise Continue()
+        elif k == 'stop':
+            raise Stop()
         elif k == 'return':
             raise Return(self.ev(s.e, env) if s.e is not None else None)
         elif k == 'assert':
