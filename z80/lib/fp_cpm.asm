@@ -232,6 +232,11 @@ bly_fadd:
 .stk:   db 0
 
 ; -- * ----------------------------------------------------------------------------------------------------------------
+; Horner over B's bytes, the top first: T = 256 T + A b_j, the 64-bit product in .w. R (HL:IX) holds the window's
+; bytes j+1 to j+4 as row j starts; its top byte (H) goes out to .w+j+4 first, so what stays is under 2^24 and every
+; partial sum fits its 32 + k bits. Then C = b_j above R, and 8 times C:HL:IX <<= 1, adding A (its words patched into
+; .row8's code, as / does) whenever a bit comes out of C, HL's carry into C. After the row, C belongs to byte j+4:
+; added in, carrying up. (A model of these steps held them to A x B on 200,000 products.)
 bly_fmul:
         call bly_fc.both
         ld a,(bly_fc.ua+1)
@@ -254,28 +259,62 @@ bly_fmul:
         ld de,-128
         add hl,de
         ld (bly_fc.ex),hl
-        ld hl,bly_fc.w              ; the 64-bit product of the mantissas, from four 16 x 16 products
-        xor a
-        ld b,8
-.z:     ld (hl),a
-        inc hl
-        djnz .z
-        ld ix,bly_fc.w+4            ; ah * bh at 32
-        ld hl,bly_fc.ua+2
-        ld de,bly_fc.ub+2
-        call .part
-        ld ix,bly_fc.w              ; al * bl at 0
-        ld hl,bly_fc.ua+4
-        ld de,bly_fc.ub+4
-        call .part
-        ld ix,bly_fc.w+2            ; ah * bl and al * bh at 16
-        ld hl,bly_fc.ua+2
-        ld de,bly_fc.ub+4
-        call .part
-        ld ix,bly_fc.w+2
-        ld hl,bly_fc.ua+4
-        ld de,bly_fc.ub+2
-        call .part
+        ld a,(bly_fc.ua+5)          ; A's words into .row8's code (self-modifying: code runs from RAM, ABI.md section
+        ld (.alo+1),a               ; 0)
+        ld a,(bly_fc.ua+4)
+        ld (.alo+2),a
+        ld a,(bly_fc.ua+3)
+        ld (.ahi+1),a
+        ld a,(bly_fc.ua+2)
+        ld (.ahi+2),a
+        ld de,(.alo+1)              ; DE = A's low word, as .row8 keeps it
+        ld hl,0
+        ld ix,0
+        ld a,(bly_fc.ub+2)          ; row 3 (b3): R is 0, so C is byte 7 as it stands
+        call .row8
+        ld a,c
+        ld (bly_fc.w+7),a
+        ld a,h                      ; row 2
+        ld (bly_fc.w+6),a
+        ld h,0
+        ld a,(bly_fc.ub+3)
+        call .row8
+        ld a,(bly_fc.w+6)
+        add a,c
+        ld (bly_fc.w+6),a
+        jr nc,.r1
+        push hl
+        ld hl,bly_fc.w+7
+        call .up
+        pop hl
+.r1:    ld a,h                      ; row 1
+        ld (bly_fc.w+5),a
+        ld h,0
+        ld a,(bly_fc.ub+4)
+        call .row8
+        ld a,(bly_fc.w+5)
+        add a,c
+        ld (bly_fc.w+5),a
+        jr nc,.r0
+        push hl
+        ld hl,bly_fc.w+6
+        call .up
+        pop hl
+.r0:    ld a,h                      ; row 0
+        ld (bly_fc.w+4),a
+        ld h,0
+        ld a,(bly_fc.ub+5)
+        call .row8
+        ld a,(bly_fc.w+4)
+        add a,c
+        ld (bly_fc.w+4),a
+        jr nc,.rs
+        push hl
+        ld hl,bly_fc.w+5
+        call .up
+        pop hl
+.rs:    ld (bly_fc.w),ix            ; and R is bytes 0 to 3
+        ld (bly_fc.w+2),hl
         ld a,(bly_fc.w+7)           ; [2^62, 2^64): at most one shift to normalise
         rla
         jp c,bly_fc.pack
@@ -284,30 +323,23 @@ bly_fmul:
         dec hl
         ld (bly_fc.ex),hl
         jp bly_fc.pack
-.part:  ld b,(hl)                   ; HL, DE = two big-endian 16-bit halves; their product added at IX, with its
-        inc hl                      ; carry into IX+4 and IX+5
-        ld c,(hl)
-        ex de,hl
-        ld d,(hl)
-        inc hl
-        ld e,(hl)
-        call bly_i_mul16            ; DE:HL = BC * DE
-        ld a,(ix+0)
-        add a,l
-        ld (ix+0),a
-        ld a,(ix+1)
-        adc a,h
-        ld (ix+1),a
-        ld a,(ix+2)
-        adc a,e
-        ld (ix+2),a
-        ld a,(ix+3)
-        adc a,d
-        ld (ix+3),a
-        ret nc
-        inc (ix+4)
+.up:    inc (hl)                    ; a carry into (HL), and on up while a byte wraps (never past .w+7)
         ret nz
-        inc (ix+5)
+        inc hl
+        jr .up
+.row8:  ld c,a                      ; C:HL:IX = A x C + R << 8, R under 2^24 (DE = A's low word, in and out)
+        ld b,8
+.st:    add ix,ix
+        adc hl,hl
+        rl c
+        jr nc,.n
+        add ix,de
+.ahi:   ld de,0                     ; (A's high word, patched)
+        adc hl,de
+.alo:   ld de,0                     ; (A's low word, patched)
+        jr nc,.n
+        inc c
+.n:     djnz .st
         ret
 
 ; -- / ----------------------------------------------------------------------------------------------------------------

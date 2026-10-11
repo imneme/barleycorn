@@ -1744,6 +1744,23 @@ loses matter only when b's whole bytes lost are all 0: random cases
 never found that, and a mutant that ignored them went uncaught, so two
 cases are made (1 - b, d = 33 and 9).
 
+**A faster * (the same day, last):** four `bly_i_mul16`s (919 T each)
+and their sums, through IX-indexed loads and stores, were 4,500 of its
+6,202 T. Now Horner over B's bytes, the top first: T = 256 T + A b_j. R,
+in HL:IX, holds the window's bytes j+1 to j+4 as row j starts; its top
+byte goes out to the window first, so what stays is under 2^24, and then
+every partial sum fits its 32 + k bits (A m_k + R' 2^k < 2^(32+k) for k
+up to 8). With C = b_j above R, eight steps of C:HL:IX <<= 1, adding A
+(its words patched into the loop) when a bit comes out of C, leave A b_j +
+R' 2^8 in C:HL:IX, and C is added into byte j+4, carrying up. The first
+model kept R's top byte in the register, and was wrong for three
+products in four: the partial sum's extra bit walked into C's next
+multiplier bit. The bound said why, and how to fix it, before any Z80.
+**4,757 T on uniform mantissas** (from 6,202; the ROM's 6,183). A Z80
+multiply is about 90 T a bit, 32 of them, so this is near what shifting
+and adding can do; a quarter-squares table costs more than it saves
+without a spare register for it.
+
 ## Random numbers: Melissa's generator (random.asm, rndclock.asm)
 
 *Files: `random.asm`, `rndclock.asm` (the 48K's clock seed),
