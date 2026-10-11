@@ -1726,6 +1726,24 @@ it. Nine mutants for sqrt, all caught. Found on the way: `sbc a,(de)`
 isn't a Z80 instruction (only `(hl)` and the index registers are), and
 sjasmplus read `(de)` as a label.
 
+**Faster + and - (the same day, later again):** measured first, the old
+ones spent 2,700 T even when nothing needed shifting (b 40 places below
+a): they zeroed 16 bytes, built a 64-bit window and walked it a bit at a
+time, up to 4,200 T. Now it's 40 bits in registers: X = A 2^8 (A's bytes
+a byte up, no shifting at all), Z = B 2^8 >> d in C:H:L:D:E (whole
+bytes, then bits), and W = X + Z, or X - Z less one more if Z lost any
+bits (a sticky), which is the floor of the exact answer either way. The
+mantissa is W >> 8 (W >> 9 after a carry out), and the bit below it
+rounds; a difference that shrank shifts left first, far only when d is 0
+or 1 and nothing was lost. From d = 34 on the answer is a: b moves it by
+under a quarter of its last place, and even a = 2^31 less a little
+rounds back. A Python model held this to fp5 on 200,000 sums and
+differences first. **1,922 T for + and 1,906 for - on uniform
+mantissas** (from 3,829; the ROM's + is 2,713). The bits a bit shift
+loses matter only when b's whole bytes lost are all 0: random cases
+never found that, and a mutant that ignored them went uncaught, so two
+cases are made (1 - b, d = 33 and 9).
+
 ## Random numbers: Melissa's generator (random.asm, rndclock.asm)
 
 *Files: `random.asm`, `rndclock.asm` (the 48K's clock seed),

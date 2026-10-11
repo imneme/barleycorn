@@ -24,14 +24,21 @@
 ;
 ; The one trick: rounding x to 32 bits with ties away from zero is floor(x + 1/2) = (floor(2x) + 1) >> 1, so each
 ; operation needs only the floor of its exact answer to 33 bits (32 and the one that decides): no sticky bits.
-; * and / get exact floors by their nature (the whole 64-bit product; restoring division). + and - work in a 64-bit
-; window, the larger number at its top: bits of the smaller shifted out of the bottom can't move a floor at the
-; rounding's scale when adding, and when subtracting they take exactly one more unit off (the true difference lies
-; strictly between two integers of the window, and rounding's boundaries are integers there).
+; * and / get exact floors by their nature (the whole 64-bit product; restoring division). + and - work in 40 bits,
+; the larger number's mantissa a byte up: bits of the smaller shifted out of the bottom can't move a floor when adding,
+; and when subtracting they take exactly one more unit off (the true difference lies strictly between two integers
+; there, and rounding's boundaries are integers).
 ; bly_fc is the shared part: .pack rounds the window (.w, its top bit set) by its bit 31 and writes the answer.
-; Scratch: bly_fc's .res .flip .sg .lost .ex .ua .ub .w .v.
+; Scratch: bly_fc's .res .flip .sg .ex .ua .ub .w.
 
 ; -- + and - ---------------------------------------------------------------------------------------------------------
+; In 40 bits, in registers: |a| >= |b| (swapped if not), X = A 2^8 (A's bytes a byte up: no shifting), Z = B 2^8 >> d
+; in C:H:L:D:E (d = ea - eb: whole bytes, then bits), and W = X + Z, or X - Z less one more if Z lost any bits (a sticky):
+; the floor of W's exact value either way, which is all the rounding needs (the one trick). W's top 32 bits are the
+; mantissa and the bit below rounds it: W >> 8 (or W >> 9 after a carry out); a difference that has shrunk shifts left
+; first, exactly when it shrinks far (d is 0 or 1 then, and nothing was lost), by a bit at most otherwise. From d = 34
+; on, b moves a by under a quarter of its last place, and a, even at 2^31 less a little, rounds back to a: it's a.
+; (A Python model held this to fp5 on 200,000 sums and differences before it was written.)
 bly_fsub:
         ld a,80h                    ; b's sign flipped
         jr bly_fadd.go
@@ -62,172 +69,167 @@ bly_fadd:
         djnz .cmp
         jr .ord
 .cmpd:  jr c,.ord                   ; b's is smaller
-        ld hl,bly_fc.ua             ; else swap them: the larger is a from here
-        ld de,bly_fc.ub
-        ld b,6
-.sw:    ld a,(de)
-        ld c,(hl)
-        ld (hl),a
-        ld a,c
-        ld (de),a
-        inc hl
-        inc de
-        djnz .sw
-.ord:   ld hl,bly_fc.w              ; .w = a's mantissa << 32; .v = 0
-        xor a
-        ld b,16
-.z:     ld (hl),a
-        inc hl
-        djnz .z
-        ld (bly_fc.lost),a
-        ld hl,bly_fc.ua+2
-        ld de,bly_fc.w+7
-        ld b,4
-.wa:    ld a,(hl)
-        ld (de),a
-        inc hl
-        dec de
-        djnz .wa
-        ld a,(bly_fc.ua+1)          ; d = ea - eb
-        ld hl,bly_fc.ub+1
-        sub (hl)
-        cp 64
-        jr nc,.op                   ; all of b is below the window: a alone rounds as a - b does
-        ld c,a                      ; C = d
-        rrca
-        rrca
-        rrca
-        and 1Fh                     ; whole bytes: k = d / 8
-        ld b,a
-        ld a,7
-        sub b                       ; where b's top byte lands: 7 - k, then down
-        ld hl,bly_fc.ub+2
-        ld b,4
-.pl:    bit 7,a
-        jr nz,.pn                   ; below the window (see .bits)
-        push hl
-        ld e,a
-        ld d,0
-        ld hl,bly_fc.v
-        add hl,de
-        ex de,hl
-        pop hl
-        push af
-        ld a,(hl)
-        ld (de),a
-        pop af
-        jr .pn
-.pn:    inc hl
-        dec a
-        djnz .pl
-        ld a,c                      ; and d % 8 bits. Only here can what b loses matter, and only at d = 33: from
-        and 7                       ; 34 on, what's left of b is 1 to 2^30, so a - b can't sit on a rounding
-                                    ; boundary (multiples of 2^30, after the one shift a - b can need); whole bytes
-                                    ; go below only from 40, and from 64 nothing is left and a rounds as a - b
-        jr z,.op
-        ld b,a
-.bits:  ld hl,bly_fc.v+7
-        srl (hl)
-        dec hl
-        rr (hl)
-        dec hl
-        rr (hl)
-        dec hl
-        rr (hl)
-        dec hl
-        rr (hl)
-        dec hl
-        rr (hl)
-        dec hl
-        rr (hl)
-        dec hl
-        rr (hl)
-        jr nc,.bnl
-        ld a,1
-        ld (bly_fc.lost),a
-.bnl:   djnz .bits
-.op:    ld a,(bly_fc.ua)            ; the answer's sign is the larger's
+        ld hl,(bly_fc.ua)           ; else swap them, a word at a time: the larger is a from here
+        ld de,(bly_fc.ub)
+        ld (bly_fc.ua),de
+        ld (bly_fc.ub),hl
+        ld hl,(bly_fc.ua+2)
+        ld de,(bly_fc.ub+2)
+        ld (bly_fc.ua+2),de
+        ld (bly_fc.ub+2),hl
+        ld hl,(bly_fc.ua+4)
+        ld de,(bly_fc.ub+4)
+        ld (bly_fc.ua+4),de
+        ld (bly_fc.ub+4),hl
+.ord:   ld a,(bly_fc.ua)            ; the answer's sign is the larger's, its exponent the larger's to start
         ld (bly_fc.sg),a
         ld a,(bly_fc.ua+1)
         ld l,a
         ld h,0
         ld (bly_fc.ex),hl
-        ld a,(bly_fc.ub)
+        ld hl,bly_fc.ub+1           ; d = ea - eb
+        sub (hl)
+        cp 34
         ld hl,bly_fc.ua
-        xor (hl)
-        jr nz,.sub
-        ld hl,bly_fc.w              ; the same signs: .w += .v
-        ld de,bly_fc.v
-        ld b,8
+        jp nc,bly_fc.put            ; 34 or more: a
+        ld b,a                      ; B = d
+        ld a,(bly_fc.ub+2)          ; Z = B 2^8: C:H:L:D:E, the top first
+        ld c,a
+        ld a,(bly_fc.ub+3)
+        ld h,a
+        ld a,(bly_fc.ub+4)
+        ld l,a
+        ld a,(bly_fc.ub+5)
+        ld d,a
+        ld e,0
+        xor a
+        ld (.stk),a                 ; what Z loses below: none yet
+        ld a,b
+        cp 8
+        jr c,.bits
+.byte:  ld a,e                      ; a whole byte down: E goes below
         or a
-.ad:    ld a,(de)
-        adc a,(hl)
-        ld (hl),a
-        inc hl
-        inc de
-        djnz .ad
-        jp nc,bly_fc.pack
-        ld hl,bly_fc.w+7            ; a carry out: shift it back in at the top, one more in the exponent
-        rr (hl)
-        dec hl
-        rr (hl)
-        dec hl
-        rr (hl)
-        dec hl
-        rr (hl)
-        dec hl
-        rr (hl)
-        dec hl
-        rr (hl)
-        dec hl
-        rr (hl)
-        dec hl
-        rr (hl)
-        ld hl,(bly_fc.ex)
+        jr z,.by0
+        ld a,1
+        ld (.stk),a
+.by0:   ld e,d
+        ld d,l
+        ld l,h
+        ld h,c
+        ld c,0
+        ld a,b
+        sub 8
+        ld b,a
+        cp 8
+        jr nc,.byte
+.bits:  ld a,b                      ; then d % 8 bits
+        or a
+        jr z,.op
+.bit:   srl c
+        rr h
+        rr l
+        rr d
+        rr e
+        jr nc,.bt0
+        ld a,1
+        ld (.stk),a
+.bt0:   djnz .bit
+.op:    ld a,(bly_fc.ub)            ; the same signs: W = X + Z
+        ld b,a
+        ld a,(bly_fc.ua)
+        xor b
+        jr nz,.sub
+        ld a,(bly_fc.ua+5)          ; (E + 0 is E)
+        add a,d
+        ld d,a
+        ld a,(bly_fc.ua+4)
+        adc a,l
+        ld l,a
+        ld a,(bly_fc.ua+3)
+        adc a,h
+        ld h,a
+        ld a,(bly_fc.ua+2)
+        adc a,c
+        ld c,a
+        jp nc,.out                  ; under 2^40: the mantissa is W >> 8, and E's top bit rounds it
+        rr c                        ; 2^40 or more: W >> 9, the carry in at the top, and the bit shifted out rounds
+        rr h
+        rr l
+        rr d
+        ld a,0
+        rra
+        ld e,a
+        ld a,c
+        ld (bly_fc.w+7),a
+        ld (bly_fc.w+5),hl
+        ld (bly_fc.w+3),de
+        ld hl,(bly_fc.ex)           ; one more in the exponent
         inc hl
         ld (bly_fc.ex),hl
         jp bly_fc.pack
-.sub:   ld a,(bly_fc.lost)          ; signs differ: .w -= .v, and one more unit if b lost any bits
+.sub:   ld a,(.stk)                 ; signs differ: W = X - Z, less one more if Z lost any bits (a - b's floor)
         rra
-        ld hl,bly_fc.v
-        ld de,bly_fc.w
-        ld b,8
-.sb:    ld a,(de)
-        sbc a,(hl)
-        ld (de),a
-        inc hl
-        inc de
-        djnz .sb
-        ld hl,bly_fc.w              ; nothing left: 0
-        xor a
-        ld b,8
-.nz:    or (hl)
-        inc hl
-        djnz .nz
+        ld a,0
+        sbc a,e
+        ld e,a
+        ld a,(bly_fc.ua+5)
+        sbc a,d
+        ld d,a
+        ld a,(bly_fc.ua+4)
+        sbc a,l
+        ld l,a
+        ld a,(bly_fc.ua+3)
+        sbc a,h
+        ld h,a
+        ld a,(bly_fc.ua+2)
+        sbc a,c
+        ld c,a
+        or h                        ; nothing left: 0
+        or l
+        or d
+        or e
         jp z,bly_fc.zero
-.norm:  ld a,(bly_fc.w+7)           ; normalise: whole bytes first, then bits
+        ld b,0                      ; normalise, counting the shifts in B: whole bytes while C is 0 (only when d is
+.nby:   ld a,c                      ; 0 or 1, and W exact), then bits
         or a
-        jr nz,.nb
-        ld hl,bly_fc.w+6
-        ld de,bly_fc.w+7
-        ld bc,7
-        lddr
-        xor a
-        ld (bly_fc.w),a
+        jr nz,.nbt
+        ld c,h
+        ld h,l
+        ld l,d
+        ld d,e
+        ld e,0
+        ld a,b
+        add a,8
+        ld b,a
+        jr .nby
+.nbt:   bit 7,c
+        jr nz,.nd
+        sla e
+        rl d
+        rl l
+        rl h
+        rl c
+        inc b
+        jr .nbt
+.nd:    ld a,c
+        ld (bly_fc.w+7),a
+        ld (bly_fc.w+5),hl
+        ld (bly_fc.w+3),de
+        ld a,b                      ; the exponent less the shifts
+        or a
+        jp z,bly_fc.pack
         ld hl,(bly_fc.ex)
-        ld de,-8
-        add hl,de
+        ld e,b
+        ld d,0
+        sbc hl,de                   ; (carry clear: or a)
         ld (bly_fc.ex),hl
-        jr .norm
-.nb:    bit 7,a
-        jp nz,bly_fc.pack
-        call bly_fc.shl
-        ld hl,(bly_fc.ex)
-        dec hl
-        ld (bly_fc.ex),hl
-        jr .nb2
-.nb2:   ld a,(bly_fc.w+7)
-        jr .nb
+        jp bly_fc.pack
+.out:   ld a,c
+        ld (bly_fc.w+7),a
+        ld (bly_fc.w+5),hl
+        ld (bly_fc.w+3),de
+        jp bly_fc.pack
+.stk:   db 0
 
 ; -- * ----------------------------------------------------------------------------------------------------------------
 bly_fmul:
@@ -2191,12 +2193,10 @@ bly_fc:
 .res:   dw 0
 .flip:  db 0
 .sg:    db 0
-.lost:  db 0
 .ex:    dw 0
 .ua:    ds 6
 .ub:    ds 6
-.w:     ds 8                        ; .v follows .w: + and - clear both at once
-.v:     ds 8
+.w:     ds 8
 .movf:  db "float overflow",0
 
 ; -- printing: PRINT-FP's layout, the 8 digits exactly rounded -------------------------------------------------------

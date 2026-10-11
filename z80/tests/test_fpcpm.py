@@ -174,12 +174,19 @@ def case(op, a, b):
 MUTANTS = [   # (the text, what it becomes, what that breaks)
     ('        jr nc,.rd\n        inc l', '        jr .rd\n        inc l', 'never rounds up'),
     ('.packc: ld a,(.w+3)', '.packc: ld a,(.w+2)', 'rounds on the wrong bit'),
-    ('.sub:   ld a,(bly_fc.lost)', '.sub:   xor a', '- forgets the bits b lost'),
-    ('        jp nc,bly_fc.pack\n        ld hl,bly_fc.w+7', '        jp bly_fc.pack\n        ld hl,bly_fc.w+7',
+    ('.sub:   ld a,(.stk)', '.sub:   xor a      ', '- forgets the bits b lost'),
+    ('        jp nc,.out                  ; under 2^40', '        jp .out                     ; under 2^40',
      '+ forgets its carry out'),
-    ('        jr nc,.bnl', '        jr .bnl', "the bit shift's lost bits unseen"),
-    ('        ld de,-8\n        add hl,de\n        ld (bly_fc.ex),hl', '        ld de,-7\n        add hl,de\n        ld (bly_fc.ex),hl',
+    ('        jr nc,.bt0', '        jr .bt0', "the bit shift's lost bits unseen"),
+    ('        jr z,.by0', '        jr .by0', "a byte shifted below, unseen"),
+    ('        ld a,b\n        add a,8\n        ld b,a', '        ld a,b\n        add a,7\n        ld b,a',
      'normalising by bytes counts 7'),
+    ('        cp 34\n        ld hl,bly_fc.ua', '        cp 33\n        ld hl,bly_fc.ua', '+ and -: a alone from 33 places'),
+    ('        rl c\n        inc b\n        jr .nbt', '        rl c\n        nop\n        jr .nbt', "-: a bit's shift uncounted"),
+    ('        ld hl,(bly_fc.ex)           ; one more in the exponent\n        inc hl',
+     '        ld hl,(bly_fc.ex)           ; one more in the exponent\n        nop', "+: a carry's exponent not raised"),
+    ('        ld hl,(bly_fc.ua+4)\n        ld de,(bly_fc.ub+4)', '        ld hl,(bly_fc.ua+4)\n        ld de,(bly_fc.ua+4)',
+     "+ and -: the swap leaves b's low word"),
     ('        ld de,-128\n        add hl,de\n        ld (bly_fc.ex),hl\n        ld hl,bly_fc.w              ; the 64',
      '        ld de,-127\n        add hl,de\n        ld (bly_fc.ex),hl\n        ld hl,bly_fc.w              ; the 64',
      '* with the bias off by one'),
@@ -273,7 +280,10 @@ def main():
     fixed = [(fp5.pack(1), fp5.pack(1)), (fp5.pack(1), fp5.pack(-1)), (fp5.pack(F(1, 3)), fp5.pack(3)),
              (bytes([255, 0x7F, 255, 255, 255]), bytes([255, 0x7F, 255, 255, 255])),
              (bytes([1, 0, 0, 0, 0]), bytes([1, 0, 0, 0, 0])), (bytes([0, 0, 1, 0, 0]), bytes(5)),
-             (bytes([0, 0xFF, 0xFF, 0xFF, 0]), bytes([0, 0, 1, 0, 0])), (fp5.pack(2 ** 31 + 1), fp5.pack(F(1, 2)))]
+             (bytes([0, 0xFF, 0xFF, 0xFF, 0]), bytes([0, 0, 1, 0, 0])), (fp5.pack(2 ** 31 + 1), fp5.pack(F(1, 2))),
+             (fp5.pack(1), bytes.fromhex('6001000000')), (fp5.pack(1), bytes.fromhex('7800000001'))]
+    # (the last two: 1 - b where what b loses is lost by the bit shift alone, the whole bytes below being 0, at d = 33
+    # and 9; only there does + and -'s sticky for those bits change an answer)
     for a, b in fixed:
         for op in ops:
             case(op, a, b)
