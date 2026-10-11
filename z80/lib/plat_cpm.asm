@@ -1,4 +1,4 @@
-;; provides: bly_putc bly_exit bly_start bly_text bly_tlen
+;; provides: bly_putc bly_exit bly_failed bly_start bly_text bly_tlen
 ;; needs: bly_atop bly_alimit bly_fail
 ;; uses: bly_program bly_bss bly_bss_end
 ;; targets: cpm
@@ -115,6 +115,9 @@ bly_putc:
 .one:   ld e,a
         ld c,2
         jp BDOS
+
+bly_failed:                         ; a failure's words are out: nothing more to do here
+        ret
 
 bly_exit:
         jp 0

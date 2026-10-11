@@ -598,6 +598,15 @@ static void bly_zx_png(const char *path) {
     free(z);
 }
 
+/* a failure's words, the last bly_col printed, made readable as the 48K's runtime makes them (plat_zx.asm's
+   bly_failed): their squares paper 7, ink 0, whatever the program's colours were (zxgfx.py's failed) */
+static void bly_zx_failed(void) {
+    if (bly_showing == 3) return;                       /* in the lower screen: BASIC's report goes there anyway */
+    i32 end = bly_zx_row * 32 + bly_zx_col;
+    i32 n = bly_col < end ? (i32)bly_col : end;
+    for (i32 i = end - n; i < end; i++) bly_mem[0x5800 + i] = 0x38;
+}
+
 static void bly_zx_save(void) {
     const char *scr = getenv("BARLEY_SCREEN");
     if (scr && *scr) {

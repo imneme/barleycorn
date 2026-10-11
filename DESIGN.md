@@ -177,13 +177,16 @@ STATEMENTS  x = e   x += e   (-= *= /= %= &= |= ^= <<= >>=)   a; b on a line
             for i in a..b do ... end   (half-open; rev(a..b) counts down)
             for k, v in m do ... end  case e when v1, v2 then ... else ... end
             break  continue  return [e]  assert c
+            (no repeat: while true do ... if c then break end end)
+            A line carries on after an operator or a comma, or inside
+            brackets: it can't start with the operator
 
 NUMBERS     byte word dword: unsigned 8, 16, 32
             int long quad: signed 16, 32, 64
             bool: true false.  Overflow wraps; checked builds trap signed
             overflow.  Widen up freely; narrow with a cast: int(x)
             + - * / %  (as C: / truncates, % has the dividend's sign)
-            mod(a, m) is never negative    abs min max sign gcd lcm
+            mod(a, m) is never negative (m > 0)   abs min max sign gcd lcm
             & | ^ ~ << >>   and or not    literals 42 0x2A $2A %101010 'a'
             loosest first: or, and, not, == != < > <= >= in, .., | ^, &,
             << >>, + -, * / %, unary - ~, **   (as Python, not C: & binds
@@ -192,9 +195,11 @@ NUMBERS     byte word dword: unsigned 8, 16, 32
             float(i) trunc floor round sqrt sin cos tan asin acos atan ln
             exp x ** y.  You use them, you get what you get.
 
-TEXT        str: bytes, sliced   s.len  s[i]  s[a..b]  ==  <   for ch in s
+TEXT        str: bytes, sliced   s.len (a word)  s[i] (a byte: chr(s[i])
+            prints it as a letter)  s[a..b]  ==  <   for ch in s
             "ASCII, \n and \x90"   s.int()  s.int(k) (the k-th integer)
-            s.ints() (all)  s.split(c)  s.find(t)  s.starts(t)  s.trim()
+            s.ints() (all)  s.split(c)  s.find(t) (an int: -1 if it isn't
+            there)  s.starts(t)  s.trim()
             intern(s) -> word (0, 1, 2...)   name(id) -> str   chr(b)
 
 ARRAYS      T[N]: global, or local where not recursive.  a[i] a.len
@@ -206,27 +211,35 @@ POSITIONS   pos(r, c)  p + d  p - q  ==  p.r  p.c    dirs4 (N E S W)  dirs8
 CONTAINERS  list[T](cap)    push pop [i] len sort clear
             queue[T](cap)   put get len
             heap[T](cap)    push pop (smallest) len
-            set[K](cap)     add in del len
-            map[K, V](cap)  m[k] = v  m[k]  get(k, default)  in  del  len
+            set[K](cap)     s.add(k)  k in s  s.del(k)  len  clear
+            map[K, V](cap)  m[k] = v  m[k]  m.get(k, default)  k in m
+                            m.del(k)  len  clear
             grid[T](rows, cols[, v])   g[p]  g[r, c]  has  rows  cols  find
             References, made in the arena, fixed capacity, checked; maps
             and sets walk in insertion order.
             mark() release(m) free()  (not yet)
 
 IN AND OUT  lines() (for line in lines(), or .next())   grid()   input()
-            ask(prompt): a line typed (ask("n? ").int() for a number)
+            ask(prompt): a line typed. For a number,
+            var n: int = ask("n? ").int()  (with nothing to say, a long)
             print a; b, c;   BASIC's: ; joins, , pads to the next
             16-column zone, a trailing ; or , keeps the line open.
-            A print takes the rest of its line.
+            A print takes the rest of its line (to an else, elif or end
+            at most): if c then print x; return end is a print of return
 
 SCREEN      cls  ink(0..9)  paper(0..9)  bright(0, 1, 8)  flash(0, 1, 8)
             (8: a square keeps its own; 9: the contrast)  inverse over border
             plot(x, y)  line(x0, y0, x1, y1)  circle(x, y, r)  point(x, y)
             attr(r, c[, a])  udg(n, bytes)  pause(frames)  ticks()
-            key()  inkey()
+            key(): a key pressed since it last looked (Pascal's
+            KeyPressed and ReadKey)  inkey(): the key held now (INKEY$).
+            Held, or tapped since the last look (Melissa's snake):
+            var c = inkey()  then  if c == 0 then c = key() end
             print at r, c; ...           a place on the screen (not output)
-            print #1; ...  (or #0)       the lower screen's two lines
-            fzx(F)  print #4; at y, x; ...   text in an FZX font, in pixels
+            print #1; at 0, c; ...  (or #0)  the lower screen's two lines
+            (a status line wants its at: two plain ones need three lines)
+            fzx(F)  print #4; at y, x; ...   text in an FZX font, in
+            pixels, y down from the top of the screen
             frame do ... end   runs every frame, once frames(true)
             starts it: 16-bit Barley, safe inside the interrupt
 SOUND       beep(ms, semitone)
@@ -237,7 +250,9 @@ SOUND       beep(ms, semitone)
             guard it with if ZX then ... end, or if ZX and ... then
 
 MACHINE     peek(a)  poke(a, v)  inp(port)  outp(port, v)   (call later)
-            const ZX, CPM, C: the target, folded away
+            const ZX, CPM, C: the target, folded away (C keeps the
+            Spectrum's screen, so ZX is true there too; a global of
+            your own called C hides it)
             const F = @embed("font.fzx")   a file's bytes, read as it compiles
             func f(...) ... asm "f.asm" end    the body is f's reference
             twin (the Z80 running the fragment: later)
@@ -258,6 +273,12 @@ totals need more than 16 bits and much less than 64, and on a Z80 a
   a cast. Mixing `word` and `int` still needs one, as it does in Barley,
   because the answer to "is 65535 big or is it -1?" should be written
   down.
+- **A literal takes its type from where it goes**, and so does a literal
+  shifted or complemented: `flags |= 1 << 5` and `flags &= ~%10` both
+  work on a `byte`, where `~%10` is `%11111101`. With nothing to say,
+  it's an `int` if it fits (so `~5` alone is -6).
+- **`%` is the cheap one, and `mod()` the one for rings**: on the Z80
+  both stay in 16 bits for 16-bit numbers.
 - **Overflow wraps, and division truncates**, as on the Z80 and as in C.
   Efficient and simple won, and the deciding argument is the C backend.
   With C's own semantics the C can stay dumb (`/` and `%` as written,
@@ -469,12 +490,20 @@ bundled onto the tape, read from a CP/M file, or read from a file by the
 interpreter and the C.
 
 **The keyboard** is three words. `ask(prompt)` is BASIC's INPUT LINE:
-the line typed, as a `str`, and `ask("How many? ").int()` for a number.
-On the Spectrum it is the ROM's own editor in the lower screen, cursor
-keys, DELETE and all; the way in is spectrum-minilib's, which was worked
-out from the HiSoft BASIC compiler. `inkey()` is INKEY$, the key held
-down now, as a `byte` (0 for none), so it compares with `'q'`. `key()`
-is a new keypress since it last looked. **The prompt and the typing are
+the line typed, as a `str`, and `var n: int = ask("How many? ").int()`
+for a number (`.int()` takes its type from where it goes, and with
+nothing to say there it's a `long`). On the Spectrum it is the ROM's own
+editor in the lower screen, cursor keys, DELETE and all; the way in is
+spectrum-minilib's, which was worked out from the HiSoft BASIC compiler.
+`inkey()` is INKEY$, the key held down now, as a `byte` (0 for none), so
+it compares with `'q'`. `key()` is a new keypress since it last looked:
+Pascal's KeyPressed and ReadKey are `key()`, not `inkey()`. A key the
+tests type on the 48K is a tap, let go as soon as the ROM has it, so a
+loop that pauses between looks at `inkey()` can miss it, as a quick
+finger can. Melissa's snake has the answer, in BASIC
+(`LET C$ = INKEY$: IF C$ = "" THEN LET C$ = CHR$ PEEK 23560`):
+`var c = inkey()`, then `if c == 0 then c = key() end`, the key held now
+or else one tapped since the last look. **The prompt and the typing are
 display, not output,** as `print at` is: on the Spectrum they're in the
 lower screen, which `ask()` clears again as INPUT does, and the
 interpreter and C put the prompt on stderr. CP/M has one console, so
@@ -502,15 +531,23 @@ The screen library speaks **BASIC's own vocabulary and coordinates**:
 `attr`, `udg`, and `point` to read a pixel back. On the Spectrum,
 drawing is done by Barleycorn's own Z80 routines, checked pixel for
 pixel against the reference (`z80/zxgfx.py`), which is in turn checked
-against the real ROM for text.
+against the real ROM for text. `line` is Bresenham's, both ends plotted,
+and `circle` the midpoint circle, both clipped at the screen's edges: so
+a picture can be compared with another compiler's pixel for pixel (the
+Pasta/80 bake-off's were), and a circle isn't BASIC's CIRCLE, which
+draws arcs. There's no relative `draw` yet: keep the pen in two
+variables.
 
 **The colours are BASIC's, 8 and 9 included.** `ink` and `paper` take
 0..7, or 8 for transparent (a square printed or drawn on keeps its own
 ink, or paper), or 9 for the contrast (white on a dark square, black on
 a light one); `bright` and `flash` take 0, 1 or 8 (true and false too).
 A square gets them as the ROM's PO-ATTR gives them, and `cls` clears in
-the colours as they are, as BASIC's CLS does. `attr(r, c)` reads a
-square's byte back, as BASIC's `ATTR` does; `attr(r, c, a)` sets it.
+the colours as they are, as BASIC's CLS does. To draw over squares and
+leave all their colours as they were, set all four to 8: `ink(8)`,
+`paper(8)`, `bright(8)`, `flash(8)` (with only the first two, every
+square drawn on takes the current bright and flash). `attr(r, c)` reads
+a square's byte back, as BASIC's `ATTR` does; `attr(r, c, a)` sets it.
 `z80/tests/co_temp_check.py` holds the model's colours to BASIC itself,
 typed in on omse-ai's 48K, and `rom_text_check.py` its drawing to the
 ROM.
@@ -547,8 +584,11 @@ inside `frame` ends the program as any failure does. Off the Spectrum,
 the frames are the ones the model already counts: `pause(n)` runs
 `frame` n times, and `ticks()` once. So programs paced by frames agree
 everywhere, and what races the clock can differ, as `ticks()` already
-does. A program wanting to print from a frame counts in `frame`, and
-prints from the main program when it sees the count change.
+does. So **a program that never pauses runs its frame only on the 48K**:
+the interpreter and C never run that code, and `bly all` is its test
+(Half-rows Fern planted a mistake there, and only the 48K found it). A
+program wanting to print from a frame counts in `frame`, and prints from
+the main program when it sees the count change.
 
 **Compile-time work is marked with @.** `@embed("file")`, a const's
 value, is a file's bytes as a byte table, read from beside the program
@@ -612,13 +652,20 @@ is the one the Spectrum will show.
 `peek` and `poke` are there because it's a Spectrum and you will want
 them, and `inp` and `outp` for the same reason: the keyboard's
 half-rows, the border, the speaker, a Kempston joystick (`call` later).
-An address or a port is any whole number, checked as an index is. Only
-the ROM, the screen and the UDGs are the same everywhere: the rest of
-the 64K is the interpreter's own, so a `peek` at the system variables or
-the program reads 0 off the Spectrum and the machine's bytes on it, and
-a `poke` there can break a Spectrum program, as it can in BASIC. **`ZX`,
-`CPM` and `C` are compile-time constants**, so
-`if ZX then beep(50, 12) end` costs nothing elsewhere.
+BREAK is CAPS SHIFT and SPACE, bit 0 of `inp(0xFEFE)` and of
+`inp(0x7FFE)` both 0. A program stopping on BREAK should wait for it to
+be let go before it ends, or BASIC sees it too and says
+`L BREAK into program`. Off the Spectrum no key is ever down on a port:
+typed keys reach `inkey()`, `key()` and `ask()`, not `inp`. An address
+or a port is any whole number, checked as an index is. Only the ROM, the
+screen and the UDGs are the same everywhere: the rest of the 64K is the
+interpreter's own, so a `peek` at the system variables or the program
+reads 0 off the Spectrum and the machine's bytes on it, and a `poke`
+there can break a Spectrum program, as it can in BASIC. **`ZX`, `CPM`
+and `C` are compile-time constants**, so `if ZX then beep(50, 12) end`
+costs nothing elsewhere. The C backend keeps a Spectrum's screen and
+sound, so `ZX` is true there as well as `C`; in the interpreter, `ZX`
+alone (or `CPM`, with `--as cpm`).
 
 **Anything missing can be added**, by anyone, the same way the library
 itself is written: a function whose body is plain Barley, with a

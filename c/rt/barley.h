@@ -58,6 +58,7 @@ static void bly_zx_lower(int l);
 static void bly_zx_upper(void);
 static void bly_zx_init(void);
 static void bly_zx_save(void);
+static void bly_zx_failed(void);
 
 static void bly_flush(void) {
     fwrite(bly_obuf, 1, bly_on, stdout);
@@ -82,7 +83,7 @@ static void bly_out(const void *p, size_t n) {
             bly_obuf[bly_on++] = s[i];
         }
         bly_col = s[i] == '\n' ? 0 : bly_col + 1;
-        if (bly_showing) bly_zx_out(s[i]);
+        bly_zx_out(s[i]);             /* print's text, and a failure's words, which the 48K shows too */
     }
 }
 
@@ -113,6 +114,7 @@ _Noreturn static void bly_fail_end(int line) {
         bly_pr_cstr(" at line ");
         bly_pr_int(line);
     }
+    bly_zx_failed();
     bly_nl();
     bly_flush();
     bly_zx_save();                    /* the screen and sound as they were, as the interpreter's finally saves them */

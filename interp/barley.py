@@ -379,7 +379,7 @@ class Parser:
         if self.at(':'):
             self.next()
             ret = self.type_()
-        body = self.block()
+        body = self.block(BLOCK_END + ('asm',))            # a body ends at its asm clause, if it has one
         asm = None
         if self.at('asm', 'kw'):
             self.next()
@@ -412,10 +412,10 @@ class Parser:
         return ('name', name, line)
 
     # -- statements
-    def block(self):
+    def block(self, ends=BLOCK_END):
         stmts = []
         self.skip_nl()
-        while not (self.t.kind == 'kw' and self.t.val in BLOCK_END):
+        while not (self.t.kind == 'kw' and self.t.val in ends):
             if self.t.kind == 'eof':
                 raise BarleyError('the file ended inside a block: is an end missing?', self.t.line)
             stmts.append(self.stmt())
@@ -506,6 +506,14 @@ class Parser:
                 return N('assert', line, e=e)
             if t.val == 'print':
                 return self.print_()
+        if t.kind == 'op' and t.val in ('+', '-', '*', '/', '%', '&', '|', '^', '<<', '>>', '**', '==', '!=', '<',
+                                        '>', '<=', '>=', '..') or t.kind == 'kw' and t.val in ('and', 'or'):
+            raise BarleyError(f'a statement can\'t start with {t.val}: to carry an expression on to the next line, '
+                              f'end the line before with the operator', line)
+        if t.kind == 'name' and (t.val == 'repeat' and self.peek().kind in ('nl', 'eof')
+                                 or t.val == 'until' and self.peek().kind != 'op'):
+            raise BarleyError(f'{t.val} isn\'t Barleycorn: for a loop that tests at its end, write while true do ... '
+                              f'if c then break end end', line)
         e = self.expr()
         if self.t.kind == 'op' and self.t.val in ('=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<=', '>>='):
             op = self.next().val
@@ -554,6 +562,9 @@ class Parser:
                     if ends():
                         newline = False
                 continue
+            if self.t.kind == 'kw' and self.t.val not in ('not', 'true', 'false'):
+                raise BarleyError(f'a print takes the rest of its line, so {self.t.val} here would be something to '
+                                  f'print: put it on a line of its own', self.t.line)
             items.append(('item', self.expr()))
             if self.at(';', 'op') or self.at(',', 'op'):
                 sep = self.next().val
@@ -705,6 +716,9 @@ class Parser:
 
 # -- checker -----------------------------------------------------------------------------------------------------
 
+ORDINALS = ('first', 'second', 'third', 'fourth', 'fifth')
+
+
 class Var:
     def __init__(self, name, ty, where, const=False, loop=False, cval=None):
         self.name, self.ty, self.where, self.const, self.loop, self.cval = name, ty, where, const, loop, cval
@@ -754,6 +768,7 @@ class Checker:
         self.scopes, self.func = [], None
         for t in TARGET_CONSTS:
             self.globals[t] = Var(t, BOOL, 'const', const=True, cval=(t == {'zx48': 'ZX', 'cpm': 'CPM'}[target]))
+            self.globals[t].target = True
         self.globals['dirs4'] = Var('dirs4', Gen('array', POS, n=4), 'const', const=True,
                                     cval=[(-1, 0), (0, 1), (1, 0), (0, -1)])
         self.globals['dirs8'] = Var('dirs8', Gen('array', POS, n=8), 'const', const=True,
@@ -824,6 +839,7 @@ class Checker:
 
     def declare(self, var, line):
         self.not_a_kind(var.name, line)
+        var.line = line                                 # for a message that says where a type came from
         for scope in self.scopes:
             if var.name in scope:
                 raise BarleyError(f'{var.name} is already defined in this function', line)
@@ -855,6 +871,8 @@ class Checker:
         for d in self.decls:
             if d.k in ('const', 'var', 'func', 'record'):
                 self.not_a_kind(d.name, d.line)
+                if getattr(self.globals.get(d.name), 'target', False):
+                    del self.globals[d.name]          # a program's own C (a column, say) hides the target's
             if d.k == 'const' and d.e.k == 'compile':
                 if d.name in self.globals:
                     raise BarleyError(f'{d.name} is defined twice', d.line)
@@ -1182,7 +1200,9 @@ class Checker:
             s.ty = self.var_type(s)
             if isinstance(s.ty, Gen) and s.ty.kind == 'array' and self.func is not None:
                 pass                                    # local arrays: fine where a function isn't recursive
-            self.declare(Var(s.name, s.ty, 'local'), s.line)
+            v = Var(s.name, s.ty, 'local')
+            v.inferred = not s.tyx                      # var x = ...: its type is its value's
+            self.declare(v, s.line)
         elif k == 'assign':
             self.assign(s)
         elif k == 'expr':
@@ -1240,6 +1260,9 @@ class Checker:
                     t = self.expr(e)
                     if t is FLEX:
                         self.settle_default(e)
+                    elif t is VOID and e.k in ('call', 'method') and (kind, e) != s.items[0]:
+                        raise BarleyError(f"print can't show a void: a print takes the rest of its line, so this "
+                                          f"call is one of its items: put it on a line of its own", e.line)
                     elif t is VOID or isinstance(t, Gen):
                         raise BarleyError(f"print can't show {article(t)}", e.line)
         else:
@@ -1349,10 +1372,20 @@ class Checker:
             return FLOAT
         if not is_int(t):
             raise BarleyError(f'a number where {article(t)} is needed', e.line)
+        if self.complement_fits(e, t):                      # ~%10 as a byte is %11111101, as ~ works in a byte
+            self.settle(e.a, t)
+            e.cval = ~e.a.cval & t.hi
         if e.cval is not None and not (t.lo <= e.cval <= t.hi):
             raise BarleyError(f"{e.cval} doesn't fit in {article(t.name)}", e.line)
         e.ty = t
         return t
+
+    @staticmethod
+    def complement_fits(e, t):
+        """~ on a literal that fits an unsigned t is the complement in t's width, as a literal shifted fits where its
+        literal does: flags &= ~%10 on a byte (the numbers me found ~ didn't, where 1 << 5 did)"""
+        return e.k == 'un' and e.op == '~' and e.ty in (FLEX, None) and is_int(t) and t.lo == 0 \
+            and e.a.cval is not None and 0 <= e.a.cval <= t.hi
 
     def settle_default(self, e):
         if e.k == 'bin' and e.op in ('<<', '>>') and e.ty is FLEX:
@@ -1364,7 +1397,8 @@ class Checker:
                 return self.settle(e, t)
         raise BarleyError(f"{e.cval} doesn't fit in a quad", e.line)
 
-    def coerce(self, e, t):
+    def coerce(self, e, t, what=None):
+        """what names the place that wants a t (f's n), for the message"""
         et = e.ty if e.ty is not None else self.expr(e)
         if et is FLEX:
             return self.settle(e, t)
@@ -1373,7 +1407,21 @@ class Checker:
         if isinstance(et, Gen) and isinstance(t, Gen) and et.kind == t.kind == 'array' and et.args == t.args \
                 and (t.n is None or t.n == et.n):
             return t
-        raise BarleyError(f'{article(et)} where {article(t)} is needed', e.line)
+        raise BarleyError(f'{article(et)} where {article(t)} is needed' + self.why(e, et, t, what), e.line)
+
+    def why(self, e, et, t, what):
+        """where the mismatch's two types came from: the porters' types turned up lines from their causes"""
+        parts = [f'{what} is {article(t)}'] if what else []
+        while e.k == 'bin' and e.ty == et:                  # 1 + j is a word because j is
+            e = e.a if e.a.ty == et and e.a.k in ('name', 'bin') else e.b
+        v = getattr(e, 'var', None) if e.k == 'name' else None
+        if v is not None and v.where == 'local' and getattr(v, 'line', None) and is_int(et) and is_int(t):
+            if v.loop:
+                parts.append(f'{e.name} is {article(et)} (its for at line {v.line} made it one)')
+            elif getattr(v, 'inferred', False):
+                parts.append(f'{e.name} is {article(et)} (var {e.name} took its value\'s type at line {v.line}: '
+                             f'var {e.name}: {t!r} = ... makes it {article(t)})')
+        return ': ' + ', and '.join(parts) if parts else ''
 
     def unify(self, a, b, line):
         if widens(a, b):
@@ -1387,6 +1435,8 @@ class Checker:
         v = f.cval
         if v is None and f.k == 'bin' and f.op in ('<<', '>>'):
             v = f.a.cval                              # a literal shifted fits where its literal does
+        if self.complement_fits(f, other):
+            v = f.a.cval                              # and so does a literal complemented, in an unsigned type
         if v is None or other.lo <= v <= other.hi:
             return self.settle(f, other)
         for t in (INT, LONG, QUAD):
@@ -1650,9 +1700,9 @@ class Checker:
             if ot.kind == 'heap':
                 return {'push': ([el], VOID), 'pop': ([], el)}.get(name)
             if ot.kind == 'set':
-                return {'add': ([el], VOID), 'del': ([el], VOID)}.get(name)
+                return {'add': ([el], VOID), 'del': ([el], VOID), 'clear': ([], VOID)}.get(name)
             if ot.kind == 'map':
-                return {'get': ([el, ot.args[1]], ot.args[1]), 'del': ([el], VOID)}.get(name)
+                return {'get': ([el, ot.args[1]], ot.args[1]), 'del': ([el], VOID), 'clear': ([], VOID)}.get(name)
             if ot.kind == 'grid':
                 return {'has': ([POS], BOOL), 'find': ([el], POS)}.get(name)
         return None
@@ -1682,9 +1732,9 @@ class Checker:
                                   e.line)
             if len(args) != len(f.params):
                 raise BarleyError(f'{name} takes {len(f.params)} argument{"s" * (len(f.params) != 1)}', e.line)
-            for a, pt in zip(args, f.ptys):
+            for a, (pname, _), pt in zip(args, f.params, f.ptys):
                 self.expr(a)
-                self.coerce(a, pt)
+                self.coerce(a, pt, f"{name}'s {pname}")
             e.func = f
             return f.rty
         if name in self.records or name == 'pos':
@@ -1714,7 +1764,7 @@ class Checker:
                 raise BarleyError('attr takes 2 values (to read a square) or 3 (to set it)', e.line)
             if len(args) != len(params):
                 raise BarleyError(f'{name} takes {len(params)} value{"s" * (len(params) != 1)}', e.line)
-            for a, p in zip(args, params):
+            for nth, (a, p) in enumerate(zip(args, params)):
                 t = self.expr(a)
                 if p == 'level':                                  # bright: true or false, or 0, 1 or 8, as BASIC
                     if t is BOOL:
@@ -1734,7 +1784,8 @@ class Checker:
                     if t is FLEX:
                         self.settle_default(a)
                 else:
-                    self.coerce(a, p)
+                    self.coerce(a, p, f"{name}'s values" if len(set(map(repr, params))) == 1 else
+                                f"{name}'s {ORDINALS[nth]} value")
             if name == 'frames' and 'frame' not in self.funcs:
                 raise BarleyError('frames turns frame do ... end on and off, and there isn\'t one', e.line)
             if name == 'fzx':                                     # a font, read when the program's compiled
@@ -2028,6 +2079,14 @@ class Interp:
             self.out.write(s)
         nl = s.rfind('\n')
         self.col = len(s) - nl - 1 if nl >= 0 else self.col + len(s)
+
+    def failed(self, msg):
+        """a failure's words on the screen, where print's text goes next, made readable as the 48K's are; main
+        prints them as output"""
+        for ch in msg.encode('latin-1'):
+            self.screen.out(ch)
+        self.screen.failed(self.col + len(msg))
+        self.screen.out(10)
 
     def ask(self, prompt, line):
         """a line typed at the keyboard (the keys: zxgfx.Keys). On the 48K, and so here and in C, the prompt and
@@ -2478,6 +2537,10 @@ class Interp:
             if not obj.items:
                 raise BarleyError('heap empty', line)
             return heapq.heappop(obj.items)
+        if kind in ('set', 'map') and name == 'clear':      # empty again, its room kept: no new one in the arena
+            obj.d.clear()
+            obj.ver += 1
+            return None
         if kind == 'set':
             if name == 'add':
                 if args[0] not in obj.d:
@@ -2670,6 +2733,9 @@ def run(src, text=b'', target='zx48', out=sys.stdout, screen=None, sound=None, k
     it.screen.keys = keys
     try:
         it.run()
+    except BarleyError as err:                          # a failure's words are on the screen too, as on the 48K
+        it.failed(str(err))
+        raise
     finally:
         if screen:
             it.screen.png(screen)
@@ -2696,6 +2762,8 @@ def main(argv):
     ap.add_argument('--screen', metavar='OUT.png',
                     help="save the Spectrum's screen at the end as a picture (and OUT.scr beside it)")
     ap.add_argument('--sound', metavar='OUT.txt', help='save a log of the notes it played')
+    ap.add_argument('--check', action='store_true', help='only read and check it, for the machine --as says: '
+                                                          'run nothing')
     a = ap.parse_args(argv)
     global EMBED_DIR
     EMBED_DIR = os.path.dirname(os.path.abspath(a.program))
@@ -2705,6 +2773,13 @@ def main(argv):
     except OSError as err:
         sys.exit(f'barley.py: {err.filename}: {err.strerror}')
     sys.setrecursionlimit(20000)
+    if a.check:
+        try:
+            Checker(Parser(src).program(), a.target).check()
+        except BarleyError as err:
+            print(err)
+            sys.exit(1)
+        return
     try:
         keys = None if sys.stdin is None else it_keys(sys.stdin)
         run(src, text, a.target, screen=a.screen, sound=a.sound, keys=keys)

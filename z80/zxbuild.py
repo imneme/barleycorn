@@ -2,8 +2,10 @@
 """Build a Barley program into a Spectrum tape: a BASIC loader, the input, the
 code. Code lives high.
 
-The loader is one line: CLEAR 32767: LOAD "" CODE: LOAD "" CODE: RANDOMIZE USR
-start. The first CODE block is the input at 8000h (a length word, then the
+The loader is one line: CLEAR 32767: LOAD "" CODE: LOAD "" CODE: CLS:
+RANDOMIZE USR start. The CLS takes the loader's own words away, so a program
+starts on a clear screen, as it does in the interpreter and in C. The first
+CODE block is the input at 8000h (a length word, then the
 text, so a missing input is just a zero), the second is the program, assembled
 twice so it sits flush under the UDGs at FF58h, with its slots just beneath
 it.
@@ -65,9 +67,10 @@ def number(n):
 
 
 def loader(start, input_at=INPUT):
-    CLEAR, LOAD, CODE, RANDOMIZE, USR = 0xFD, 0xEF, 0xAF, 0xF9, 0xC0
+    CLEAR, LOAD, CODE, CLS, RANDOMIZE, USR = 0xFD, 0xEF, 0xAF, 0xFB, 0xF9, 0xC0
     line = (bytes([CLEAR]) + number(input_at - 1) + b':' + bytes([LOAD]) + b'""' + bytes([CODE]) + b':' +
-            bytes([LOAD]) + b'""' + bytes([CODE]) + b':' + bytes([RANDOMIZE, USR]) + number(start) + b'\r')
+            bytes([LOAD]) + b'""' + bytes([CODE]) + b':' + bytes([CLS]) + b':' +       # the loader's words away:
+            bytes([RANDOMIZE, USR]) + number(start) + b'\r')                      # the program starts on a clear screen
     return (10).to_bytes(2, 'big') + len(line).to_bytes(2, 'little') + line
 
 
@@ -126,7 +129,7 @@ def main(argv):
         print(f'Z80: {err}')
         sys.exit(2)
     open(a.out or os.path.splitext(a.program)[0] + '.tap', 'wb').write(tap)
-    print(f"code {info['code']} bytes at {info['org']:04X}h, slots {info['slots']}, input at {info['input_at']:04X}h, "
+    print(f"code {info['code']} bytes at {info['org']:04X}h, slots {info['slots']} bytes, input at {info['input_at']:04X}h, "
           f"arena {info['arena']} bytes free")
 
 if __name__ == '__main__':

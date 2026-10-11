@@ -1,4 +1,4 @@
-;; provides: bly_map_new bly_map_has bly_map_put bly_map_ref bly_map_getd bly_map_del bly_map_find
+;; provides: bly_map_new bly_map_has bly_map_put bly_map_ref bly_map_getd bly_map_del bly_map_clear bly_map_find
 ;; needs: bly_cn_cap bly_cn_cmul bly_cn_mul bly_cn_full bly_cn_afull bly_alloc bly_pr_cstr bly_fail
 ;; targets: cpm zx48 test
 ;; bly_map_new    in: HL=&block (+0 cap quad, +8 ksize, +10 vsize, +12 kpr, +14 kind byte)   out: HL=map
@@ -8,6 +8,7 @@
 ;; bly_map_ref    in: HL=map DE=&key                     out: HL=&value   fails: no key {k} in the map   clobbers: AF BC DE HL IX
 ;; bly_map_getd   in: HL=map DE=&key BC=&default IX=&dest   dest = the value, or the default      clobbers: AF BC DE HL IX
 ;; bly_map_del    in: HL=map DE=&key                     no change if the key is absent          clobbers: AF BC DE HL IX
+;; bly_map_clear  in: HL=map                             empty again, its room kept              clobbers: AF BC DE HL IX
 ;; bly_map_find   in: IX=map DE=&key   out: NC: HL=&the key's index slot; C: HL=&the slot an insert would use
 ;;                (internal to this fragment and the tests)                  preserves DE IX   clobbers: AF BC HL
 ;;
@@ -582,3 +583,42 @@ bly_map_put:                        ; HL=map DE=&key BC=&value
 .val:   dw 0
 .i:     dw 0
 .j:     dw 0
+
+bly_map_clear:                      ; HL=map: no entries, every index slot empty, and a walk under way notices
+        push hl
+        pop ix
+        xor a
+        ld (ix+0),a
+        ld (ix+1),a                 ; ne
+        ld (ix+2),a
+        ld (ix+3),a                 ; live
+        inc (ix+6)                  ; ver
+        jr nz,.v
+        inc (ix+7)
+.v:     ld l,(ix+18)
+        ld h,(ix+19)                ; the alive flags: cap bytes of 0
+        ld c,(ix+4)
+        ld b,(ix+5)
+        ld e,0
+        call .fill
+        ld l,(ix+20)
+        ld h,(ix+21)                ; the index: mask + 1 words of FFFFh
+        ld c,(ix+8)
+        ld b,(ix+9)
+        inc bc
+        sla c
+        rl b
+        ld e,0FFh
+.fill:  ld a,b                      ; HL = where, BC = how many bytes, E = the byte
+        or c
+        ret z
+        ld (hl),e
+        dec bc
+        ld a,b
+        or c
+        ret z
+        ld d,h
+        ld e,l
+        inc de
+        ldir
+        ret

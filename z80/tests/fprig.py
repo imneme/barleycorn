@@ -8,8 +8,8 @@
 The program the tape carries is a loop (rig_ready) that loads HL DE BC A from a block, calls the routine whose
 address Python poked in, and stores A back. Python stops it at rig_ready with a breakpoint, writes the next call,
 and runs it on to rig_ready again. Interrupts are off around the call, so the T-states are the routine's own.
-A routine that fails ends in bly_exit, whose return to BASIC is pointed back at rig_ready (bly_basic_sp is poked),
-so failures cost nothing either. After every call the rig checks what BASIC needs kept: IY, HL', ERR_SP, ERR_NR,
+A routine that fails ends in bly_exit, whose return to BASIC is pointed back at rig_ready (bly_basic_sp is poked,
+and its RST 8, the report after a failure, made a RET), so failures cost nothing either. After every call the rig checks what BASIC needs kept: IY, HL', ERR_SP, ERR_NR,
 an empty calculator stack, and MEM.
 Run with a Python that can import omse-ai (paths.py's OMSE_AI_PYTHON).
 """
@@ -114,6 +114,7 @@ class Rig:
         s = self.sym
         self.X, self.Y, self.R = s['rig_x'], s['rig_y'], s['rig_r']
         self.poke16(s['bly_basic_sp'], s['rig_restart'])  # a failure's way back to BASIC comes back to the rig
+        self.zx.poke(s['zxp_stop'], 0xC9)                 # by RET: not RST 8's report, which would leave the rig
         self.keep = self.state()
         zx.printed(clear=True)
 

@@ -65,6 +65,12 @@ static G_V *F(_ref)(G_NAME *x, G_K key, int l) {
     return &x->v[x->ix[s]];
 }
 static G_V F(_getd)(G_NAME *x, G_K key, G_V d) { i64 s = F(_slot)(x, key); return s < 0 ? d : x->v[x->ix[s]]; }
+static void F(_clear)(G_NAME *x) {                       /* empty again, its room kept */
+    for (u32 i = 0; i < x->ne; i++) x->alive[i] = 0;
+    for (u32 i = 0; i <= x->mask; i++) x->ix[i] = -1;
+    x->ne = x->live = 0;
+    x->ver++;
+}
 static void F(_del)(G_NAME *x, G_K key) {
     i64 s = F(_slot)(x, key);
     if (s < 0) return;

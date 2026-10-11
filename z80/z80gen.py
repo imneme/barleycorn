@@ -2031,6 +2031,10 @@ class Gen:
             self.emit(f'ld de,{r.val}')
             self.call(f'bly_{k}_{name}')
             return r
+        if k in ('map', 'set') and name == 'clear':
+            self.emit(f'ld hl,({obj.val})')
+            self.call('bly_map_clear')
+            return None
         if k == 'map':
             key = self.conv(args[0], ot.args[0])
             if name == 'get':
@@ -2321,6 +2325,39 @@ class Gen:
             self.emit(f'ld bc,{r.val}')
             self.call('bly_neg_i32')
             self.place(done)
+            return r
+        if name == 'mod' and t in (B.BYTE, B.WORD, B.INT):   # 16 bits stay 16 bits: not 2.7K of quad (the bake-off)
+            a, b = [x if x.kind == 'imm' else self.conv(x, t) for x in args]
+            r = self.temp(t)
+            self.load_hl(b)
+            self.emit('ex de,hl')
+            self.load_hl(a)
+            self.emit('ld a,d')
+            self.emit('or e')
+            self.fail_jp('z', 'bly_mod0', line)
+            if t is B.INT:
+                done = self.label()
+                self.emit('push de')
+                self.call('bly_rem_i16')                    # DE = the remainder, with a's sign
+                self.emit('pop bc')
+                self.emit('ld a,d')
+                self.emit('or e')
+                self.emit(f'jr z,{done}')                   # 0 has no sign
+                self.emit('ld a,d')
+                self.emit('xor b')
+                self.emit(f'jp p,{done}')                   # the remainder has m's sign already
+                self.emit('ex de,hl')
+                self.emit('add hl,bc')                      # else it's m's side of 0: r + m
+                self.emit('ex de,hl')
+                self.place(done)
+            else:
+                self.call('bly_divmod_u16')                 # unsigned: mod is %
+            self.emit('ex de,hl')
+            if t is B.BYTE:
+                self.emit('ld a,l')
+                self.emit(f'ld ({r.val}),a')
+            else:
+                self.emit(f'ld ({r.val}),hl')
             return r
         if name in ('abs', 'gcd', 'lcm', 'mod'):
             qs = [self.conv(a, B.QUAD) if a.kind != 'imm' else self.materialize(Op('imm', a.val, B.QUAD)) for a in args]

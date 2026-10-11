@@ -135,6 +135,14 @@ screen, sound or memory need the ROM, even in the interpreter.
 `./bly -h` lists the commands, and `./bly COMMAND -h` gives one's
 options (every script here answers `-h`).
 
+Making a tape reports what it holds: `code 1062 bytes at FB32h, slots 12
+bytes, input at 8000h, arena 30313 bytes free`. The code sits flush
+under the UDGs; the slots are its variables' fixed homes, just beneath
+it (a `bit[10000]` is 1,250 of them); the arena, where lists, maps and
+the rest are made, is what's left between the input and the stack. A
+tape that seems big: `z80/zxsize.py PROG.bly` says where every byte
+went, fragment by fragment.
+
 A program reads its input with `lines()`, `grid()` or `input()`. On a
 Spectrum the input travels on the tape and loads like any other block.
 What's typed at the keyboard comes through `ask()` (a line), `inkey()`

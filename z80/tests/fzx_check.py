@@ -123,13 +123,12 @@ def ours(name, font, items, k):
     for _ in range(40):
         if zx.wait_ready(max_frames=250) is not None:
             break
-    failed = 'after' not in i.stdout                 # the 48K prints a failure's words on rows 1 and 2, and the
-    rows = [r for r in range(22) if not (failed and r in (1, 2))]        # model doesn't: leave those out then
-    seen = lambda a: ((a - 6144) // 32 if a >= 6144 else ((a >> 8) & 0x18) | ((a >> 5) & 7)) in rows
+    failed = 'after' not in i.stdout                 # a failure's words are on both screens, as the 48K shows them
+    seen = lambda a: ((a - 6144) // 32 if a >= 6144 else ((a >> 8) & 0x18) | ((a >> 5) & 7)) < 22
     upper = lambda m: bytes(m[a] for a in range(6912) if seen(a))
     out = transcript.answer(zx.printed())
-    if not zx.report().startswith('0 OK'):            # a failure inside the driver must still go back to BASIC as
-        out += f'\nREPORT: {zx.report()}'             # any program does
+    if not zx.report().startswith('9 STOP statement' if failed else '0 OK'):    # a failure inside the driver must
+        out += f'\nREPORT: {zx.report()}'             # still go back to BASIC as any failure does
     return (i.stdout, upper(open(scr_i, 'rb').read())), (out, upper(bytes(zx.read(0x4000, 6912)))), lines
 
 

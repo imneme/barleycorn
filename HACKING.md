@@ -167,12 +167,15 @@ spectrum-minilib), when it comes.
   ```
   A failure's message is part of the output
   (`index 9 is outside 0..8 at line 4`), so tests pin failures too. On
-  the 48K, `zxrun` also fails a run that ends in any report but BASIC's
-  `0 OK`: a Barley program goes back to BASIC by returning, failure or
-  not, so any other report is the ROM's own error. Anything that runs
-  programs gives them a stdin of its own, the keys or an empty one: a
-  program that reads keys reads stdin, and one inherited from a terminal
-  or a pipe can leave it waiting for ever. (The screen test did, once.)
+  the 48K, a program goes back to BASIC by returning (`0 OK`), or after
+  a failure by BASIC's `9 STOP statement` (exit status 1, as in the
+  interpreter), with the failure's words recoloured paper 7, ink 0, so
+  they can't be lost in the program's colours. `zxrun` fails a run that
+  ends in any other report: that's the ROM's own error. Anything that
+  runs programs gives them a stdin of its own, the keys or an empty one:
+  a program that reads keys reads stdin, and one inherited from a
+  terminal or a pipe can leave it waiting for ever. (The screen test
+  did, once.)
 - **The fragments** (`z80/tests/test_*.py`, with omse-ai's Python): each
   library area on a bare Z80 against a Python model of what it should
   do, usually the interpreter's own code, over random and edge cases.
@@ -185,9 +188,9 @@ spectrum-minilib), when it comes.
   as C and as CP/M programs. Any disagreement is kept in
   `build/fuzz-failures/`.
 - **One program, every backend**: `./bly all PROGRAM [INPUT]` compares
-  the text each prints and the final screens. A program that compares
-  screens should `cls()` first: otherwise the 48K's screen still has the
-  tape loader's text on it, which the interpreter's never had.
+  the text each prints and the final screens. The tape's loader does a
+  CLS before the program starts, so the 48K's screen starts as clear as
+  the interpreter's.
 - **The screen**: `c/tests/test_screen.py` holds C to the reference;
   `z80/tests/test_zxgfx.py` holds the Z80's drawing to it;
   `z80/tests/rom_text_check.py` holds the reference's text to the real

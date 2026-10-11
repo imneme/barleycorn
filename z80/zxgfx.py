@@ -481,6 +481,13 @@ class Screen:
         self.paint(self.row * 32 + self.col)
         self.col += 1
 
+    def failed(self, n):
+        """a failure's words, the last n printed, made readable as the 48K's runtime makes them (plat_zx.asm's
+        bly_failed): their squares paper 7, ink 0, whatever the program's colours were"""
+        end = self.row * 32 + self.col
+        for i in range(max(0, end - n), end):
+            self.mem[6144 + i] = 0x38
+
     # -- sound and time ----------------------------------------------------------------------------------------
     def beep(self, ms, semitone):
         if not -60 <= semitone <= 69:

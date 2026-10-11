@@ -1,4 +1,4 @@
-;; provides: bly_putc bly_exit bly_test_init bly_test_out bly_test_outp bly_test_failed bly_text bly_tlen
+;; provides: bly_putc bly_exit bly_failed bly_test_init bly_test_out bly_test_outp bly_test_failed bly_text bly_tlen
 ;; needs: bly_atop bly_alimit bly_line bly_col
 ;; targets: test
 ;; bly_putc       in: A=byte       appends to bly_test_out          clobbers: AF BC DE HL
@@ -17,6 +17,9 @@ bly_putc:
         ld (hl),a
         inc hl
         ld (bly_test_outp),hl
+        ret
+
+bly_failed:                         ; a failure's words are out: nothing more to do here
         ret
 
 bly_exit:

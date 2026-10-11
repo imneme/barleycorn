@@ -833,6 +833,9 @@ class Gen:
                 self.emit(f'{g}_push({obj}, {conv_el(0)}, {line});')
                 return None
             return self.temp(self.ctype(e.ty), f'{g}_pop({obj}, {line})')
+        if k in ('map', 'set') and name == 'clear':
+            self.emit(f'{g}_clear({obj});')
+            return None
         if k == 'map':
             if name == 'get':
                 d = self.conv(args[1], e.args[1].ty, ot.args[1])
@@ -1000,6 +1003,7 @@ GRID_INPUT = '''static grid_u8 *bly_grid_input(int l) {
 def compile_program(src, target='zx48'):
     decls = B.Parser(src).program()
     ck = B.Checker(decls, target)
+    ck.globals['C'].cval = True                     # C is a Spectrum, as far as a program can tell, and C too
     ck.check()
     return Gen(ck).program()
 

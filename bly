@@ -123,6 +123,12 @@ def upper(a):
 def run_all(prog, inp, work, minutes, keys):
     """keys: the same keys typed for each (none: an empty stdin, not the terminal's)"""
     keys = keys or ''
+    r = subprocess.run([sys.executable, os.path.join(ROOT, 'interp', 'barley.py'), '--check', prog],
+                       capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    if r.returncode:
+        sys.stdout.write(r.stdout + r.stderr)
+        print('  nothing ran: the program doesn\'t compile')
+        return 1
     outs, codes = {}, {}
     png = os.path.join(work, 'interp.png')
     r = subprocess.run([sys.executable, os.path.join(ROOT, 'interp', 'barley.py'), '--screen', png, prog] + inp,
@@ -138,7 +144,9 @@ def run_all(prog, inp, work, minutes, keys):
         codes['zx'], outs['zx'] = run_zx(tap, zscr, minutes, capture=True, keys=keys)
     else:
         codes['zx'], outs['zx'] = 1, '(the tape failed to build)'
-    sys.stdout.write(outs['interp'])
+    sys.stdout.flush()
+    sys.stdout.buffer.write(outs['interp'].encode('latin-1'))     # the bytes it printed, as they were
+    sys.stdout.flush()
     ok = True
     for k in ('c', 'cpm', 'zx'):
         want = outs['interp-cpm'] if k == 'cpm' else outs['interp']
@@ -146,6 +154,8 @@ def run_all(prog, inp, work, minutes, keys):
             print(f'  {k}: the same text' + (' (as the interpreter prints it --as cpm)' if k == 'cpm' and want != outs['interp'] else ''))
         elif k == 'cpm' and 'Spectrum-only' in outs[k]:
             print(f'  cpm: not run (the program uses the Spectrum outside if ZX)')
+        elif k == 'cpm' and 'floats are not on the Z80 yet' in outs[k]:
+            print(f'  cpm: not run (floats aren\'t on CP/M yet: it has no ROM calculator)')
         else:
             ok = False
             print(f'  {k}: DIFFERENT text (exit {codes[k]}):')

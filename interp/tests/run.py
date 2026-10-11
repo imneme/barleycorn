@@ -48,7 +48,7 @@ def run_zx(prog, args_in, keys=None):
         r = subprocess.run([OMSEPY, ZXRUN, tap] + typing, capture_output=True, text=True, encoding='latin-1', timeout=600)
     except subprocess.TimeoutExpired:
         return 'TIMEOUT'
-    return r.stdout + (('\nSTDERR: ' + r.stderr[-500:]) if r.returncode else '')
+    return r.stdout + (('\nSTDERR: ' + r.stderr[-500:]) if r.returncode > 1 else '')    # 1: a failure, as said
 Z80GEN = os.path.join(HERE, '..', '..', 'z80', 'z80gen.py')
 SJASM = paths.SJASMPLUS
 TNYLPO = paths.TNYLPO

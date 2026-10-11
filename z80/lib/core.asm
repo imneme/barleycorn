@@ -1,5 +1,5 @@
 ;; provides: bly_line bly_col bly_out bly_pr_cstr bly_pr_str bly_nl bly_zone bly_pr_bool bly_pr_u16 bly_pr_i16 bly_fail bly_fail_end bly_fail_index_u16 bly_fail_index_i16 bly_alloc bly_atop bly_alimit
-;; needs: bly_putc bly_exit
+;; needs: bly_putc bly_exit bly_failed
 ;; targets: cpm zx48 test
 ;; bly_out            in: A=byte          keeps bly_col, prints through bly_putc          clobbers: AF BC DE HL
 ;; bly_pr_cstr        in: HL=&cstring     prints up to the zero                           clobbers: AF BC DE HL
@@ -9,7 +9,8 @@
 ;; bly_pr_u16         in: HL              unsigned decimal, no division                    clobbers: AF BC DE HL
 ;; bly_pr_i16         in: HL              signed decimal                                   clobbers: AF BC DE HL
 ;; bly_fail           in: HL=&cstring     prints it, then as bly_fail_end                  never returns
-;; bly_fail_end       in: -               " at line N" (unless bly_line is 0), newline, bly_exit   never returns
+;; bly_fail_end       in: -               " at line N" (unless bly_line is 0), the platform's bly_failed, newline,
+;;                                        bly_exit                                         never returns
 ;; bly_fail_index_u16 in: DE=i BC=n       index {i} is outside 0..{n}                      never returns
 ;; bly_fail_index_i16 in: DE=i BC=n       the same, i signed                               never returns
 ;; bly_alloc          in: HL=size         out: HL=a zeroed block from the arena; fails: arena full   clobbers: AF BC DE
@@ -147,7 +148,8 @@ bly_fail_end:
         call bly_pr_cstr
         ld hl,(bly_line)
         call bly_pr_u16
-.nl:    call bly_nl
+.nl:    call bly_failed             ; the platform's: the 48K makes the words readable, and says STOP, not OK
+        call bly_nl
         jp bly_exit
 .at:    db " at line ",0
 

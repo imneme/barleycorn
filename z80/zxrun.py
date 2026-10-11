@@ -14,6 +14,11 @@ doesn't ask within half a second, the key is pressed and let go (for key() and
 inkey()), and a few frames pass before the next. When the keys run out and the
 program is waiting in ask(), it presses cursor down, which stops it, as the end
 of the keys does in the interpreter and C.
+
+A program that ends well leaves BASIC saying 0 OK, and the exit status is 0;
+one that fails leaves it saying 9 STOP statement, and the exit status is 1, as
+the interpreter's is. Any other report is the ROM's own error: it's printed,
+and the exit status is 3.
 """
 import argparse
 import os
@@ -90,11 +95,14 @@ while zx.lib.zx_tstates(zx.z) - t0 < limit:
         break
 if a.scr:                                               # the screen memory too, for comparing pictures
     open(a.scr, 'wb').write(bytes(zx.read(0x4000, 6912)))
+sys.stdout.reconfigure(encoding='latin-1', errors='replace')    # each byte the program printed as that byte
 sys.stdout.write(transcript.answer(zx.printed()))        # without the text printed at a place: that's the screen's
 if not done:
     sys.stderr.write(f'\nzxrun: still running after {minutes:g} minutes of Spectrum time (--minutes N for longer)\n')
     sys.exit(2)
 report = zx.report()
-if not report.startswith('0 OK'):                       # a program, failing or not, goes back to BASIC with RET: any
-    sys.stderr.write(f'\nzxrun: BASIC reported {report}\n')     # other report is the ROM's error, not ours
+if report.startswith('9 STOP statement'):               # a failure: its words are the output's last line
+    sys.exit(1)
+if not report.startswith('0 OK'):                       # a program goes back to BASIC with RET (0 OK), or after a
+    sys.stderr.write(f'\nzxrun: BASIC reported {report}\n')     # failure with RST 8 (9 STOP): any other is the ROM's
     sys.exit(3)

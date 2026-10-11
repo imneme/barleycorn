@@ -14,7 +14,12 @@ try:
 except OSError as err:
     sys.exit(f'zxsize.py: {err.filename}: {err.strerror}')
 z80gen.B.EMBED_DIR = os.path.dirname(os.path.abspath(a.program))       # embed's files are beside it
-tap, info = zxbuild.build(src, text)
+try:
+    tap, info = zxbuild.build(src, text)
+except z80gen.B.BarleyError as err:
+    sys.exit(str(err))                                  # the checker's words, as bly prints them
+except (z80gen.GenError, ValueError) as err:
+    sys.exit(f'Z80: {err}')
 org = info['org']
 asm = z80gen.compile_program(src, 'zx48', org=org, bss_at=org - info['slots']) + \
     f'\nbly_input_at equ {info["input_at"]}\n'
@@ -35,6 +40,7 @@ for row in lst:
     if m:
         sizes[part] = sizes.get(part, 0) + len(m.group(1).split())
 total = sum(sizes.values())
-print(f'{a.program}: {total} bytes of code ({info["code"]} by the builder), slots {info["slots"]}')
+print(f'{a.program}: {total} bytes of code ({info["code"]} by the builder), slots {info["slots"]} bytes '
+      f'(the variables\' homes)')
 for k, v in sorted(sizes.items(), key=lambda kv: -kv[1]):
     print(f'{v:6}  {100 * v / total:5.1f}%  {k}')

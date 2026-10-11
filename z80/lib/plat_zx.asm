@@ -1,4 +1,4 @@
-;; provides: bly_putc bly_exit bly_start bly_text bly_tlen bly_basic_sp bly_zx_cls bly_zx_at bly_zx_key bly_zx_ticks bly_zx_pause
+;; provides: bly_putc bly_exit bly_failed bly_start bly_text bly_tlen bly_basic_sp bly_zx_cls bly_zx_at bly_zx_key bly_zx_ticks bly_zx_pause
 ;; needs: bly_atop bly_alimit bly_fail bly_pr_cstr bly_pr_i16 bly_out bly_col
 ;; uses: bly_program bly_bss bly_bss_end bly_input_at
 ;; targets: zx48
@@ -9,7 +9,10 @@
 ;; bly_putc   in: A=byte. A newline is ENTER; a byte that would be a control code (below 32) or a keyword token
 ;;            (A5h and up) prints as ?, so nothing is ever interpreted. The scroll prompt is kept quiet.
 ;;            clobbers: AF BC DE HL
-;; bly_exit   back to BASIC, from anywhere: BASIC's SP, then RET (0 OK)
+;; bly_failed a failure's words are printed (core.asm's bly_fail_end): colour their squares paper 7, ink 0, so ink
+;;            0 on paper 0 can't hide them, and have bly_exit report 9 STOP statement   clobbers: AF BC DE HL
+;; bly_exit   back to BASIC, from anywhere: BASIC's SP, then RET (0 OK), or after a failure RST 8 (9 STOP statement),
+;;            so a person at the Spectrum sees that it stopped
 ;; The screen and sound's platform half (ABI.md section 10; zxgfx.py is their meaning). The colours (ink, paper,
 ;; border, bright, flash, inverse, over) are zxcolour.asm, a fragment of their own, as beep is zxbeep.asm.
 ;; bly_zx_cls                          the ROM's CLS, then print starts at the top left    clobbers: all but IY
@@ -30,6 +33,8 @@ bly_tlen: dw 0
 bly_basic_sp: dw 0
 
 bly_start:
+        xor a
+        ld (zxp_failed),a           ; RUN again after a failure: this run hasn't failed
         ld (bly_basic_sp),sp
         ld sp,bly_bss               ; our stack grows down beneath the slots
         ld hl,bly_bss
@@ -78,11 +83,70 @@ bly_putc:
 .out:   rst 10h
         ret
 
+bly_failed:
+        ld a,1
+        ld (zxp_failed),a
+        ld a,(TV_FLAG)
+        rra
+        ret c                       ; printing in the lower screen: BASIC's report goes there anyway
+        ld a,(S_POSN+1)
+        ld c,a
+        ld a,24
+        sub c                       ; the row the words end on
+        cp 23
+        ret nc                      ; not the upper screen's (nor anywhere sane): leave it be
+        ld l,a
+        ld h,0
+        add hl,hl
+        add hl,hl
+        add hl,hl
+        add hl,hl
+        add hl,hl                   ; HL = row * 32
+        ld a,(S_POSN)
+        ld c,a
+        ld a,33
+        sub c                       ; the column, 0..32 (32: the row is full)
+        cp 33
+        ret nc
+        ld e,a
+        ld d,0
+        add hl,de                   ; HL = the square after the words
+        ld de,(bly_col)             ; the words are the last bly_col of the line, and the line may be longer
+        or a
+        sbc hl,de
+        jr nc,.from
+        add hl,de                   ; the line began above the top of the screen: from the top
+        ex de,hl
+        ld hl,0
+.from:  ld b,d
+        ld c,e                      ; BC = how many squares
+        ld a,b
+        or c
+        ret z
+        ld de,5800h
+        add hl,de                   ; HL = the first square's attribute
+        ld (hl),38h                 ; paper 7, ink 0: BASIC's own, readable whatever the program chose
+        dec bc
+        ld a,b
+        or c
+        ret z
+        ld d,h
+        ld e,l
+        inc de
+        ldir
+        ret
+
 bly_exit:
         im 1                        ; IM 1, interrupts on: as BASIC needs them, even from a failure inside frame's
         ei                          ; interrupt (zxframes.asm)
         ld sp,(bly_basic_sp)
-        ret
+        ld a,(zxp_failed)
+        or a
+        ret z                       ; 0 OK
+zxp_stop:                           ; (fprig.py makes this a RET, so a failure comes back to it as BASIC would)
+        rst 08h                     ; a failure: the program stopped, and BASIC says so
+        db 8                        ; 9 STOP statement
+zxp_failed: db 0
 
 ; -- the screen and sound -----------------------------------------------------------------------------------------
 ATTR_P  equ 5C8Dh
@@ -94,6 +158,8 @@ BORDCR  equ 5C48h
 FLAGS   equ 5C3Bh
 LAST_K  equ 5C08h
 FRAMES  equ 5C78h
+TV_FLAG equ 5C3Ch
+S_POSN  equ 5C88h
 
 bly_zx_cls:
         call 0D6Bh                  ; the ROM's CLS: the screen in ATTR_P, print back to the top left
