@@ -87,6 +87,22 @@ def commands():
     return seen, omse, bad
 
 
+def card():
+    """the card (DESIGN.md section 4) against the language: every built-in function and every method the checker
+    knows is on it, since the card is the whole language on one page. (The outside reading found nothing held it.)"""
+    import inspect
+    sys.path.insert(0, os.path.join(ROOT, 'interp'))
+    import barley as B
+    design = open(os.path.join(ROOT, 'DESIGN.md')).read()
+    text = design.split('## 4. The whole language, on one page', 1)[1].split('```', 2)[1]
+    words = set(re.findall(r'[A-Za-z_][A-Za-z_0-9]*', text))
+    funcs = set(B.BUILTIN_FUNCS) | set(B.SCREEN_FUNCS) | set(B.MACHINE_FUNCS) | set(B.FLOAT_FUNCS)
+    methods = set(re.findall(r"'([a-z_]+)': \(", inspect.getsource(B.Checker.method_sig)))
+    bad = [f'the card leaves out {k} {n}' for k, names in (('the function', funcs), ('the method', methods))
+           for n in sorted(names) if n not in words]
+    return len(funcs) + len(methods), bad
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--wrap', metavar='MDWRAP', help='check the wrapping too, with this mdwrap')
@@ -102,6 +118,11 @@ def main(argv=None):
         print(f'{n} commands\' -h' + ('' if omse else ' (not the omse-ai ones: no omse-ai here)') +
               f', {len(cbad)} wrong')
         bad += cbad
+        n, kbad = card()
+        for b in kbad:
+            print('FAIL: ' + b)
+        print(f'the card: {n} functions and methods, {len(kbad)} left out')
+        bad += kbad
     if a.wrap:
         files = markdown_files()
         r = subprocess.run([a.wrap, '--check'] + files, cwd=ROOT, capture_output=True, text=True)

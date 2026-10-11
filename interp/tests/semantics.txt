@@ -1874,6 +1874,52 @@ end
 --- expect
 records compare field by field, and R has a field that can't be compared (a container) at line 4
 
+=== a number from text with leading zeros and a sign reads as its value, and the too-big message says the value, not the text (the numbers me checked all four agree; now the suite holds them)
+func main()
+  var a: byte = "0042".int()
+  var b: int = "+007".int()
+  var c: int = "-0000".int()
+  var d: word = "00065535".int()
+  print a; " "; b; " "; c; " "; d
+  var e: byte = "0300".int()
+end
+--- expect
+42 7 0 65535
+300 doesn't fit in a byte at line 7
+
+=== and a negative one says its sign
+func main()
+  var e: byte = "-0300".int()
+end
+--- expect
+-300 doesn't fit in a byte at line 2
+
+=== and a plus sign isn't part of the value either
+func main()
+  var e: byte = "+0300".int()
+end
+--- expect
+300 doesn't fit in a byte at line 2
+
+=== print's comma moves to the next 16-column zone from columns 0, 15, 16 and 31, and counts from a newline inside a str
+func main()
+  print "", "x"
+  print "123456789012345", "x"
+  print "1234567890123456", "x"
+  print "1234567890123456789012345678901", "x"
+  print "ab\ncd", "x"
+  print "ab\ncdefghijklmnopqrst", "x"
+end
+--- expect
+                x
+123456789012345 x
+1234567890123456                x
+1234567890123456789012345678901 x
+ab
+cd              x
+ab
+cdefghijklmnopqrst              x
+
 === dword: unsigned 32 bits, which wrap (+ - * / % >> << - ~, min, max, a hash), and its widenings and casts
 func hash(s: str): dword
   var h: dword = 2166136261

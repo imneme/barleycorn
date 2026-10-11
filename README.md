@@ -32,9 +32,9 @@ work on the Spectrum, in the interpreter and in C (which keep a picture
 of the screen and a log of the notes), and are an error on CP/M. Floats
 are the one exception: on a Spectrum they're the ROM's own, so they can
 differ in the last digit. The test suite holds the backends to that, and
-so does a fuzzer that writes random programs and checks C and CP/M
-against the interpreter (`./check` runs 400 of them; `--quick` leaves it
-out).
+so does a fuzzer that writes random programs, over the integer core and
+over the containers, and checks C and CP/M against the interpreter
+(`./check` runs 550 of them).
 
 It was made for Advent of Code-sized problems: read some text, pull the
 numbers out, search a grid or a graph, and print an answer that may need

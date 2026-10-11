@@ -221,9 +221,110 @@ class Gen:
         return '\n'.join(src + [''] + main) + '\n'
 
 
-def run_one(seed, zx=False):
+class ContGen:
+    """random programs over the containers: one to three of them (list, queue, heap, map, set, grid) of ints, words,
+    bytes, longs, positions or a record, and forty-odd operations, each read printed. Keys are small, so they collide;
+    most operations are guarded so a program runs long, and about one in ten isn't, so the failures (full, empty, no
+    key, off the grid, changed while walking) are compared too. The meaning is the interpreter's, as for Gen."""
+    ELEMS = ['int', 'word', 'byte', 'long', 'pos', 'R']
+
+    def __init__(self, seed):
+        self.r = random.Random(seed)
+
+    def val(self, t):
+        r = self.r
+        if t == 'pos':
+            return f'pos({r.randint(-3, 9)}, {r.randint(-3, 9)})'
+        if t == 'R':
+            return f'R({r.randint(-5, 5)}, {r.randint(0, 9)})'
+        small = r.randint(0, 15)
+        return str(r.choice([small, small, small] + EDGE[t]))
+
+    def key(self, t):
+        return self.val(t) if t == 'pos' else str(self.r.randint(0, 15) if t != 'byte' else self.r.randint(0, 15))
+
+    def walk(self, c, kind, two=False):
+        r = self.r
+        body = ['  print k; ":"; v; " ";' if two else '  print x; " ";']
+        if r.random() < 0.08:                                   # changing it while walking: a failure (on a line of
+            body.append('  ' + {'list': f'{c}.clear()', 'queue': f'var y = {c}.get()',  # its own: a print takes
+                                'map': f'{c}.clear()', 'set': f'{c}.clear()'}[kind])  # the rest of its line)
+        return [f'for {"k, v" if two else "x"} in {c} do'] + body + ['end', 'print']
+
+    def op(self, c, kind, t, k2=None):
+        r = self.r
+        safe = r.random() > 0.1
+        v = lambda: self.val(t)
+        if kind == 'list':
+            return r.choice([
+                [f'if {c}.len < {c}_cap then {c}.push({v()}) end' if safe else f'{c}.push({v()})'],
+                [f'if {c}.len > 0 then print {c}.pop() end' if safe else f'print {c}.pop()'],
+                [f'if {c}.len > 0 then print {c}[{r.randint(0, 7)} % int({c}.len)] end' if safe
+                 else f'print {c}[{r.randint(0, 9)}]'],
+                [f'if {c}.len > 2 then {c}[1] = {v()} end'],
+                [f'print {c}.len'], [f'{c}.sort()'], [f'{c}.clear()'] if r.random() < 0.3 else [f'print {c}.len'],
+                self.walk(c, 'list')])
+        if kind == 'queue':
+            return r.choice([
+                [f'if {c}.len < {c}_cap then {c}.put({v()}) end' if safe else f'{c}.put({v()})'],
+                [f'if {c}.len > 0 then print {c}.get() end' if safe else f'print {c}.get()'],
+                [f'print {c}.len'], self.walk(c, 'queue')])
+        if kind == 'heap':
+            return r.choice([
+                [f'if {c}.len < {c}_cap then {c}.push({v()}) end' if safe else f'{c}.push({v()})'],
+                [f'if {c}.len > 0 then print {c}.pop() end' if safe else f'print {c}.pop()'],
+                [f'print {c}.len']])
+        if kind == 'map':
+            k = self.key(t)
+            return r.choice([
+                [f'if {c}.len < {c}_cap or {k} in {c} then {c}[{k}] = {self.val(k2)} end' if safe
+                 else f'{c}[{k}] = {self.val(k2)}'],
+                [f'if {k} in {c} then print {c}[{k}] end' if safe else f'print {c}[{k}]'],
+                [f'print {c}.get({k}, {self.val(k2)})'], [f'print {k} in {c}'], [f'{c}.del({k})'],
+                [f'print {c}.len'], [f'{c}.clear()'] if r.random() < 0.2 else [f'print {c}.len'],
+                self.walk(c, 'map', two=True)])
+        if kind == 'set':
+            k = self.key(t)
+            return r.choice([
+                [f'if {c}.len < {c}_cap or {k} in {c} then {c}.add({k}) end' if safe else f'{c}.add({k})'],
+                [f'print {k} in {c}'], [f'{c}.del({k})'], [f'print {c}.len'],
+                [f'{c}.clear()'] if r.random() < 0.2 else [f'print {c}.len'], self.walk(c, 'set')])
+        if kind == 'grid':
+            rr, cc = r.randint(-1, 5), r.randint(-1, 6)
+            inside = f'{c}.has(pos({rr}, {cc}))'
+            return r.choice([
+                [f'if {inside} then {c}[{rr}, {cc}] = {v()} end' if safe else f'{c}[{rr}, {cc}] = {v()}'],
+                [f'if {inside} then print {c}[pos({rr}, {cc})] end' if safe else f'print {c}[{rr}, {cc}]'],
+                [f'print {inside}'], [f'print {c}.rows; " "; {c}.cols'],
+                [f'print {c}.find({v()})'] if not safe else [f'print {inside}']])
+
+    def program(self):
+        r = self.r
+        decls, ops = [], []
+        conts = []
+        for i in range(r.randint(1, 3)):
+            kind = r.choice(['list', 'queue', 'heap', 'map', 'set', 'grid'])
+            t = r.choice(self.ELEMS if kind not in ('map', 'set') else ['int', 'word', 'byte', 'long', 'pos'])
+            c, cap = f'c{i}', r.randint(1, 12)
+            if kind == 'map':
+                k2 = r.choice(self.ELEMS)
+                decls += [f'  var {c}_cap: word = {cap}', f'  var {c} = map[{t}, {k2}]({cap})']
+                conts.append((c, kind, t, k2))
+            elif kind == 'grid':
+                decls += [f'  var {c} = grid[{t}]({r.randint(1, 4)}, {r.randint(1, 5)})']
+                conts.append((c, kind, t, None))
+            else:
+                decls += [f'  var {c}_cap: word = {cap}', f'  var {c} = {kind}[{t}]({cap})']
+                conts.append((c, kind, t, None))
+        for _ in range(r.randint(20, 60)):
+            c, kind, t, k2 = r.choice(conts)
+            ops += ['  ' + line for line in self.op(c, kind, t, k2)]
+        return 'record R  a: int; b: word  end\n\nfunc main()\n' + '\n'.join(decls + ops) + '\nend\n'
+
+
+def run_one(seed, zx=False, containers=False):
     import run as R
-    src = Gen(seed).program()
+    src = (ContGen if containers else Gen)(seed).program()
     sys.path.insert(0, os.path.join(HERE, '..'))
     import paths
     d = os.path.join(paths.BUILD, 'fuzz', str(os.getpid()))
@@ -272,13 +373,14 @@ def main(argv):
     ap.add_argument('--seed', type=int, help='the first seed (default: a random one, printed at the end)')
     ap.add_argument('--jobs', type=int, default=6, help='how many at once (default 6)')
     ap.add_argument('--zx', action='store_true', help="the 48K too (slower)")
+    ap.add_argument('--containers', action='store_true', help='programs over the containers, not the integer core')
     a = ap.parse_args(argv)
     n, zx, jobs = a.n, a.zx, a.jobs
     seed = a.seed if a.seed is not None else random.randrange(10 ** 6)
     os.makedirs(OUT, exist_ok=True)
     counts = {}
     with mp.Pool(jobs) as pool:
-        for s, verdict, src, outs in pool.imap_unordered(lambda_run, [(seed + k, zx) for k in range(n)]):
+        for s, verdict, src, outs in pool.imap_unordered(lambda_run, [(seed + k, zx, a.containers) for k in range(n)]):
             counts[verdict] = counts.get(verdict, 0) + 1
             if verdict == 'rejected' and counts[verdict] <= 3:
                 print('rejected:', outs.get('why'), flush=True)

@@ -49,6 +49,8 @@ def stages(quick):
           for t in FRAG] + ([] if quick else [[OPY, os.path.join(ROOT, 'z80', 'tests', 'test_int_mutants.py')],
                                                [OPY, os.path.join(ROOT, 'z80', 'tests', 'test_fp_mutants.py')],
                                                [OPY, os.path.join(ROOT, 'z80', 'tests', 'test_random.py'), '--mutants'],
+                                               [OPY, os.path.join(ROOT, 'z80', 'tests', 'test_containers.py'), '--mutants'],
+                                               [OPY, os.path.join(ROOT, 'z80', 'tests', 'test_zxgfx.py'), '--mutants'],
                                                [OPY, os.path.join(ROOT, 'z80', 'tests', 'rom_text_check.py')],
                                                [OPY, os.path.join(ROOT, 'z80', 'tests', 'co_temp_check.py')],
                                                [OPY, os.path.join(ROOT, 'z80', 'tests', 'ula_check.py')],
@@ -65,9 +67,10 @@ def stages(quick):
         ('wrap', 'the Markdown wrapped at 72 columns, as mdwrap does it',
          lambda: None if have(paths.MDWRAP) else 'needs mdwrap (MDWRAP in paths.py)',
          [[PY, os.path.join(ROOT, 'tools', 'check_docs.py'), '--wrap', paths.MDWRAP]]),
-        ('fuzz', 'random programs: the interpreter against C and CP/M',
+        ('fuzz', 'random programs, integers and containers: interpreter vs C and CP/M',
          lambda: None if have(paths.CC) and have(paths.SJASMPLUS) and have(paths.TNYLPO) else 'needs a C compiler, sjasmplus and tnylpo',
-         [[PY, os.path.join(ROOT, 'z80', 'fuzz.py'), '100' if quick else '400']]),
+         [[PY, os.path.join(ROOT, 'z80', 'fuzz.py'), '100' if quick else '400'],
+          [PY, os.path.join(ROOT, 'z80', 'fuzz.py'), '--containers', '40' if quick else '150']]),
     ]
 
 

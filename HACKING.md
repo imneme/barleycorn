@@ -86,6 +86,34 @@ decide where arithmetic wraps (unsigned) or traps (signed).
   once. `zxbuild.py` makes a tape, and for CP/M the assembly is a
   `.COM`.
 
+### What the checker writes onto the tree
+
+The parser's tree isn't only syntax by the time a backend sees it: the
+checker writes its decisions onto the nodes, and both generators read
+them rather than working anything out again. So a rule that seems to
+belong in a generator (a type, a fold, which call a name means) has
+usually been settled already, in the checker, and that's where to change
+it. Luna, reading the source from outside for a code map, asked for this
+signpost. What it writes:
+
+- **Every expression**: `ty`, its type (a literal's settled from where
+  it goes), and `cval`, its value when it's a constant, which is how
+  `if ZX` folds away and a constant's uses become its value.
+- **A name**: `var`, the variable it means (global, local or loop, with
+  `line`, and `inferred` when its type came from its value). A string
+  constant's name is rewritten into the string itself (`k` becomes
+  `'str'`, its `v` the bytes).
+- **A call**: exactly one of `func` (a function of the program's),
+  `builtin` (the library's name for it), `cast` (`int(x)` and the like,
+  the type) or `record` (a record being made).
+- **Declarations**: a function's `ptys` and `rty`; a `var`'s `ty`; a
+  `for`'s `vtys`, its iterator's `elem`, and on a range, `want`, the
+  type its literals take; a compound assignment's `opnode`, the operator
+  node it applies.
+- **The program**: `Checker.reachable`, the functions a run can reach on
+  this target, which is what makes a Spectrum-only call outside `if ZX`
+  a CP/M error, and what the generators compile.
+
 ## Where printing happens
 
 Every `print` ends in one routine per machine, `bly_putc`, and on the
@@ -186,7 +214,11 @@ spectrum-minilib (`zxask.asm`).
   integer core (every width, comparisons, `and`/`or`/`not`, casts,
   constants, loops whose bounds change, functions that change globals,
   self-calls that shuffle their own arguments), run in the interpreter,
-  as C and as CP/M programs. Any disagreement is kept in
+  as C and as CP/M programs. With `--containers`, random programs over
+  the containers instead (lists, queues, heaps, maps, sets and grids of
+  every element kind, failures included), since the suite's cases were
+  all that held C's container templates; broken on purpose, C's map
+  deletion is caught in 40 programs. Any disagreement is kept in
   `build/fuzz-failures/`.
 - **One program, every backend**: `./bly all PROGRAM [INPUT]` compares
   the text each prints and the final screens. The tape's loader does a

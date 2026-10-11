@@ -2947,6 +2947,9 @@ def main(argv):
         sys.stdout.buffer.flush()
         print(err)
         sys.exit(1)
+    except BrokenPipeError:                           # its reader stopped reading (bly run X.bly | head): nothing's
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())     # wrong with the program, so no traceback
+        sys.exit(1)
 
 
 if __name__ == '__main__':
