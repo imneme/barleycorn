@@ -356,10 +356,15 @@ between STKBOT and STKEND, which Barley's rules already keep.
 
 Elsewhere it's what's to hand. In C it's a `double`. In the interpreter
 it's Python's float (and one day, when exact agreement matters, the real
-ROM borrowed through an emulator). On CP/M there's no ROM, so there are
-no floats yet. So **floats are the exception to "three implementations
-agree"**. Programs that print floats are compared to a tolerance, and
-the card says so: you use them, you get what you get.
+ROM borrowed through an emulator). **On CP/M there's no ROM, so the
+floats are our own in the ROM's 5 bytes** (Melissa's choice: every
+32-bit integer exact): `+ - * /`, sqrt and reading correctly rounded
+(ties away, as a literal is), printing laid out as PRINT-FP lays it out
+with its digits exactly rounded, and the functions as calculator scripts
+over those, within about one unit in the last place
+(`z80/lib/fp_cpm.asm`). So **floats are the exception to "three
+implementations agree"**. Programs that print floats are compared to a
+tolerance, and the card says so: you use them, you get what you get.
 
 **Reading one from text is the machine's reading too.** On a Spectrum,
 `s.float()` hands the number to the ROM's own DEC-TO-FP (2C9Bh), the
@@ -1221,28 +1226,29 @@ Barleycorn (HISTORY.md says why).
 - `call`, anywhere
 - on the Z80, `grid[bit]` and containers of bits are a byte a bit (bit
   arrays pack), and a bit array can't be sorted
-- floats on CP/M
 - the 128K mode (input in the banks; the AY sound chip)
 
 **Still open:**
-1. **Floats on CP/M**: our own routines, or none until a program asks?
-2. **The alternate registers.** The rule that compiled code never
+1. **The alternate registers.** The rule that compiled code never
    touches them is stricter than the machine needs: the return to BASIC
    needs HL' restored, and nothing may be kept there across a ROM
    routine that uses them. Leaf routines could use EXX freely.
-3. **How fast can the Z80 backend get?** HISTORY.md has the measured
+2. **How fast can the Z80 backend get?** HISTORY.md has the measured
    steps so far, and the next ones.
-4. *Answered (10 October):* constant tables, `const SCALE = int[...]`,
+3. *Answered (10 October):* constant tables, `const SCALE = int[...]`,
    of any element type (section 5, "Arrays"). An array literal anywhere
    else (a `var`'s first value, an argument) is a later question.
-5. *Answered (10 October):* text printed at a place is the screen's
+4. *Answered (10 October):* text printed at a place is the screen's
    alone, and the answer is an ordinary `print` (section 5, "Screen and
    sound").
-6. *Answered (10 October):* BASIC's INK and PAPER 8 and 9, BRIGHT and
+5. *Answered (10 October):* BASIC's INK and PAPER 8 and 9, BRIGHT and
    FLASH 8, and `attr(r, c)` reading a square back, all as the ROM does
    them (section 5, "Screen and sound").
-7. *Answered (10 October):* `dword`, unsigned 32 bits (section 5,
+6. *Answered (10 October):* `dword`, unsigned 32 bits (section 5,
    "Numbers").
+7. *Answered (11 October):* floats on CP/M, our own in the ROM's 5
+   bytes, correctly rounded where that can be said exactly (section 5,
+   "Floats: you get what you get").
 
 And the one that matters most, every time: **what would you reach for,
 and not find?**

@@ -155,8 +155,6 @@ def run_all(prog, inp, work, minutes, keys):
             print(f'  {k}: the same text' + (' (as the interpreter prints it --as cpm)' if k == 'cpm' and want != outs['interp'] else ''))
         elif k == 'cpm' and 'Spectrum-only' in outs[k]:
             print(f'  cpm: not run (the program uses the Spectrum outside if ZX)')
-        elif k == 'cpm' and 'floats are not on the Z80 yet' in outs[k]:
-            print(f'  cpm: not run (floats aren\'t on CP/M yet: it has no ROM calculator)')
         else:
             ok = False
             print(f'  {k}: DIFFERENT text (exit {codes[k]}):')

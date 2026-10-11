@@ -597,7 +597,7 @@ puts IM 1 back and interrupts on, always, so a failure from inside
 frame's interrupt, or a program that ends with frame still on, goes back
 to BASIC as BASIC needs.
 
-## 11. Floats: the ROM's, on the Spectrum only
+## 11. Floats: the ROM's 5 bytes, the ROM's on the Spectrum and our own on CP/M
 
 **A `float` is the ROM's own 5 bytes** (`lib/fp.asm`, and
 `lib/fp_exact.asm` for what's exact in Z80; target `zx48`), so the
@@ -613,17 +613,16 @@ calculator can take a slot as it is:
 Both forms are legal everywhere, so equal floats needn't have equal
 bytes: **compare with `bly_fcmp`, never as raw bytes** (this is why a
 float can't be a map or set key, which the checker already refuses). On
-CP/M there's no ROM, and the generator stops with
-`floats are not on the Z80 yet: the CP/M target has no ROM calculator`.
+CP/M there's no ROM: the same 5 bytes are worked by `lib/fp_cpm.asm`
+(below).
 
-**Where there's no ROM** (CP/M; the generator doesn't use it there yet),
-`lib/fp_cpm.asm` gives the same routines the same 5 bytes: `+ - * /` and
-`sqrt` correctly rounded (the nearest, ties away from zero, as a
-literal), and `bly_pr_f` laid out as PRINT-FP lays a number out, its
-digits exactly rounded, and `bly_str_float` (`s.float()`) reading its
-first 40 significant digits exactly. They're held to a model of exact
-Fractions (`z80/fp5.py`) bit for bit and text for text
-(`tests/test_fpcpm.py`).
+**Where there's no ROM** (CP/M), `lib/fp_cpm.asm` gives the same
+routines the same 5 bytes: `+ - * /` and `sqrt` correctly rounded (the
+nearest, ties away from zero, as a literal), and `bly_pr_f` laid out as
+PRINT-FP lays a number out, its digits exactly rounded, and
+`bly_str_float` (`s.float()`) reading its first 40 significant digits
+exactly. They're held to a model of exact Fractions (`z80/fp5.py`) bit
+for bit and text for text (`tests/test_fpcpm.py`).
 
 **Constants** are made by the generator (`z80gen.rom5`): the nearest 5
 bytes, rounded half away from zero, the short form when the value is

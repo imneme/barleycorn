@@ -122,7 +122,7 @@ def size(t):
     if t is B.FLOAT:
         if FLOATS['on']:
             return 5                                    # the ROM's own form (ABI.md section 11)
-        raise GenError('floats are not on the Z80 yet: the CP/M target has no ROM calculator')
+        raise GenError('floats are not on this target')
     raise GenError(f'no size for {t!r}')
 
 
@@ -1025,7 +1025,7 @@ class Gen:
             if isinstance(e.var.ty, B.Gen):
                 return Op('mem', self.const_array(e.name, e.var), e.ty)
             if e.ty is B.FLOAT:
-                size(B.FLOAT)                            # (on CP/M: floats aren't here)
+                size(B.FLOAT)                            # (floats must be on for the target)
                 return Op('imm', float(e.cval), B.FLOAT)
             return Op('imm', int(e.cval), e.ty if e.ty is not B.FLEX else B.INT)
         if e.cval is not None and e.k != 'name':
@@ -1066,7 +1066,7 @@ class Gen:
                 return ['dw 0, 0']
             return [f'dw {self.string(v).val}d, {len(v)}']
         if t is B.FLOAT:
-            size(B.FLOAT)                                # (on CP/M: floats aren't here)
+            size(B.FLOAT)                                # (floats must be on for the target)
             return ['db ' + ', '.join(str(b) for b in rom5(float(v)))]
         if t is B.BOOL:
             return [f'db {1 if v else 0}']
@@ -2518,7 +2518,7 @@ class Gen:
     def float_cast(self, a, to, line):
         """float(x) from any integer type (or a bool), and the integer types from a float: truncating, and
         checked by bly_f_to_int ({x} doesn't fit in a {type})"""
-        size(B.FLOAT)                                   # (on CP/M: floats aren't here)
+        size(B.FLOAT)                                   # (floats must be on for the target)
         frm = B.BYTE if a.ty in (B.BOOL, B.BIT) else a.ty
         if to is B.FLOAT and frm is B.FLOAT:
             return a
@@ -3178,7 +3178,7 @@ def compile_program(src, target='cpm', org=None, bss_at=None, markers=True):
     """org and bss_at place the code and the slots (the Spectrum's builder puts code high, slots beneath it).
     markers=False leaves out the two invisible control codes around each piece of text printed at a place, which
     only the tests' transcript needs (HACKING.md): a tape for a real Spectrum is faster without them"""
-    FLOATS['on'] = target == 'zx48'
+    FLOATS['on'] = target in ('zx48', 'cpm')     # the ROM's on the 48K; fp_cpm.asm's on CP/M
     decls = B.Parser(src).program()
     ck = B.Checker(decls, 'cpm' if target == 'cpm' else 'zx48')
     ck.check()

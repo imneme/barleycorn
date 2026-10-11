@@ -272,7 +272,7 @@ def main(argv=None):
             pending += 1
             print(f'{"wait" if got.startswith("PENDING") else "n/a "} {name}: {got[9:]}')
             continue
-        near = not ok and BACKEND == 'zx' and floats_agree(got, want)
+        near = not ok and BACKEND in ('zx', 'z80') and floats_agree(got, want)
         ok = ok or near
         fails += not ok
         print(f'{"ok~ " if near else "ok  " if ok else "FAIL"} {name}' + ('   (floats as the ROM prints them)' if near else ''))
