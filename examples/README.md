@@ -244,12 +244,63 @@ picture or the sound.
 
 ## Melissa's Advent of Code
 
-Two programs Melissa wrote in ZX Spectrum BASIC for Advent of Code,
-ported to Barley by Fern as literally as Barley allows. A puzzle's own
-input isn't ours to share, so each comes with one of our own, made by a
-small Python script that also works out the answer, for checking. Like
-the hill, they use the screen outside `if ZX`, so they're for the
-Spectrum (and the interpreter and C) only.
+Four programs Melissa wrote in ZX Spectrum BASIC for Advent of Code,
+ported to Barley as literally as Barley allows: the CRT and the sand by
+a Fern working through Melissa's archive of them, the cube and the
+towels by the Fern who wrote Barleycorn. A puzzle's own input isn't ours
+to share, so each comes with one of our own, made by a small Python
+script that also works out the answer, for checking. All but
+`crt_d10.bly` use the screen outside `if ZX`, so like the hill they're
+for the Spectrum (and the interpreter and C) only; `crt_d10.bly` prints
+its answer on CP/M too.
+
+- `crt_d10.bly`: Advent of Code 2022, day 10 (Cathode-Ray Tube). A
+  little CPU runs `addx` and `noop` while a CRT draws one pixel a cycle,
+  lit if the three-pixel sprite centred on the X register covers it. Her
+  screen shows the instruction, the cycle and X, and the CRT as a black
+  panel of dotted half-cells, with the sprite riding along each row as a
+  dithered bar, so you watch the letters come up out of the dots. Part
+  1's answer is the sum of the signal strengths at six cycles; part 2's
+  is the word. The program, `crt_d10.txt`, comes from `make_crt.py`,
+  which searches out instructions whose CRT spells SPECTRUM (or a word
+  of your own, up to eight letters from its font) and works the sum out
+  too: 13040. Her `PAUSE 5` a cycle is kept, so it takes 28 seconds on a
+  48K, 24 of them pausing; on her own program, her interpreted BASIC
+  took 86. On CP/M it prints the sum.
+
+      ./bly zx examples/crt_d10.bly examples/crt_d10.txt
+      ./bly run --screen crt.png examples/crt_d10.bly examples/crt_d10.txt
+
+  ![SPECTRUM in cyan pixels on a black CRT of dotted half-cells, with
+  the cycle, the X register and the signal strengths'
+  sum](../docs/crt-d10.png)
+
+- `sand_d14.bly`: Advent of Code 2022, day 14 (Regolith Reservoir), part 1.
+  Sand pours in at 500,0 over paths of rock, and her program keeps no
+  map in memory: the screen is the map. Rock is drawn two pixels wide, a
+  recursive fill asks `point()` whether a square is taken (straight
+  down, then down-left, then down-right), and a square whose three are
+  all taken holds a grain, drawn as one pixel on alternate halves row by
+  row, so the sand shows dithered against the solid rock; a grain that
+  would fall past the lowest rock is rubbed out again. Her BASIC read
+  DATA her Perl had made from the input; this reads the input as the
+  puzzle gives it and works the bounds out itself. The rocks,
+  `sand_d14.txt`, come from `make_sand.py`: a Christmas tree of widening
+  cups, with presents round the trunk. A grain tries down-left first, so
+  the snow heaps up on the left of each branch and spills down the
+  tree's left side, and the last of it caps a present: 635 grains,
+  counted in Python grain by grain and with her fill. 17 seconds on a
+  48K, most of them her `PAUSE 1` a step, kept so you can watch; on her
+  own rocks it took 31, where her HiSoft-compiled BASIC took 34 and her
+  interpreted BASIC 326. The screen is its memory, so it doesn't run on
+  CP/M.
+
+      ./bly zx examples/sand_d14.bly examples/sand_d14.txt
+      ./bly run --screen sand.png examples/sand_d14.bly examples/sand_d14.txt
+
+  ![A Christmas tree of six widening branches in black line, snow heaped
+  in dithered drifts on the left of each, a trunk and presents below,
+  and "635 grains"](../docs/sand-d14.png)
 
 - `monkey_d22.bly`: Advent of Code 2022, day 22 (Monkey Map), part 2. A
   board folded into a 50 x 50 x 50 cube, drawn twice in isometric with

@@ -1,0 +1,98 @@
+-- Advent of Code 2022, day 14 (Regolith Reservoir), part 1: Melissa O'Neill's ZX Spectrum BASIC, ported to Barley by
+-- Fern. Rock is drawn two pixels wide, a pixel for each half of a square. Sand pours in at 500,0, and her program
+-- needs no map in memory: the screen is the map. A recursive fill asks point() whether a square is taken, falls
+-- straight down, then down-left, then down-right, and a square whose three are all taken holds a grain, drawn as a
+-- single pixel on alternate halves row by row, so sand shows dithered against the solid rock. A grain that would fall
+-- past the lowest rock is rubbed out again. The grains that stay are the answer. sand_d14.txt comes from
+-- make_sand.py, with rocks of our own (a puzzle's input isn't ours to share): a Christmas tree, snowed on. Her
+-- BASIC read DATA her Perl had made from the input, its bounds worked out; here the program reads the input as the
+-- puzzle gives it and works out the bounds itself. Because the screen is its memory, it runs on the Spectrum, in
+-- the interpreter and in C, but not on CP/M.
+
+var minx = 9999
+var maxx = 0
+var maxy = 0
+var paths = 0
+var x = 0                                  -- her X, Y and B: where the fill is, in screen pixels,
+var y = 0
+var b = 0                                  -- and which half of the square this row's sand goes in
+var floor_y = 0                            -- her ScreenMaxY: below the lowest rock
+var grains = 0
+
+func sx(rx: int): int                      -- a rock x on the screen, the picture centred (her LeftMargin)
+  return 2 * (rx - minx) + 128 - (maxx - minx)
+end
+
+func fill(): bool                          -- her @fill: is (x, y) taken, or can it be?
+  if point(x + b, y) then return true end
+  pause(1)
+  if y < floor_y then return false end
+  plot(x + b, y)
+  y -= 1; b = 1 - b
+  var held = fill()
+  if held then
+    x -= 2
+    held = fill()
+    x += 2
+  end
+  if held then
+    x += 2
+    held = fill()
+    x -= 2
+  end
+  y += 1; b = 1 - b
+  if held then
+    grains += 1
+    return true
+  end
+  inverse(true)                            -- it would fall: rub it out
+  plot(x + b, y)
+  inverse(false)
+  return false
+end
+
+func main()
+  for line in lines() do                   -- the bounds, as her gendata.pl worked them out
+    var k = 0
+    for v in line.ints() do
+      var n = int(v)
+      if k % 2 == 0 then
+        minx = min(minx, n); maxx = max(maxx, n)
+      else
+        maxy = max(maxy, n)
+      end
+      k += 1
+    end
+    paths += 1
+  end
+  cls()
+  var i = 0
+  for line in lines() do                   -- the rock: each path drawn twice, a pixel apart
+    i += 1
+    print #0; at 0, 0; "Line "; i; " of "; paths; "   ";
+    var px = 0
+    var py = 0
+    var k = 0
+    for v in line.ints() do
+      var n = int(v)
+      if k % 2 == 0 then
+        x = n
+      else
+        if k > 1 then
+          line(sx(px), 175 - py, sx(x), 175 - n)
+          line(sx(px) + 1, 175 - py, sx(x) + 1, 175 - n)
+        end
+        px = x; py = n
+      end
+      k += 1
+    end
+  end
+  print #0; at 0, 0; "The sand must flow...    ";
+  x = sx(500)
+  y = 175
+  floor_y = 175 - maxy
+  fill()
+  ink(1)
+  print at 0, 0;
+  print grains; " grains"
+end

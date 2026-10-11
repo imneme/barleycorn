@@ -1,0 +1,113 @@
+-- Advent of Code 2022, day 10 (Cathode-Ray Tube): Melissa O'Neill's ZX Spectrum BASIC, ported to Barley by Fern.
+-- A little CPU runs addx and noop, one instruction at a time, while a CRT 40 pixels wide and 6 high draws one pixel
+-- a cycle: lit if the 3-pixel sprite, centred on the X register, covers it. Her screen shows the instruction, the
+-- cycle and X, and the CRT as a black panel of dotted half-cells, a pixel to each half, with the sprite riding along
+-- the row as a dithered bar. The signal strength (cycle times X) is noted at cycles 20, 60, ... 220, and their sum is
+-- the first answer. The second is the word the pixels spell. crt_d10.txt comes from make_crt.py, with a program of
+-- our own (a puzzle's input isn't ours to share), which spells SPECTRUM. Ported as literally as I could, with one
+-- change: for an odd X her sprite was drawn two pixels to the left of where it is; here it covers X - 1 to X + 1.
+
+const W = 40                               -- her CW and CH
+const H = 6
+const DIM_A = byte[$0A, 0, $05, 0, $0A, 0, $05, 0]      -- her UDGs: the sprite, dithered, as a right half,
+const DIM_B = byte[$AA, 0, $55, 0, $AA, 0, $55, 0]      -- a whole cell
+const DIM_C = byte[$A0, 0, $50, 0, $A0, 0, $50, 0]      -- and a left half;
+const DOT_D = byte[0, $40, 0, 0, 0, $20, 0, 0]          -- and an unlit pixel, a dot or two, on the left
+const DOT_E = byte[0, $04, 0, 0, 0, $02, 0, 0]          -- and on the right
+
+var cycle = 1
+var x = 1                                  -- the X register
+var row = 0
+var last_row = 0                           -- the row the sprite was last drawn on
+var next_signal = 20                       -- her ICycle
+var total: long = 0                        -- her StrSum
+
+func on_crt(r: int, c: int, s: str)        -- her PRINT AT r, c; OVER 1; PAPER 0; INK 5; s: drawing twice undraws
+  if ZX then
+    over(true); paper(0); ink(5)
+    print at r, c; s;
+    over(false); paper(7); ink(0)
+  end
+end
+
+func sprite()                              -- her showXsprite and hideXsprite are one routine: OVER makes it a toggle
+  if x < 0 or x >= W then return end
+  if x % 2 == 0 then
+    on_crt(last_row + 5, 1 + x / 2, "\x90\x91")          -- A then B: pixels x - 1, x and x + 1
+  else
+    on_crt(last_row + 5, 2 + x / 2, "\x91\x92")          -- B then C
+  end
+end
+
+func setup()
+  if ZX then
+    cls()
+    udg(0, DIM_A); udg(1, DIM_B); udg(2, DIM_C); udg(3, DOT_D); udg(4, DOT_E)
+    paper(0); ink(5)
+    for r in -1..H + 1 do
+      for c in -1..W / 2 + 1 do print at r + 5, c + 2; " "; end
+    end
+    paper(7); ink(0)
+    print at 1, 20; "Cycle "; cycle;
+  end
+  last_row = row
+  sprite()
+end
+
+func tick()                                -- one cycle: the signal if it's one we note, and the pixel
+  if cycle == next_signal then             -- her @interesting
+    total += cycle * x
+    if ZX then
+      print at 18, 0; "At cycle "; cycle, " signal "; cycle * x
+    end
+    next_signal += 40
+  end
+  row = (cycle - 1) / W
+  var col = (cycle - 1) - row * W
+  var lit = abs(x - col) <= 1
+  if col % 2 == 0 and lit then on_crt(row + 5, 2 + col / 2, "\x8A") end      -- the left half of a cell, lit
+  if col % 2 == 1 and lit then on_crt(row + 5, 2 + col / 2, "\x85") end      -- or the right half
+  if col % 2 == 0 and not lit then on_crt(row + 5, 2 + col / 2, "\x93") end  -- or its dot, unlit
+  if col % 2 == 1 and not lit then on_crt(row + 5, 2 + col / 2, "\x94") end
+  cycle += 1
+  if ZX then
+    print at 1, 20; "Cycle "; cycle;
+    pause(5)
+  end
+end
+
+func main()
+  setup()
+  for line in lines() do
+    var cycles = 1
+    var v = 0
+    if line.starts("addx") then
+      cycles = 2
+      v = line.int(0)
+      if ZX then
+        ink(1)
+        print at 0, 0; "addx "; v,
+      end
+    elif ZX then
+      ink(4)
+      print at 0, 0; "noop ",
+    end
+    if ZX then
+      ink(0)
+      print at 2, 20; "X Reg "; x;
+    end
+    for t in 0..cycles do tick() end
+    if cycles == 2 then
+      sprite()                             -- hide it where it was,
+      x += v
+      last_row = row
+      sprite()                             -- and show it where X is now
+    end
+  end
+  sprite()
+  if ZX then
+    print at 18, 0; "                                ";
+    print at 18, 0;
+  end
+  print "Signal strengths sum: "; total
+end
