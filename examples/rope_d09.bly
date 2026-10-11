@@ -1,0 +1,128 @@
+-- Advent of Code 2022, day 9 (Rope Bridge): Melissa O'Neill's ZX Spectrum BASIC, ported to Barley by Fern.
+-- A rope of ten knots is dragged about by its head, a step at a time, up, down, left or right. Each knot keeps up
+-- with the one before it: when they're two apart, it steps once towards it, diagonally if it must. The answers are
+-- how many squares the knot behind the head visits (a rope of two, part 1) and how many the last knot does (part 2).
+-- Her screen is a window 32 squares by 22 that follows a knot: the rope drawn as H and 1 to 9, the squares its tail
+-- has visited in yellow, the window scrolled a square at a time by moving the colours with PEEK and POKE, and the
+-- squares that scroll in coloured from her hash set of visited squares. Her program asked how many knots and which
+-- to follow, and counted the last knot's squares; here KNOTS and FOCUS are constants, and the first knot behind the
+-- head is counted too, since it moves exactly as a rope of two's tail does, so both answers come out of one run.
+-- Her hash set is a set[pos]. rope_d09.txt comes from make_rope.py, with moves of our own (a puzzle's input isn't
+-- ours to share) that make the last knot draw Barley the cat in yellow, as her own inputs drew lines and wrote
+-- "Merry Xmas"; at the end the head walks to where the window shows all of him.
+
+const KNOTS = 10                           -- her L: the head and nine more
+const FOCUS = 0                            -- her Z: the knot the window follows (0 is the head)
+const ROOM = 500                           -- how many squares each set can hold (two of 1,000 overflow the 48K)
+const ATTRS = 0x5800                       -- the colours: a byte a square, 32 a row
+const PLAIN = 56                           -- paper 7, ink 0
+const YELLOW = 48                          -- paper 6: the last knot has been here
+
+var kx: int[KNOTS]                         -- the knots, her C() and D(); y counts down, so U is -1
+var ky: int[KNOTS]
+var ox: int[KNOTS]                         -- and where they were a step ago, her E() and F()
+var oy: int[KNOTS]
+var near = set[pos](ROOM)                  -- where knot 1 has been: part 1
+var far = set[pos](ROOM)                   -- where the last knot has been: part 2, and her yellow
+var counted: word = 0                      -- the count her status line shows
+
+func colour(x: int, y: int): byte          -- the square at x, y, as her fill routines colour it
+  if pos(y, x) in far then return YELLOW end
+  return PLAIN
+end
+
+func scroll(dx: int, dy: int)              -- the focus moved by dx, dy: move the colours the other way
+  if dy > 0 then                           -- it went down, so everything goes up a row (her scrollAttrsUp)
+    for i in 32..704 do poke(ATTRS + i - 32, peek(ATTRS + i)) end
+    for c in 0..32 do poke(ATTRS + 672 + c, colour(kx[FOCUS] - 16 + c, ky[FOCUS] + 10)) end
+  elif dy < 0 then                         -- up: down a row, and fill the top
+    for i in rev(0..672) do poke(ATTRS + i + 32, peek(ATTRS + i)) end
+    for c in 0..32 do poke(ATTRS + c, colour(kx[FOCUS] - 16 + c, ky[FOCUS] - 11)) end
+  end
+  if dx > 0 then                           -- right: everything left a square, and fill the right-hand column
+    for r in 0..22 do
+      var row = ATTRS + 32 * r
+      for c in 1..32 do poke(row + c - 1, peek(row + c)) end
+      poke(row + 31, colour(kx[FOCUS] + 15, ky[FOCUS] - 11 + r))
+    end
+  elif dx < 0 then                         -- left: everything right a square, and fill the left-hand column
+    for r in 0..22 do
+      var row = ATTRS + 32 * r
+      for c in rev(0..31) do poke(row + c + 1, peek(row + c)) end
+      poke(row, colour(kx[FOCUS] - 16, ky[FOCUS] - 11 + r))
+    end
+  end
+end
+
+func show(fdx: int, fdy: int)              -- the window after a step: scroll, colour, rub out, redraw
+  scroll(fdx, fdy)
+  var cx = 16 - kx[FOCUS]                  -- the focus is at column 16, row 11
+  var cy = 11 - ky[FOCUS]
+  attr(cy + ky[KNOTS - 1], cx + kx[KNOTS - 1], YELLOW)  -- where the tail is now
+  paper(8)                                 -- the knots are printed on whatever colour the square is
+  for k in rev(0..KNOTS) do                -- rub out the old rope, where a knot didn't move with the focus
+    if ox[k] + fdx != kx[k] or oy[k] + fdy != ky[k] then
+      print at 11 + oy[k] - oy[FOCUS], 16 + ox[k] - ox[FOCUS]; " ";
+    end
+  end
+  for k in rev(1..KNOTS) do print at cy + ky[k], cx + kx[k]; chr(byte(48 + k)); end
+  print at cy + ky[0], cx + kx[0]; "H";
+  paper(7)
+  if far.len != counted then status(0, -1) end
+  pause(1)                                 -- hers too: a frame a step, to watch it go
+end
+
+func status(d: byte, n: int)               -- her line at the foot of the screen: the move, and the count
+  if n >= 0 then print #1; at 1, 6; chr(d); " "; n; " "; end
+  if far.len != counted then
+    counted = far.len
+    print #1; at 1, 27; counted;
+  end
+  for c in 0..5 do attr(23, c, 14) end     -- " AoC " in yellow on blue (the lower screen prints in its own colours)
+  for c in 6..11 do attr(23, c, 59) end    -- the move in magenta
+  for c in 11..32 do attr(23, c, 57) end   -- the count in blue
+end
+
+func main()
+  near.add(pos(0, 0))
+  far.add(pos(0, 0))
+  if ZX then
+    cls()
+    print #1; at 1, 0; " AoC "; at 1, 11; "Points visited:";
+  end
+  for line in lines() do
+    var d = line[0]
+    var n: int = line.int(0)
+    var dx = 0
+    var dy = 0
+    case d
+      when 'U' then dy = -1
+      when 'D' then dy = 1
+      when 'L' then dx = -1
+      when 'R' then dx = 1
+    end
+    if ZX then status(d, n) end
+    for step in 0..n do
+      for k in 0..KNOTS do
+        ox[k] = kx[k]
+        oy[k] = ky[k]
+      end
+      kx[0] += dx                          -- the head moves
+      ky[0] += dy
+      for k in 1..KNOTS do                 -- and each knot keeps up with the one before
+        var mx = kx[k - 1] - kx[k]
+        var my = ky[k - 1] - ky[k]
+        if abs(mx) > 1 or abs(my) > 1 then
+          kx[k] += sign(mx)
+          ky[k] += sign(my)
+        end
+      end
+      near.add(pos(ky[1], kx[1]))
+      far.add(pos(ky[KNOTS - 1], kx[KNOTS - 1]))
+      if ZX then show(kx[FOCUS] - ox[FOCUS], ky[FOCUS] - oy[FOCUS]) end
+    end
+  end
+  if ZX then print at 20, 0; end
+  print "Positions visited by knot 1: "; near.len     -- part 1
+  print "and by knot "; KNOTS - 1; ": "; far.len       -- part 2
+end

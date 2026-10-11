@@ -244,15 +244,43 @@ picture or the sound.
 
 ## Melissa's Advent of Code
 
-Four programs Melissa wrote in ZX Spectrum BASIC for Advent of Code,
-ported to Barley as literally as Barley allows: the CRT and the sand by
-a Fern working through Melissa's archive of them, the cube and the
-towels by the Fern who wrote Barleycorn. A puzzle's own input isn't ours
-to share, so each comes with one of our own, made by a small Python
-script that also works out the answer, for checking. All but
-`crt_d10.bly` use the screen outside `if ZX`, so like the hill they're
-for the Spectrum (and the interpreter and C) only; `crt_d10.bly` prints
-its answer on CP/M too.
+Five programs Melissa wrote in ZX Spectrum BASIC for Advent of Code,
+ported to Barley as literally as Barley allows: the rope by Fronds and
+the CRT and the sand by S3, two Ferns working through Melissa's archive
+of them, and the cube and the towels by the Fern who wrote Barleycorn. A
+puzzle's own input isn't ours to share, so each comes with one of our
+own, made by a small Python script that also works out the answer, for
+checking. The rope and the CRT keep their screens inside `if ZX`, so
+they print their answers on CP/M too; the sand, the cube and the towels
+use the screen outside it, so like the hill they're for the Spectrum
+(and the interpreter and C) only.
+
+- `rope_d09.bly`: Advent of Code 2022, day 9 (Rope Bridge). A rope of
+  ten knots is dragged about by its head, and each knot steps after the
+  one before whenever they're two apart. The answers are how many
+  squares the knot behind the head visits (a rope of two) and how many
+  the last knot does. Her screen is a window that follows the head: the
+  rope drawn as H and 1 to 9, the squares its tail has visited in
+  yellow, and the window scrolled a square at a time by moving the
+  colours with `peek` and `poke`, with each square that scrolls in
+  coloured from her set of visited squares. Her own inputs drew pictures
+  with the tail, as these do: the moves, `rope_d09.txt`, come from
+  `make_rope.py`, and make the last knot draw Barley the cat, sitting
+  with his tail curled up behind him, in one unbroken yellow line. To
+  turn a corner, the head walks back along its own path, which folds the
+  rope up behind it and leaves the tail where it is, then sets off the
+  new way, so the rope pays out straight from the corner and the tail
+  turns it sharply. At the end the head walks to where the window shows
+  all of him. Python works out the answers too: 213 and 77. 80 seconds
+  on a 48K, ten of them her `PAUSE 1` a step, kept so you can watch the
+  rope. On CP/M it prints the answers.
+
+      ./bly zx examples/rope_d09.bly examples/rope_d09.txt
+      ./bly run --screen rope.png examples/rope_d09.bly examples/rope_d09.txt
+
+  ![Barley the cat in yellow squares, sitting with his tail curled up
+  behind him, three tabby stripes on his brow, the rope's knots H and 1
+  to 9 hanging inside him, and the two answers](../docs/rope-d09.png)
 
 - `crt_d10.bly`: Advent of Code 2022, day 10 (Cathode-Ray Tube). A
   little CPU runs `addx` and `noop` while a CRT draws one pixel a cycle,
