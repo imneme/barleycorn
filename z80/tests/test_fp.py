@@ -468,7 +468,8 @@ def costs(rig):
 def main():
     rig = Rig(ROUTINES, lib_dir=LIB)
     s = rig.sym
-    print(f"fp.asm: {s['bly_pr_f.buf'] + 16 - s['bly_fadd']} bytes (code and its scratch)")
+    print(f"fp.asm: {s['bly_pr_f.buf'] + 16 - s['bly_fadd']} bytes, fp_exact.asm: "
+          f"{s['bly_fx.mag'] + 8 - s['bly_ftrunc']} bytes (code and its scratch)")
     for t in (test_literals, test_cmp, test_whole, test_conv, test_arith, test_funcs, test_print, test_strfloat):
         t(rig)
     if ARGS.costs:

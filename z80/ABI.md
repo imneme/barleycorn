@@ -599,8 +599,9 @@ to BASIC as BASIC needs.
 
 ## 11. Floats: the ROM's, on the Spectrum only
 
-**A `float` is the ROM's own 5 bytes** (`lib/fp.asm`, target `zx48`), so
-the calculator can take a slot as it is:
+**A `float` is the ROM's own 5 bytes** (`lib/fp.asm`, and
+`lib/fp_exact.asm` for what's exact in Z80; target `zx48`), so the
+calculator can take a slot as it is:
 - the **short form** `00 s lo hi 00` for a whole number from −65535 to
   65535: `s` is 00h or FFh, and `lo hi` is the number's 16-bit two's
   complement (−1 is `00 FF FF FF 00`);
@@ -639,9 +640,10 @@ own slot):
 
 - **Who does the work.** `+ - * / **` and the nine functions are the
   ROM's calculator (RST 28h, one operation a call). Compare, negate,
-  abs, trunc, floor, round and the conversions are Z80 in `fp.asm`,
-  exact, and much faster. The ROM's INT and truncate aren't used: they
-  turn −65536 into −1 (SkoolKit's ROM notes, "The trouble with −65536").
+  abs, trunc, floor, round and the conversions are Z80 in
+  `fp_exact.asm`, exact, and much faster. The ROM's INT and truncate
+  aren't used: they turn −65536 into −1 (SkoolKit's ROM notes, "The
+  trouble with −65536").
 - **Where the ROM is fixed or refused, and why:**
   - `-65535 - 1` comes out of the ROM's addition as the short form
     `00 FF 00 00 00`, which its own routines misread (PRINT shows

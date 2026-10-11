@@ -1,6 +1,7 @@
 """Watching test_fp.py fail: break fp.asm on purpose, one way at a time, and see the tests notice.
 
-Each mutant is a copy of lib/ with one change to fp.asm (or, where it says, fp_read.asm, s.float()'s reading);
+Each mutant is a copy of lib/ with one change to fp.asm (or, where it says, fp_exact.asm, the Z80-exact half,
+or fp_read.asm, s.float()'s reading);
 test_fp.py --quick runs against the copy (--lib), so lib/
 itself is never touched. A mutant is caught when the run reports anything WRONG or blows up (the rig refuses a
 call that leaves BASIC's state broken).
@@ -16,6 +17,7 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 LIB = os.path.join(HERE, '..', 'lib')
 FR = 'fp_read.asm'
+FX = 'fp_exact.asm'
 
 # (the text to change, what it becomes, what the change breaks[, the file: fp.asm unless it says])
 MUTANTS = [
@@ -34,24 +36,24 @@ MUTANTS = [
      'PRINT-FP\'s stray 0 left on the calculator stack'),
     ('        ld a,3\n        call fp_CHAN_OPEN', '        ld a,2\n        call fp_CHAN_OPEN', 'print on the screen\'s stream'),
     ('        neg                         ; both negative', '        nop\n        nop                         ; both negative',
-     'compare: two negatives the wrong way round'),
+     'compare: two negatives the wrong way round', FX),
     ('        bit 7,c                     ; round on the next bit', '        bit 7,b                     ; round on the next bit',
-     'from_i64: round on the wrong bit'),
-    ('.nrnd:  cp 3', '.nrnd:  cp 1', 'round: a negative half rounds away'),
-    ('.prnd:  and 1', '.prnd:  and 2', 'round: a positive half rounds down'),
-    ('.signed: db 0, 0, 1, 1, 1', '.signed: db 0, 0, 0, 1, 1', 'to_int: int checked as unsigned'),
-    ('.width: db 1, 2, 2, 4, 8', '.width: db 1, 2, 2, 8, 8', 'to_int: long given a quad\'s range'),
+     'from_i64: round on the wrong bit', FX),
+    ('.nrnd:  cp 3', '.nrnd:  cp 1', 'round: a negative half rounds away', FX),
+    ('.prnd:  and 1', '.prnd:  and 2', 'round: a positive half rounds down', FX),
+    ('.signed: db 0, 0, 1, 1, 1', '.signed: db 0, 0, 0, 1, 1', 'to_int: int checked as unsigned', FX),
+    ('.width: db 1, 2, 2, 4, 8', '.width: db 1, 2, 2, 8, 8', 'to_int: long given a quad\'s range', FX),
     ('        jp z,bly_div0', '        nop\n        nop\n        nop', 'divide by zero through the ROM'),
     ('.par:   and 1', '.par:   and 0', '**: a negative base, an odd exponent, a positive answer'),
-    ('        and 2\n        srl d', '        and 0\n        srl d', 'toint: forget the sticky bits'),
+    ('        and 2\n        srl d', '        and 0\n        srl d', 'toint: forget the sticky bits', FX),
     ('        sbc hl,de                   ; |x| = 65536 - (lo hi)\n        pop de',
-     '        add hl,de                   ; |x| = 65536 - (lo hi)\n        pop de', 'unpack: a negative short form\'s size'),
+     '        add hl,de                   ; |x| = 65536 - (lo hi)\n        pop de', 'unpack: a negative short form\'s size', FX),
     ('        sbc hl,de                   ; |x| = 65536 - (lo hi), where', '        add hl,de                   ; |x| = 65536 - (lo hi), where',
-     'toint: a negative short form\'s size'),
+     'toint: a negative short form\'s size', FX),
     ('        ld a,(hl)\n        cpl\n        ld (hl),a\n        ret', '        ld a,(hl)\n        nop\n        ld (hl),a\n        ret',
-     'negate a short form: forget its sign byte'),
-    ('        cp 4\n        jr c,.tok', '        cp 3\n        jr c,.tok', 'toint: 2^56..2^64 called too big'),
-    ('        cp 34\n        jr c,.tn', '        cp 31\n        jr c,.tn', 'toint: tiny fractions cut short'),
+     'negate a short form: forget its sign byte', FX),
+    ('        cp 4\n        jr c,.tok', '        cp 3\n        jr c,.tok', 'toint: 2^56..2^64 called too big', FX),
+    ('        cp 34\n        jr c,.tn', '        cp 31\n        jr c,.tn', 'toint: tiny fractions cut short', FX),
     ('        cp 5\n        ld hl,.movf', '        cp 9\n        ld hl,.movf', 'overflow reported as no answer'),
     ('        ld (hl),0Dh                 ; an ENTER', '        nop\n        nop                 ; an ENTER',
      's.float: the ROM reads on past the number (2.5 3 is 2.53)', FR),

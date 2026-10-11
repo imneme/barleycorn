@@ -41,7 +41,9 @@ on CP/M) counts as **n/a**, not failed.
   - `cont.asm`, `list.asm`, `queue.asm`, `heap.asm`, `map.asm`,
     `grid.asm`, `sort.asm`: the containers
   - `fp.asm`: floats, through the Spectrum ROM's calculator;
-    `fp_read.asm`: `s.float()`, the ROM reading a number from text
+    `fp_exact.asm`: what's exact in Z80 (compare, round, the
+    conversions); `fp_read.asm`: `s.float()`, the ROM reading a number
+    from text
   - `zxgfx.asm`, `zxline.asm`, `zxcircle.asm`: plotting, lines and
     circles; `zxbeep.asm`: the beeper
   - `plat_zx.asm`, `plat_cpm.asm`, `plat_test.asm`: the start, output,
