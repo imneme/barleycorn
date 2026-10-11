@@ -98,9 +98,33 @@ def sqrt(a):
     return hi if mid * mid <= v else lo
 
 
+DIGITS = 40                                  # a number read from text keeps its first 40 significant digits
+
+
 def read(span):
-    """s.float() on CP/M: the number barley.py's FLOAT_RE found, rounded to the nearest 5 bytes as a literal is"""
-    return pack(F(span))
+    """s.float() on CP/M: the number barley.py's FLOAT_RE found (sign, digits, point, exponent), its first DIGITS
+    significant digits rounded exactly to the nearest 5 bytes, ties away (a literal is the same: z80gen)"""
+    t = span.strip()
+    neg = t.startswith('-')
+    t = t.lstrip('+-')
+    mant, _, ex = t.lower().partition('e')
+    whole, _, frac = mant.partition('.')
+    d, x, n = 0, int(ex) if ex else 0, 0
+    for ch in whole:                         # whole digits: leading zeros skipped, past DIGITS each moves x up
+        if d == 0 and ch == '0':
+            continue
+        if n < DIGITS:
+            d, n = d * 10 + int(ch), n + 1
+        else:
+            x += 1
+    for ch in frac:                          # after the point: each kept digit moves x down; past DIGITS, dropped
+        if d == 0 and ch == '0':
+            x -= 1
+            continue
+        if n < DIGITS:
+            d, n, x = d * 10 + int(ch), n + 1, x - 1
+    v = F(d) * F(10) ** x
+    return pack(-v if neg else v)
 
 
 def show(b):

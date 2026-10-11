@@ -1,5 +1,5 @@
-;; provides: bly_fadd bly_fsub bly_fmul bly_fdiv bly_fsqrt bly_fc bly_pr_f
-;; needs: bly_fx bly_fail bly_div0 bly_i_mul16 bly_pr_cstr
+;; provides: bly_fadd bly_fsub bly_fmul bly_fdiv bly_fsqrt bly_fc bly_pr_f bly_str_float
+;; needs: bly_fx bly_fail bly_div0 bly_i_mul16 bly_pr_cstr bly_pr_str bly_out
 ;; targets: cpm test
 ;; Floats where there's no ROM (CP/M, and the bare Z80 the tests use): the ROM's 5-byte form all the same (ABI.md
 ;; section 11), with our own arithmetic, correctly rounded: the nearest 5 bytes, ties away from zero, as a literal is
@@ -7,6 +7,9 @@
 ;; bly_fadd bly_fsub bly_fmul bly_fdiv   in: HL=&a DE=&b BC=&r   out: (BC) = a op b, in the full form
 ;;        fails: float overflow; division by zero (/)
 ;; bly_fsqrt      in: HL=&x BC=&r   out: (BC) = the root, correctly rounded   fails: sqrt({x}) has no answer (x < 0)
+;; bly_str_float  in: HL=&str DE=&dest   out: (DE) = the number the str starts with, its first 40 significant
+;;                digits rounded exactly (so "x".float() is the literal x)
+;;                fails: "{s}" doesn't start with a number; {number} doesn't fit in a float
 ;; bly_pr_f       in: HL=&x   prints x as the ROM's PRINT-FP lays a number out (8 digits, .0001, 1E+10), its digits
 ;;                exactly rounded, through bly_out (so print's column is kept)
 ;; Every routine clobbers AF BC DE HL IX.
@@ -570,6 +573,566 @@ bly_fsqrt:
 .msqrt: db "sqrt(",0
 .mno:   db ") has no answer",0
 
+; -- reading: s.float() without a ROM, exactly ------------------------------------------------------------------------
+; The number is \s*[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)? (barley.py's FLOAT_RE). Its first 40 significant digits make
+; an integer D (the rest are dropped, as fp5.read drops them), and X is the power of ten of D's last digit. Since
+; 10^a = 5^a x 2^a, only fives need big arithmetic: X >= 0 is D x 5^X, its bit length giving the exponent (plus X);
+; X < 0 is q = floor(D x 2^s / 5^-X), s guessed so q has 33 bits and corrected by q's size, the exponent 33 - s + X.
+; Either way the 33-bit floor's last bit rounds it, ties away, as a literal is rounded: so "x".float() is the literal x.
+bly_str_float:
+        ld (.s),hl
+        ld (bly_fc.res),de
+        ld e,(hl)
+        inc hl
+        ld d,(hl)
+        inc hl
+        ld c,(hl)
+        inc hl
+        ld b,(hl)
+        ex de,hl                    ; HL = p, BC = n
+        ld a,b
+        or c
+        jp z,.bad
+.ws:    ld a,(hl)                   ; spaces, tabs, LF, VT, FF, CR first
+        cp ' '
+        jr z,.wsk
+        sub 9
+        cp 5
+        jr nc,.start
+.wsk:   inc hl
+        dec bc
+        ld a,b
+        or c
+        jr nz,.ws
+        jp .bad
+.start: ld (.st),hl
+        ld (.rem),bc                ; what's left of the str, from here on in .rem
+        xor a
+        ld (bly_fc.sg),a
+        ld (.cnt),a
+        ld (.seen),a
+        ld (.x),a
+        ld (.x+1),a
+        push hl
+        ld hl,.n                    ; D = 0
+        ld b,32
+.nz:    ld (hl),a
+        inc hl
+        djnz .nz
+        pop hl
+        ld a,(hl)
+        cp '+'
+        jr z,.sign
+        cp '-'
+        jr nz,.whole
+        ld a,80h
+        ld (bly_fc.sg),a
+.sign:  inc hl
+        call .used
+.whole: call .dig                   ; whole digits: past 40 kept, each moves X up
+        jr nc,.point
+        call .take
+        cp 2
+        jr nz,.wn
+        call .xup
+.wn:    inc hl
+        call .used
+        jr .whole
+.point: call .left
+        jr z,.done
+        ld a,(hl)
+        cp '.'
+        jr nz,.done
+        inc hl
+        call .used
+.frac:  call .dig                   ; after the point: a kept digit, or a leading zero, moves X down
+        jr nc,.done
+        call .take
+        cp 2
+        call nz,.xdn
+        inc hl
+        call .used
+        jr .frac
+.done:  ld a,(.seen)
+        or a
+        jp z,.bad
+        call .left                  ; an exponent only if it has digits: 3east is 3
+        jp z,.end
+        ld a,(hl)
+        or 20h
+        cp 'e'
+        jp nz,.end
+        push hl
+        ld bc,(.rem)
+        push bc
+        inc hl
+        call .used
+        call .left
+        jr z,.noexp
+        xor a
+        ld (.eneg),a
+        ld a,(hl)
+        cp '+'
+        jr z,.es
+        cp '-'
+        jr nz,.ed
+        ld a,1
+        ld (.eneg),a
+.es:    inc hl
+        call .used
+.ed:    call .dig
+        jr nc,.noexp
+        ld de,0                     ; DE = the exponent, held at 10000 at most
+.el:    push hl
+        ld h,d
+        ld l,e
+        add hl,hl
+        add hl,hl
+        add hl,de
+        add hl,hl                   ; x10
+        ld e,a
+        ld d,0
+        add hl,de
+        ex de,hl
+        pop hl
+        ld a,d                      ; past 10000: stays 10000
+        cp 27h
+        jr c,.ek
+        ld de,10000
+.ek:    inc hl
+        call .used
+        call .dig
+        jr c,.el
+        pop af                      ; it was an exponent: forget where it started
+        pop af
+        ld a,(.eneg)
+        or a
+        jr z,.eadd
+        ld a,e                      ; negative: DE = -DE
+        cpl
+        ld e,a
+        ld a,d
+        cpl
+        ld d,a
+        inc de
+.eadd:  push hl
+        ld hl,(.x)
+        add hl,de
+        ld (.x),hl
+        pop hl
+        jp .end
+.noexp: pop bc
+        ld (.rem),bc
+        pop hl
+.end:   ld (.end_),hl
+        ld a,(.cnt)                 ; D = 0: the answer is 0
+        or a
+        jp z,bly_fc.zero
+        ld hl,(.x)                  ; t = digits + X: over 39 is too big; -40 or less is under 2^-129, so 0
+        ld e,a
+        ld d,0
+        add hl,de
+        bit 7,h
+        jr nz,.tneg
+        ld de,-40
+        add hl,de
+        jp c,.big_                  ; 40 or more: too big
+        jr .scale
+.tneg:  ld de,40
+        add hl,de
+        jp nc,bly_fc.zero           ; -40 or less
+.scale: ld a,(.x+1)
+        bit 7,a
+        jp nz,.small
+        ld a,(.x)                   ; X >= 0: N = D x 5^X, then its top 33 bits
+        or a
+        jr z,.m5d
+        ld b,a
+.m5:    push bc
+        call .mul5
+        pop bc
+        djnz .m5
+.m5d:   call .bits                  ; HL = N's bit length L
+        push hl
+        ld de,-33                   ; q = N >> (L - 33), or N << (33 - L)
+        add hl,de
+        call .shift
+        pop hl                      ; the exponent byte: L + X + 128
+        ld de,(.x)
+        add hl,de
+        ld de,128
+        add hl,de
+        ld (bly_fc.ex),hl
+        jp .round
+.small: ld hl,(.x)                  ; X < 0: a = -X; s's guess: 33 - L(D) + ((a * 594) >> 8) + 1
+        ld a,l
+        neg
+        ld (.a),a
+        call .bits
+        ld (.ld),hl
+        ld a,(.a)
+        ld l,a
+        ld h,0
+        ld d,h
+        ld e,l
+        add hl,hl                   ; a * 594 = a * (512 + 64 + 16 + 2)
+        ld b,h
+        ld c,l                      ; 2a
+        add hl,hl
+        add hl,hl
+        add hl,hl                   ; 16a
+        push hl
+        add hl,hl
+        add hl,hl                   ; 64a
+        push hl
+        add hl,hl
+        add hl,hl
+        add hl,hl                   ; 512a
+        pop de
+        add hl,de
+        pop de
+        add hl,de
+        add hl,bc                   ; 594a
+        ld l,h
+        ld h,0                      ; >> 8
+        inc hl
+        ld de,33
+        add hl,de
+        ld de,(.ld)
+        or a
+        sbc hl,de
+        ld (.sh),hl
+.try:   ld hl,.n                    ; .w2 = D, then x 2^s (a floor if s < 0), then / 5, a times
+        ld de,.w2
+        ld bc,32
+        ldir
+        ld hl,(.sh)
+        ld a,h                      ; .shift shifts .w2... by -(HL): make it right by -s
+        cpl
+        ld h,a
+        ld a,l
+        cpl
+        ld l,a
+        inc hl
+        ld ix,.w2
+        call .shiftx
+        ld a,(.a)
+        ld b,a
+.d5:    push bc
+        call .div5
+        pop bc
+        djnz .d5
+        ld ix,.w2                   ; q has 33 bits? (2^32 <= q < 2^33)
+        call .bitsx
+        ld de,-34
+        add hl,de
+        bit 7,h
+        jr z,.sup                   ; 34 or more: s one less
+        inc hl
+        ld a,h
+        or l
+        jr z,.sok                   ; 33 exactly
+        ld hl,(.sh)                 ; fewer: s one more
+        inc hl
+        ld (.sh),hl
+        jr .try
+.sup:   ld hl,(.sh)
+        dec hl
+        ld (.sh),hl
+        jr .try
+.sok:   ld hl,.w2                   ; q into .n for .round
+        ld de,.n
+        ld bc,5
+        ldir
+        ld hl,(.sh)                 ; the exponent byte: 33 - s + X + 128
+        ex de,hl
+        ld hl,161
+        or a
+        sbc hl,de
+        ld de,(.x)
+        add hl,de
+        ld (bly_fc.ex),hl
+.round: ld hl,.n+4                  ; q (33 bits, in .n): the mantissa is q >> 1, its last bit decides
+        srl (hl)
+        dec hl
+        rr (hl)
+        dec hl
+        rr (hl)
+        dec hl
+        rr (hl)
+        dec hl
+        rr (hl)
+        ld a,0
+        rra
+        ld (bly_fc.w+3),a
+        ld hl,.n
+        ld de,bly_fc.w+4
+        ld bc,4
+        ldir
+        call bly_fc.packc
+        ret nc
+.big_:  ld hl,(.st)                 ; {number} doesn't fit in a float
+        ld (.span),hl
+        ex de,hl
+        ld hl,(.end_)
+        or a
+        sbc hl,de
+        ld (.span+2),hl
+        ld hl,.span
+        call bly_pr_str
+        ld hl,.mbig
+        jp bly_fail
+.bad:   ld a,'"'
+        call bly_out
+        ld hl,(.s)
+        call bly_pr_str
+        ld hl,.mno
+        jp bly_fail
+
+.used:  ld bc,(.rem)                ; one byte of the str used
+        dec bc
+        ld (.rem),bc
+        ret
+.left:  ld bc,(.rem)                ; Z if the str is used up
+        ld a,b
+        or c
+        ret
+.dig:   call .left                  ; C (and A = its value) if a digit is at HL, before the end
+        ret z                       ; (OR leaves NC)
+        ld a,(hl)
+        sub '0'
+        cp 10
+        ret
+.take:  ld e,a                      ; a digit, E: A = 0 a leading zero, 1 kept, 2 dropped (past 40)
+        ld a,1
+        ld (.seen),a
+        ld a,(.cnt)
+        or a
+        jr nz,.t1
+        ld a,e
+        or a
+        ret z
+.t1:    ld a,(.cnt)
+        cp 40
+        ld a,2
+        ret nc
+        ld a,(.cnt)
+        inc a
+        ld (.cnt),a
+        push hl
+        ld ix,.n                    ; D = D x 10 + the digit, over 17 bytes (D < 10^40 < 2^133)
+        ld b,17
+        ld c,e
+.t2:    push bc
+        ld l,(ix+0)
+        ld h,0
+        add hl,hl
+        ld e,l
+        ld d,h
+        add hl,hl
+        add hl,hl
+        add hl,de
+        pop bc
+        ld e,c
+        ld d,0
+        add hl,de
+        ld (ix+0),l
+        ld c,h
+        inc ix
+        djnz .t2
+        pop hl
+        ld a,1
+        ret
+.xup:   push hl                     ; X + 1
+        ld hl,(.x)
+        inc hl
+        ld (.x),hl
+        pop hl
+        ret
+.xdn:   push hl                     ; X - 1
+        ld hl,(.x)
+        dec hl
+        ld (.x),hl
+        pop hl
+        ret
+
+.mul5:  ld hl,.n+31                 ; .n x 5, from the bottom to one byte past its top
+        ld b,32
+.fsk:   ld a,(hl)
+        or a
+        jr nz,.fgo
+        dec hl
+        djnz .fsk
+        ret
+.fgo:   ld a,b
+        cp 32
+        jr nc,.fok
+        inc b
+.fok:   ld ix,.n
+        ld c,0
+.f1:    ld l,(ix+0)
+        ld h,0
+        ld d,h
+        ld e,l
+        add hl,hl
+        add hl,hl
+        add hl,de
+        ld e,c
+        ld d,0
+        add hl,de
+        ld (ix+0),l
+        ld c,h
+        inc ix
+        djnz .f1
+        ret
+.div5:  ld hl,.w2+31                ; .w2 / 5, from its top nonzero byte down: nested floors are exact
+        ld b,32
+.vsk:   ld a,(hl)
+        or a
+        jr nz,.vgo
+        dec hl
+        djnz .vsk
+        ret
+.vgo:   push hl
+        pop ix
+        xor a
+.v1:    ld d,(ix+0)
+        ld e,8
+.v2:    sla d
+        rla
+        cp 5
+        jr c,.v3
+        sub 5
+        inc d
+.v3:    dec e
+        jr nz,.v2
+        ld (ix+0),d
+        dec ix
+        djnz .v1
+        ret
+.bits:  ld ix,.n                    ; HL = the bit length of the 32 bytes at IX (.n, or .w2 by .bitsx)
+.bitsx: push ix
+        pop hl
+        ld de,31
+        add hl,de
+        ld b,32
+.b1:    ld a,(hl)
+        or a
+        jr nz,.b2
+        dec hl
+        djnz .b1
+        ld hl,0
+        ret
+.b2:    ld c,0                      ; B = the top byte's index + 1; bits = 8 * (B - 1) + that byte's length
+.b3:    inc c
+        srl a
+        jr nz,.b3
+        ld l,b
+        ld h,0
+        dec hl
+        add hl,hl
+        add hl,hl
+        add hl,hl
+        ld e,c
+        ld d,0
+        add hl,de
+        ret
+.shift: ld ix,.n                    ; the 32 bytes at IX shifted right by HL (left if HL is negative): whole
+.shiftx:                            ; bytes, then bits; right is a floor
+        bit 7,h
+        jr nz,.sl
+.sr:    ld a,h
+        or a
+        jr nz,.srb
+        ld a,l
+        cp 8
+        jr c,.srbits
+.srb:   push hl
+        push ix
+        pop hl
+        ld d,h
+        ld e,l
+        inc hl
+        ld bc,31
+        ldir
+        xor a
+        ld (de),a
+        pop hl
+        ld de,-8
+        add hl,de
+        jr .sr
+.srbits:
+        or a
+        ret z
+        ld c,a
+.sr1:   push ix
+        pop hl
+        ld de,31
+        add hl,de
+        or a
+        ld b,32
+.sr2:   rr (hl)
+        dec hl
+        djnz .sr2
+        dec c
+        jr nz,.sr1
+        ret
+.sl:    ld a,l                      ; left by -HL
+        neg
+        ld l,a
+        ld h,0
+.slb:   ld a,l
+        cp 8
+        jr c,.slbits
+        push hl
+        push ix
+        pop hl
+        ld de,30
+        add hl,de
+        ld d,h
+        ld e,l
+        inc de
+        ld bc,31
+        lddr
+        xor a
+        ld (de),a
+        pop hl
+        ld a,l
+        sub 8
+        ld l,a
+        jr .slb
+.slbits:
+        or a
+        ret z
+        ld c,a
+.sl1:   push ix
+        pop hl
+        or a
+        ld b,32
+.sl2:   rl (hl)
+        inc hl
+        djnz .sl2
+        dec c
+        jr nz,.sl1
+        ret
+
+.mno:   db 34," doesn't start with a number",0
+.mbig:  db " doesn't fit in a float",0
+.s:     dw 0
+.st:    dw 0
+.end_:  dw 0
+.rem:   dw 0
+.x:     dw 0
+.sh:    dw 0
+.ld:    dw 0
+.a:     db 0
+.cnt:   db 0
+.seen:  db 0
+.eneg:  db 0
+.span:  dw 0,0
+.n:     ds 32
+.w2:    ds 32
+
 ; -- the shared part ------------------------------------------------------------------------------------------------
 bly_fc:
 .both:  ld (.res),bc                ; HL=&a DE=&b BC=&r: unpack both into .ua and .ub
@@ -580,7 +1143,11 @@ bly_fc:
         ld de,.ub
         jp bly_fx.unpack
 
-.pack:  ld a,(.w+3)                 ; .w's top bit set, .ex its exponent byte (biased, 16 bits), .sg the sign:
+.pack:  call .packc                 ; as .packc, and too big is float overflow
+        ret nc
+        ld hl,.movf
+        jp bly_fail
+.packc: ld a,(.w+3)                 ; .w's top bit set, .ex its exponent byte (biased, 16 bits), .sg the sign:
         rla                         ; round by bit 31, ties away, and write the 5 bytes; out of range is an
         ld hl,(.w+4)                ; overflow, or 0
         ld de,(.w+6)
@@ -603,7 +1170,7 @@ bly_fc:
         jr nz,.range
         ld a,c
         or a
-        jr z,.zero                  ; under 2^-128: 0, as the ROM's
+        jr z,.zero                  ; under 2^-128: 0, as the ROM's (and NC, as a written answer)
         ld ix,(.res)
         ld (ix+0),c
         ld a,d
@@ -618,8 +1185,8 @@ bly_fc:
         ret
 .range: bit 7,b
         jr nz,.zero                 ; below: 0
-        ld hl,.movf
-        jp bly_fail
+        scf                         ; too big: C, and nothing written
+        ret
 
 .zero:  ld hl,(.res)
         ld b,5

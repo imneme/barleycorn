@@ -42,7 +42,7 @@ if ARGS.lib:
 N = 300 if ARGS.quick else 2000
 rnd = random.Random(ARGS.seed)
 A, B, R = 0xE000, 0xE008, 0xE010
-run = Runner(['bly_fadd', 'bly_fsub', 'bly_fmul', 'bly_fdiv', 'bly_fsqrt', 'bly_pr_f'])
+run = Runner(['bly_fadd', 'bly_fsub', 'bly_fmul', 'bly_fdiv', 'bly_fsqrt', 'bly_pr_f', 'bly_str_float'])
 wrong = checks = 0
 costs = {}
 
@@ -121,12 +121,13 @@ def case(op, a, b):
 
 MUTANTS = [   # (the text, what it becomes, what that breaks)
     ('        jr nc,.rd\n        inc l', '        jr .rd\n        inc l', 'never rounds up'),
-    ('.pack:  ld a,(.w+3)', '.pack:  ld a,(.w+2)', 'rounds on the wrong bit'),
+    ('.packc: ld a,(.w+3)', '.packc: ld a,(.w+2)', 'rounds on the wrong bit'),
     ('.sub:   ld a,(bly_fc.lost)', '.sub:   xor a', '- forgets the bits b lost'),
     ('        jp nc,bly_fc.pack\n        ld hl,bly_fc.w+7', '        jp bly_fc.pack\n        ld hl,bly_fc.w+7',
      '+ forgets its carry out'),
     ('        jr nc,.bnl', '        jr .bnl', "the bit shift's lost bits unseen"),
-    ('        ld de,-8\n        add hl,de', '        ld de,-7\n        add hl,de', 'normalising by bytes counts 7'),
+    ('        ld de,-8\n        add hl,de\n        ld (bly_fc.ex),hl', '        ld de,-7\n        add hl,de\n        ld (bly_fc.ex),hl',
+     'normalising by bytes counts 7'),
     ('        ld de,-128\n        add hl,de\n        ld (bly_fc.ex),hl\n        ld hl,bly_fc.w              ; the 64',
      '        ld de,-127\n        add hl,de\n        ld (bly_fc.ex),hl\n        ld hl,bly_fc.w              ; the 64',
      '* with the bias off by one'),
@@ -150,6 +151,12 @@ MUTANTS = [   # (the text, what it becomes, what that breaks)
     ('        rra\n        jr nc,.even', '        rra\n        jr .even', 'sqrt: an odd exponent not shifted'),
     ('        ld de,-127\n        add hl,de\n        sra h', '        ld de,-126\n        add hl,de\n        sra h',
      "sqrt: the exponent's half miscounted"),
+    ('        cp 2\n        call nz,.xdn', '        cp 1\n        call nz,.xdn', "read: a fraction's leading zeros don't count"),
+    ('        cp 40\n        ld a,2', '        cp 30\n        ld a,2', 'read: keeps 30 digits, not 40'),
+    ('        jr nz,.wn\n        call .xup', '        jr .wn\n        call .xup', "read: a dropped whole digit doesn't count"),
+    ('        jr z,.sup                   ; 34 or more', '        jr .sok                     ; 34 or more',
+     "read: s's guess taken as it is"),
+    ('        ld hl,161', '        ld hl,160', "read: a small number's exponent one low"),
     ('; The one trick:', '; The trick:', 'CONTROL: a comment'),
 ]
 
@@ -225,6 +232,51 @@ def main():
         want = fp5.sqrt(x)
         if res.failed or got[:5] != want or got[5:] != b'\xAA' * 3:
             say_wrong('sqrt', x.hex(), 'gave', got.hex(), repr(res.out), 'want', want.hex(), float(v))
+    print('reading (s.float()) against fp5.read, bit for bit')
+    import re
+    pat = re.compile(rb'\s*([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)')
+    texts = [b'0', b'1', b'-1', b'3.25', b'-3.25e2xyz', b'5.', b'.5', b'-.5', b'+.5e-1', b'1e', b'1e+', b'3east',
+             b'\t 42 and more', b'-0', b'1E+05', b'007.50', b'0.1', b'0.3', b'123456789012', b'1.7e38', b'1.7014118e38',
+             b'1.8e38', b'3.4e38', b'1e-38', b'1.5e-39', b'1.4e-39', b'1e-39', b'2.9e-39', b'1e-40', b'0e999', b'1e-9999',
+             b'0.000000000000000000000000000000000000000000000012', b'12345678901234567890123456789012345678901234',
+             b'1' * 40, b'1' * 41 + b'e-10', b'9' * 45 + b'e-30', b'0.' + b'0' * 30 + b'1' * 45, b'4294967295',
+             b'4294967296', b'65535', b'65536', b'2.5 3', b'5. 3', b'1.5e3 3', b'99999999999e-11', b'1e+00000005',
+             b'1.00000000023283064365386962890625', b'-1.00000000023283064365386962890625']   # a tie, 33 digits
+    for _ in range(N):
+        w = rnd.choice([b'', b' ', b'  \t'])
+        n = rnd.choice([f'{rnd.uniform(-1e6, 1e6):.{rnd.randint(0, 9)}f}', f'{rnd.randint(0, 99)}.{rnd.randint(0, 99):02d}',
+                        f'{rnd.uniform(1, 10):.{rnd.randint(1, 12)}f}e{rnd.randint(-45, 45)}', str(rnd.randint(-10**12, 10**12)),
+                        f'.{rnd.randint(0, 10**9)}', '0' * rnd.randint(1, 50) + str(rnd.randint(1, 10**15))])
+        texts.append(w + n.encode() + rnd.choice([b'', b' ', b',', b'x', b'e', b'.', b' 7', b'e+']))
+    S = 0xE100
+    for t in texts:
+        checks += 1
+        m = pat.match(t)
+        if not m:
+            want, err = None, b'"' + t + b'" doesn\'t start with a number\n'
+        else:
+            try:
+                want, err = fp5.read(m.group(1).decode()), None
+            except fp5.Overflow:
+                want, err = None, m.group(1) + b" doesn't fit in a float\n"
+        res = run.call('bly_str_float', regs={'hl': A, 'de': R},
+                       mem={A: S.to_bytes(2, 'little') + len(t).to_bytes(2, 'little'), S: t + b'Z#', R: b'\xAA' * 8})
+        got = bytes(res.mem[R:R + 8])
+        if err is not None:
+            if not (res.failed and res.out == err):
+                say_wrong('read', t, 'should fail', err, 'got', res.out, got.hex())
+            continue
+        if res.t is not None:
+            costs.setdefault('bly_str_float', []).append(res.t)
+        if res.failed or got[:5] != want or got[5:] != b'\xAA' * 3:
+            say_wrong('read', t, 'gave', got.hex(), repr(res.out), 'want', want.hex())
+    for t in [b'', b'.', b'-', b'abc', b' +x', b'e5', b'.e5']:
+        checks += 1
+        res = run.call('bly_str_float', regs={'hl': A, 'de': R},
+                       mem={A: S.to_bytes(2, 'little') + len(t).to_bytes(2, 'little'), S: t + b'Z#'})
+        want = b'"' + t + b'" doesn\'t start with a number\n'
+        if not (res.failed and res.out == want):
+            say_wrong('read', t, 'should fail', want, 'got', res.out)
     print('printing against fp5.show, text for text')
     import z80gen as G
     shown = [0.5, 0.01, 1e-5, 1.2345678e-5, 1e-6, 99999999.0, 1e8, 123456789.0, 999999999.0, 12345.678, 1234.5,
@@ -240,7 +292,7 @@ def main():
             costs.setdefault('bly_pr_f', []).append(res.t)
         if res.failed or res.out != want:
             say_wrong('print', b.hex(), 'gave', res.out, 'want', want)
-    for op in ops + ['bly_fsqrt', 'bly_pr_f']:
+    for op in ops + ['bly_fsqrt', 'bly_str_float', 'bly_pr_f']:
         t = costs[op]
         print(f'  {op:9} {len(t)} cases, {min(t):,} to {max(t):,} T, mean {sum(t) // len(t):,}')
     print(f'{checks} checks, {wrong} wrong')

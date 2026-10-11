@@ -1637,6 +1637,21 @@ root on 20,000 cases), perfect squares exact; 53,268 T mean. Three
 mutants, all caught (and the division's mutant text, now found twice,
 made longer: the runner refuses a mutant it can't place exactly).
 
+**Reading, `s.float()` without a ROM:** exact decimal to binary needs,
+in principle, every digit (a halfway point between two 5-byte floats can
+take ~160 digits to write), so the rule is **the first 40 significant
+digits, rounded exactly** (ties away), in the model (`fp5.read`) and the
+Z80 alike. Since 10^a = 5^a x 2^a, the big integer only meets fives: X
+>= 0 is D x 5^X with its bit length giving the exponent; X < 0 is
+floor(D x 2^s / 5^-X), s guessed and corrected by the quotient's size,
+as printing does. Bit for bit with the model on 338 readings and every
+failure. A "keeps 30 digits" mutant first went uncaught: digits past the
+30th matter only at an exact tie, and truncation only lowers a number,
+so it took a tie written in 31 to 40 digits, 1 + 2^-32 =
+1.00000000023283064365386962890625, to tell them apart. Mean 75,581 T
+(1,946 to 1,240,042; the ROM's DEC-TO-FP 10,000 to 125,000), after ÷5
+and ×5 were kept to the significant bytes (from 141,926).
+
 ## Random numbers: Melissa's generator (random.asm, rndclock.asm)
 
 *Files: `random.asm`, `rndclock.asm` (the 48K's clock seed),
