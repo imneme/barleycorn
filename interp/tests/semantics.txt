@@ -1758,6 +1758,122 @@ end
 --- expect
 a print takes the rest of its line, so this = is part of it: put the assignment on a line of its own at line 3
 
+=== include brings in another file's declarations, once each: dice that include faces that include dice back, an asm clause and an @embed that look beside their own file, and a failure there that says which file
+include "inc/dice.bly"
+include "inc/twice.bly"
+include "inc/bytes.bly"
+include "inc/dice.bly"
+func main()
+  print roll2(); " "; face(roll(SIDES) - 1); " "; twice(21); " "; THREE.len; " "; THREE[0]
+  print face(6)
+end
+--- expect
+5 six 42 3 65
+index 6 is outside 0..6 at line 13 of inc/dice.bly
+
+=== an include that isn't there says so
+include "inc/nothere.bly"
+func main()
+end
+--- expect
+inc/nothere.bly isn't there: include looks beside the file that includes it at line 1
+
+=== the program's own lines read as ever, includes or not
+include "inc/twice.bly"
+func main()
+  print twice(1); " "; nothing
+end
+--- expect
+nothing is not defined at line 3
+
+=== a local can't take a constant's name: what the name means would depend on where you stand
+const N = 10
+func f(): int
+  var N = 3
+  return N
+end
+func main()
+  print f()
+end
+--- expect
+N is already a constant: call the local something else at line 3
+
+=== nor ZX, CPM or C's: if ZX in that function would mean the local (the numbers me found it)
+func f(): bool
+  var ZX = false
+  return ZX
+end
+func main()
+  print f()
+end
+--- expect
+ZX is already a constant (it says which machine this is): call the local something else at line 2
+
+=== containers in containers: a map of lists, a queue of sets, a list of maps (references, shared as any container is)
+func main()
+  var adj = map[int, list[int]](4)
+  for i in 0..4 do
+    adj[i] = list[int](4)
+  end
+  adj[0].push(1)
+  adj[0].push(2)
+  adj[2].push(3)
+  var total: word = 0
+  for k, v in adj do total += v.len end
+  print "edges "; total; " from 0: "; adj[0][0]; " "; adj[0][1]
+  var q = queue[set[int]](2)
+  var s = set[int](4)
+  s.add(5)
+  q.put(s)
+  print 5 in q.get()
+  var ms = list[map[int, int]](2)
+  ms.push(map[int, int](2))
+  ms[0][3] = 4
+  print ms[0][3]
+end
+--- expect
+edges 3 from 0: 1 2
+true
+4
+
+=== a heap's elements need an order: a heap of lists has none (the numbers me found the interpreter crashing)
+func main()
+  var h = heap[list[int]](2)
+end
+--- expect
+a heap's elements need an order, to give back the smallest: numbers, strs, positions, or records of them at line 2
+
+=== and so does sort
+func main()
+  var xs = list[list[int]](2)
+  xs.sort()
+end
+--- expect
+sort needs elements with an order: numbers, strs, positions, or records of them at line 3
+
+=== a container can't hold arrays: an array is a value, and the interpreter shared what the Z80 copied
+func main()
+  var xs = list[int[3]](2)
+end
+--- expect
+a list can't hold arrays: an array is a value in a place of its own, so hold lists instead at line 2
+
+=== a grid holds values it can compare and print
+func main()
+  var g = grid[list[int]](2, 2)
+end
+--- expect
+a grid holds values it can compare and print, as find does: numbers, strs, positions, or records of them (a map from pos holds containers) at line 2
+
+=== records compare field by field, so one with a container in it can't be compared
+record R  xs: list[int]  end
+func main()
+  var a = R(list[int](1))
+  print a == a
+end
+--- expect
+records compare field by field, and R has a field that can't be compared (a container) at line 4
+
 === dword: unsigned 32 bits, which wrap (+ - * / % >> << - ~, min, max, a hash), and its widenings and casts
 func hash(s: str): dword
   var h: dword = 2166136261

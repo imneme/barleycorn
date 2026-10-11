@@ -32,4 +32,20 @@ if res.out != b'hello':
 res = r.call('bly_pr_str', regs={'hl': 0xE000}, mem={0xE000: bytes(4)})
 if res.out != b'':
     bad += 1; print('pr_str empty', res.out)
+# a line in an included file: (file << 12) | its line, " of NAME" from the table bly_files points at, as the
+# interpreter's where() says it (barley.py)
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'interp'))
+import barley as B                                                  # noqa: E402
+names = ['lib/a.bly', 'dice.bly', 'inc/faces.bly']
+table = bytes([0, 0]) + b''.join((0xE110 + 16 * k).to_bytes(2, 'little') for k in range(len(names)))
+mem = {0xE100: table, **{0xE110 + 16 * k: n.encode() + b'\0' for k, n in enumerate(names)}}
+B.FILES[:] = [None] + [(n, '.', n) for n in names]
+for k, n in ((0, 7), (0, 4095), (1, 1), (2, 4095), (3, 77)):
+    line = k << 12 | n
+    res = r.call('bly_fail_index_i16', regs={'de': 0xFFFF, 'bc': 3}, mem=mem,
+                 set16={'bly_line': line, 'bly_files': 0xE100})
+    want = str(B.BarleyError('index -1 is outside 0..3', line)) + '\n'
+    if res.out.decode() != want or not res.failed:
+        bad += 1; print('line of a file', k, n, res.out, want)
 print('core:', 'all right' if not bad else f'{bad} wrong', f'(pr_u16 of 65535: {r.call("bly_pr_u16", regs={"hl": 65535}).t} T)')
+sys.exit(1 if bad else 0)                               # ./check goes by this: the words alone aren't a failure

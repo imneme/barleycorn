@@ -26,6 +26,7 @@ def reads_keys(prog):
     """does the program call ask(), inkey() or key()? (If it doesn't parse, the build will say why.)"""
     sys.path.insert(0, os.path.join(ROOT, 'interp'))
     import barley
+    barley.EMBED_DIR = os.path.dirname(os.path.abspath(prog))      # where its includes are
     try:
         return barley.uses_keys(barley.Parser(open(prog).read()).program())
     except barley.BarleyError:

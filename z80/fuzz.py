@@ -289,10 +289,11 @@ def main(argv):
                         f.write(f'--- {k}\n{v}\n')
                 print(f'{verdict}: seed {s} ({", ".join(k for k in outs if k != "interp")})', flush=True)
     print(f'{n} programs from seed {seed}: ' + ', '.join(f'{v} {k}' for k, v in sorted(counts.items())))
+    return sum(v for k, v in counts.items() if k not in ('ok', 'rejected', 'slow'))     # rejected: the generator's
 
 def lambda_run(a):
     return run_one(*a)
 
 
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    sys.exit(1 if main(sys.argv[1:]) else 0)            # a FAIL or a crash fails ./check, whatever it printed

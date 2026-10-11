@@ -29,7 +29,7 @@ def omse_ready():
 
 SUITE = os.path.join(ROOT, 'interp', 'tests', 'run.py')
 FRAG = ['test_core', 'test_gen', 'test_int', 'test_num', 'test_text', 'test_containers', 'test_zxgfx', 'test_fp',
-        'test_random']
+        'test_random', 'test_peephole']
 
 
 def stages(quick):

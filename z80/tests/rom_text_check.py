@@ -102,6 +102,7 @@ def main():
                 open(keep, 'w').write(src)
                 print(f'program {k}: {len(diff)} bytes differ (kept as {keep})')
     print(f'{n - bad} of {n} screens identical to the ROM')
+    return bad
 
 
-main()
+sys.exit(1 if main() else 0)                            # a screen that differs fails ./check, not just its words

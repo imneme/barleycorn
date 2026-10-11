@@ -149,7 +149,8 @@ def main():
             missed += 1
             print(f'  MISSED  {what:55} all {n} cases still right')
     print(f'mutants: {caught} caught, {missed} missed')
+    return missed
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(1 if main() else 0)                        # a missed mutant fails ./check, not just its words

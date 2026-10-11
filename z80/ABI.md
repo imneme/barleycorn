@@ -133,7 +133,12 @@ target out isn't used for it, and the twin is compiled instead.
 - **`bly_line`** (word, in `core`) holds the Barley source line of the
   operation being done. Generated code stores it before anything that
   can fail, whenever it differs from the last stored, so a failure names
-  the same line the interpreter does.
+  the same line the interpreter does. It's `(file << 12) | line`: file 0
+  is the program itself, and 1 to 15 the files it includes (barley.py's
+  `FILES`), so a file has at most 4,095 lines. `bly_fail_end` prints the
+  line, and for an included file ` of NAME`, from the table of names
+  `bly_files` points at (a `dw` table from entry 1; 0 when nothing's
+  included), which the program sets at its start.
 - **To fail**, print the message's parts, then `JP bly_fail_end`, which
   prints ` at line N`, a newline, and ends the program. **`bly_fail`**
   (HL = a zero-terminated message) does both for a plain message.

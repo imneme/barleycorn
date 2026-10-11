@@ -21,7 +21,7 @@
 ;; bly_zx_beep is zxbeep.asm, its own fragment: its tables and 32-bit arithmetic are 2K a program doesn't need
 ;;            unless it beeps
 ;; bly_zx_key   out: A = the last key pressed since the last call, or 0                    clobbers: AF HL
-;; bly_zx_ticks in: DE=&dest           out: (DE) = FRAMES, as a long                       clobbers: AF HL
+;; bly_zx_ticks in: DE=&dest           out: (DE) = FRAMES, as a long                       clobbers: AF DE HL
 ;; bly_zx_pause in: HL=n               waits n frames; fails: pause {n} is negative       clobbers: AF BC HL
 
 INPUT   equ bly_input_at              ; 8000h when it fits up there; lower when it doesn't (the builder decides)

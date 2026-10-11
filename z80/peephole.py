@@ -168,7 +168,8 @@ def cache_pass(code):
             else:
                 c.forget()
         elif op == 'pop' and args:
-            c.forget(args[0].lower())
+            r = args[0].lower()
+            c.forget('a' if r == 'af' else r)                    # the cache's key for AF is A (the numbers me found)
         elif op in ('djnz',):
             c.forget('bc')
         else:

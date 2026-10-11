@@ -1538,11 +1538,14 @@ failures word for word (0, negative ints, negative quads); and
 value and on **the state it leaves**, which says the Z80 drew exactly
 the words the meaning draws, the thing every backend's agreement rests
 on. **Mutants:** the last swizzle turning left, or adding; the xor into
-H, not L; the mask never growing; a draw past m kept (16 bits and 64);
-two words a try where one or four belong; the first word put at the
-bottom; the seed outside the long cycles' run, or its low 16 bits in the
-wrong place; a negative int let through; the message misspelt: **13 of
-13 caught**, and the control (a comment) passes.
+H, not L; the mask smeared a shift short, or its low byte short of FFh
+(since 10 October, when the mask stopped growing a bit at a time); a
+draw past m kept (16 bits and 64); two words a try where one or four
+belong; the first word put at the bottom; the seed outside the long
+cycles' run, or its low 16 bits in the wrong place; a negative int let
+through; the message misspelt: **14 of 14 caught**, and the control (a
+comment) passes. (Commit da7f0d3's message said 15 of 15: it counted the
+control.)
 
 **Found on the way:** an asm function can't be called `pair`: sjasmplus
 takes it, and `mod`, `high`, `low`, `abs`, `z`, `c` and a dozen others,

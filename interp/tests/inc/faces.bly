@@ -1,0 +1,4 @@
+-- Included by dice.bly, and including it back: each file comes in once, so that's the end of it.
+include "dice.bly"
+const SIDES = 6
+const NAMES = str["one", "two", "three", "four", "five", "six"]

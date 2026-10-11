@@ -34,3 +34,4 @@ res = r.call('bly_shl16', regs={'hl': 1, 'de': 0xFFFF})
 if res.out != b'negative shift count\n' or not res.failed:
     bad += 1; print('negative shift', res.out)
 print('gen:', 'all right' if not bad else f'{bad} wrong')
+sys.exit(1 if bad else 0)                               # ./check goes by this: the words alone aren't a failure

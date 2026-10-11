@@ -65,6 +65,8 @@ class Gen:
             return 'pos'
         if isinstance(t, B.RecordT):
             return 'R_' + t.name
+        if isinstance(t, B.Gen) and t.kind != 'array':      # a container in a container: its reference
+            return self.gname(t)
         raise CGenError(f'no element kind for {t!r}')
 
     def ctype(self, t):
@@ -255,8 +257,14 @@ class Gen:
         body += ginit
         body.append('}\n')
         body += fbodies
-        body.append('int main(int argc, char **argv) {\n    bly_start(argc, argv);\n    bly_init_globals();\n'
-                    '    f_main();\n    return bly_finish();\n}')
+        files = ''
+        if len(B.FILES) > 1:                         # included files: their names, for a failure's line to say
+            cstr = lambda n: '"' + n.replace('\\', '\\\\').replace('"', '\\"') + '"'
+            body.append('static const char *const bly_file_names[] = {0, ' +
+                        ', '.join(cstr(f[0]) for f in B.FILES[1:]) + '};')
+            files = '    bly_files = bly_file_names;\n'
+        body.append('int main(int argc, char **argv) {\n' + files + '    bly_start(argc, argv);\n'
+                    '    bly_init_globals();\n    f_main();\n    return bly_finish();\n}')
         return '\n'.join(body) + '\n'
 
     @property
@@ -1034,8 +1042,6 @@ def main(argv):
                                  formatter_class=argparse.RawDescriptionHelpFormatter,
                                  epilog='then: cc -std=c11 -I rt program.c -lm -o program && ./program INPUT')
     ap.add_argument('program', metavar='PROGRAM.bly', help='the program; its C goes to standard output')
-    ap.add_argument('--as', dest='target', choices=['zx48', 'cpm'], default='zx48',
-                    help='the machine it is, as far as the program can tell (default zx48)')
     a = ap.parse_args(argv)
     try:
         B.EMBED_DIR = os.path.dirname(os.path.abspath(a.program))
@@ -1043,10 +1049,13 @@ def main(argv):
     except OSError as err:
         sys.exit(f'cgen.py: {a.program}: {err.strerror}')
     try:
-        sys.stdout.write(compile_program(src, a.target))
+        sys.stdout.write(compile_program(src))
     except B.BarleyError as err:
         print(err)                                   # the same words the interpreter says, on stdout
         sys.exit(1)
+    except CGenError as err:                         # a program the checker passed that C can't build yet: a
+        print(f'C: {err}')                           # sentence, as z80gen's "Z80: ..." is, not a traceback
+        sys.exit(2)
 
 if __name__ == '__main__':
     main(sys.argv[1:])

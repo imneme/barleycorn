@@ -170,8 +170,7 @@ except:
 - `mark`, `release` and `free`, and checks you can turn off (`--fast`),
   which aren't anywhere yet;
 - floats, which aren't on CP/M (there's no ROM to borrow);
-- the 128K Spectrum's extra memory and sound chip;
-- `include`, for sharing functions between programs.
+- the 128K Spectrum's extra memory and sound chip.
 
 A function can carry an `asm` clause: on the Z80 its hand-written
 fragment runs, and the interpreter and C run its Barleycorn body, the

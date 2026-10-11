@@ -272,7 +272,7 @@ def pairs16(t):
 
 def test16(r):
     s16 = lambda v: v - 65536 if v >= 32768 else v
-    line = lambda: random.randint(1, 65535)
+    line = lambda: random.randint(1, 4095)                  # the program's own lines: (file << 12) | line
     for name, t in (('bly_mul_u16', WORD), ('bly_mul_i16', INT)):
         tl = Tally(name)
         for a, b in pairs16(t):
@@ -303,7 +303,7 @@ def test16(r):
 # -- 32 and 64 bits, by address ------------------------------------------------------------------------------------
 
 def line():
-    return random.randint(1, 65535)
+    return random.randint(1, 4095)
 
 
 def pairs(t, count=None):

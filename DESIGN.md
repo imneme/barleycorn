@@ -165,7 +165,9 @@ program made to sing.
 ```
 -- a comment       const N = 140       const NOTES = "\x00\x02\x04"
 const SCALE = int[0, 2, 4, 7, 9]       a table: any element type, read-only
-var total: long = 0                    (every variable has a value)
+include "dice.bly"                     another file's declarations, once
+var total: long = 0                    (every variable has a value; a
+                   local can't take a global's or a constant's name)
 func f(a: int, xs: list[word]): long ... end
                    recursion anywhere; call before define; main() runs first
 record Step  risk: word; at: pos  end
@@ -205,7 +207,7 @@ TEXT        str: bytes, sliced   s.len (a word)  s[i] (a byte: chr(s[i])
             there)  s.starts(t)  s.trim()
             intern(s) -> word (0, 1, 2...)   name(id) -> str   chr(b)
 
-ARRAYS      T[N]: global, or local where not recursive.  a[i] a.len
+ARRAYS      T[N]: global, or local.  a[i] a.len
             a.sort().  A parameter T[] is by reference.  bit as an element
             type packs 8 to a byte.  An index can be any integer type.
 
@@ -437,10 +439,13 @@ changes between machines is only what printing a byte shows:
 ### Arrays, and the one bit type
 
 Barley's fixed arrays stay: `var cols: byte[8]`, at a fixed address, as
-fast as memory gets. They're now allowed as **locals in functions that
-aren't recursive**, where a local is a fixed slot anyway. In a recursive
-function a local array would have to be saved across every call, so it's
-an error that suggests a `list` instead.
+fast as memory gets. They're allowed as **locals** too, in a fixed slot
+as any local is. In a recursive function, an array still needed after a
+recursive call is saved around it, as any live local is: on the Z80 a
+word at a time, written out, so about 50 T-states and 4 bytes of code a
+word at each such call. Keep it small, or use a `list`, which is a
+reference. (DESIGN once called this an error; the checker never refused
+it, and it works on every backend, so now it says what it costs.)
 
 **`bit` is an element type only**, packed eight to a byte:
 `var seen: bit[8192]` is 1K. It's the one place the language does
@@ -515,6 +520,21 @@ The first Barley's `for i = a to b` and `downto` are retired. The
 thirteen programs of its benchmark suite converted mechanically, and
 they're the benchmark the Z80 backend is measured with (`z80/bench/`,
 and HISTORY.md).
+
+### Programs in more than one file
+
+**`include "dice.bly"`**, at the top level, brings another file's
+functions, records, constants and globals into the program, as if they
+were written there. Its path is beside the file that includes it, so a
+library can include its own parts; each file comes in once, however
+often it's included, which also ends a file that includes itself.
+`@embed` and `asm` clauses in an included file look beside that file.
+**A failure in an included file says which**:
+`index 6 is outside 0..6 at line 13 of inc/dice.bly`, named from the
+program's own folder, while the program's own lines read as they always
+have. Every backend keeps a line in 16 bits (the Z80's `bly_line`), as
+`(file << 12) | line`, so a file has at most 4,095 lines and a program
+includes at most 15 files; the build says so if one goes past either.
 
 ### Input and output
 
@@ -1152,7 +1172,6 @@ Barleycorn (HISTORY.md says why).
   arrays pack), and a bit array can't be sorted
 - floats on CP/M
 - the 128K mode (input in the banks; the AY sound chip)
-- `include`
 
 **Still open:**
 1. **Floats on CP/M**: our own routines, or none until a program asks?

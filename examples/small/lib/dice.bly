@@ -1,0 +1,11 @@
+-- Dice, for any program that rolls them: basics-include.bly includes this.
+
+func roll(sides: int): int
+  return random(sides) + 1               -- random(n) is 0..n-1
+end
+
+func roll_many(n: int, sides: int): int
+  var total = 0
+  for i in 0..n do total += roll(sides) end
+  return total
+end

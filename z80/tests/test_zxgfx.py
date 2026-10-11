@@ -422,7 +422,7 @@ def failures(rng):
     """scripts that end in a failure, after drawing something; some with a line number to print"""
     out = []
     pre = lambda: [('plot', rng.randint(0, 255), rng.randint(0, 175)), ('line', 0, 0, rng.randint(0, 255), 175)]
-    line = lambda: rng.choice([0, 1, 9, 10, 65535, rng.randint(1, 65535)])
+    line = lambda: rng.choice([0, 1, 9, 10, 4095, rng.randint(1, 4095)])     # the program's own: (file << 12) | line
     offs = [(-1, 0), (256, 0), (0, -1), (0, 176), (255, 176), (-1, 175), (-32768, 32767), (32767, -32768),
             (300, 300), (-256, 88), (128, 432), (65535 - 65536, 65535 - 65536)]
     for x, y in offs:

@@ -27,13 +27,42 @@ def article(t):
     return ('an ' if name[:1].lower() in 'aeiou' else 'a ') + name
 
 
+# -- lines, and the files they're in ----------------------------------------------------------------------------
+# A line is (file << 12) | the line in that file: file 0 is the program itself, so its lines read as they always
+# have, and 1..15 are the files it includes, in the order they're first included. Every backend keeps a line in 16
+# bits (the Z80's bly_line), so a file has at most 4,095 lines and a program includes at most 15 files.
+LINE_BITS = 12
+LINE_MASK = (1 << LINE_BITS) - 1
+MAX_FILES = 15
+FILES = [None]                                     # FILES[k]: (its path from the program's folder, its directory, its full path)
+
+
+def ordered(t):
+    """a type whose values can be compared and sorted: what a heap holds, what sort sorts, and what a record must be
+    made of to be compared (containers and arrays aren't: the numbers me found a heap of lists crashing)"""
+    return is_int(t) or t in (FLOAT, STR, POS, BOOL, BIT) or \
+        isinstance(t, RecordT) and all(ordered(ft) for _, ft in t.fields)
+
+
+def where(line):
+    """a line, said as the messages say it: "line 12", or "line 12 of dice.bly" in an included file"""
+    k, n = line >> LINE_BITS, line & LINE_MASK
+    return f'line {n}' if k == 0 or k >= len(FILES) else f'line {n} of {FILES[k][0]}'
+
+
+def file_dir(line):
+    """the directory of the file a line is in, where its @embed and asm clauses look"""
+    k = line >> LINE_BITS
+    return FILES[k][1] if k else (EMBED_DIR or '.')
+
+
 class BarleyError(Exception):
     def __init__(self, msg, line=None):
         super().__init__(msg)
         self.msg, self.line = msg, line
 
     def __str__(self):
-        return f'{self.msg} at line {self.line}' if self.line else self.msg
+        return f'{self.msg} at {where(self.line)}' if self.line else self.msg
 
 
 # -- types -----------------------------------------------------------------------------------------------------
@@ -181,8 +210,9 @@ def unescape(body, line):
     return bytes(out)
 
 
-def lex(src):
+def lex(src, file=0):
     toks, line, depth, i = [], 1, 0, 0
+    base = file << LINE_BITS                       # stamped on every token's line at the end
     opre = '|'.join(re.escape(o) for o in OPS)
     pat = re.compile(rf"""(?P<ws>[ \t\r]+) | (?P<comment>--[^\n]*) | (?P<nl>\n)
       | (?P<hex>(?:0x|\$)[0-9A-Fa-f]+) | (?P<bin>(?:0b|%)[01]+)
@@ -192,7 +222,7 @@ def lex(src):
     while i < len(src):
         m = pat.match(src, i)
         if not m:
-            raise BarleyError(f'unexpected character {src[i]!r}', line)
+            raise BarleyError(f'unexpected character {src[i]!r}', base | line)
         kind, text = m.lastgroup, m.group()
         prev = toks[-1] if toks else None
         if kind == 'bin' and text.startswith('%') and prev and (prev.kind in OPERAND_END or prev.val in (')', ']')):
@@ -205,6 +235,10 @@ def lex(src):
             if depth == 0 and toks and toks[-1].kind != 'nl' and toks[-1].val not in CONTINUES:
                 toks.append(Tok('nl', '\n', line))
             line += 1
+            if line > LINE_MASK:
+                raise BarleyError(f'{"the program" if file == 0 else FILES[file][0]} has more than {LINE_MASK:,} '
+                                  f'lines, as many as a line number can say: put some of it in a file of its own, '
+                                  f'and include that')
             continue
         if kind == 'hex':
             toks.append(Tok('num', int(text[2:] if text.startswith('0x') else text[1:], 16), line))
@@ -215,10 +249,10 @@ def lex(src):
         elif kind == 'float':
             toks.append(Tok('float', float(text), line))
         elif kind == 'char':
-            b = unescape(text[1:-1], line)
+            b = unescape(text[1:-1], base | line)
             toks.append(Tok('char', b[0], line))
         elif kind == 'str':
-            toks.append(Tok('str', unescape(text[1:-1], line), line))
+            toks.append(Tok('str', unescape(text[1:-1], base | line), line))
         elif kind == 'name':
             toks.append(Tok('kw' if text in KEYWORDS else 'name', text, line))
         else:
@@ -229,6 +263,8 @@ def lex(src):
             toks.append(Tok('op', text, line))
     toks.append(Tok('nl', '\n', line))
     toks.append(Tok('eof', None, line))
+    for t in toks:
+        t.line |= base
     return toks
 
 
@@ -250,8 +286,12 @@ BLOCK_END = ('end', 'elif', 'else', 'when')
 
 
 class Parser:
-    def __init__(self, src):
-        self.toks, self.i = lex(src), 0
+    def __init__(self, src, file=0):
+        """file: 0 for the program itself (and FILES starts again), or an included file's number"""
+        if file == 0:
+            FILES[:] = [None]
+        self.file = file
+        self.toks, self.i = lex(src, file), 0
 
     @property
     def t(self):
@@ -316,6 +356,9 @@ class Parser:
                 decls.append(self.func())
             elif self.at('record', 'kw'):
                 decls.append(self.record())
+            elif self.t.kind == 'name' and self.t.val == 'include' and self.peek().kind == 'str':
+                self.next()
+                decls += self.include(self.next().val.decode('latin-1'), line)
             elif self.t.kind == 'name' and self.t.val == 'frame' and self.peek().val == 'do':
                 self.next()                         # frame do ... end: run every frame, in the interrupt (IM 2)
                 self.expect('do')
@@ -323,7 +366,8 @@ class Parser:
                 self.expect('end')
                 decls.append(N('func', line, name='frame', params=[], retx=None, body=body, asm=None, frame=True))
             else:
-                raise BarleyError(f'expected const, var, func, record or frame but found {self.describe()}', line)
+                raise BarleyError(f'expected const, var, func, record, frame or include but found {self.describe()}',
+                                  line)
             self.end_stmt()
             self.skip_nl()
         return decls
@@ -389,6 +433,23 @@ class Parser:
             self.skip_nl()
         self.expect('end')
         return N('func', line, name=name, params=params, retx=ret, body=body, asm=asm, asm_line=asm_line)
+
+    def include(self, name, line):
+        """include "name": the file's declarations, here, the first time it's included (and nothing after, which
+        also ends a file that includes itself); its path is beside the file that includes it"""
+        full = os.path.normpath(os.path.join(file_dir(line), name))
+        if any(f[2] == full for f in FILES[1:]):
+            return []
+        if len(FILES) > MAX_FILES:
+            raise BarleyError(f'a program can include at most {MAX_FILES} files, as many as a line number can say',
+                              line)
+        try:
+            src = open(full).read()
+        except OSError:
+            raise BarleyError(f'{name} isn\'t there: include looks beside the file that includes it', line)
+        shown = os.path.relpath(full, EMBED_DIR or '.')       # as the program's own folder sees it, nested or not
+        FILES.append((shown, os.path.dirname(full), full))
+        return Parser(src, len(FILES) - 1).program()
 
     def type_(self):
         line = self.t.line
@@ -795,13 +856,13 @@ TARGET_CONSTS = ('ZX', 'CPM', 'C')
 EMBED_DIR = None                                   # where @embed finds files: beside the program (each tool's main)
 
 
-def embed(path):
-    """a file's name: its bytes, as a byte table (read from beside the program)"""
+def embed(path, beside='.'):
+    """a file's name: its bytes, as a byte table (read from beside the file that says it)"""
     if not isinstance(path, bytes):
         raise TypeError
     name = path.decode('latin-1')
     try:
-        data = open(os.path.join(EMBED_DIR or '.', name), 'rb').read()
+        data = open(os.path.join(beside, name), 'rb').read()
     except OSError:
         raise ValueError(f'{name}: no such file beside the program')
     if not data:
@@ -865,6 +926,15 @@ class Checker:
             raise BarleyError(f'{gkind} takes {want} type argument{"s" * (want > 1)}', line)
         if gkind in ('map', 'set') and not (is_int(targs[0]) or targs[0] is POS):
             raise BarleyError(f'a {gkind} key is a number or a pos (intern makes names into numbers)', line)
+        if any(isinstance(a, Gen) and a.kind == 'array' for a in targs):
+            raise BarleyError(f'a {gkind} can\'t hold arrays: an array is a value in a place of its own, so hold '
+                              f'lists instead', line)
+        if gkind == 'heap' and not ordered(targs[0]):
+            raise BarleyError(f'a heap\'s elements need an order, to give back the smallest: numbers, strs, '
+                              f'positions, or records of them', line)
+        if gkind == 'grid' and not ordered(targs[0]):
+            raise BarleyError(f'a grid holds values it can compare and print, as find does: numbers, strs, '
+                              f'positions, or records of them (a map from pos holds containers)', line)
         return Gen(gkind, *targs)
 
     def const_int(self, e):
@@ -894,10 +964,12 @@ class Checker:
         for scope in self.scopes:
             if var.name in scope:
                 raise BarleyError(f'{var.name} is already defined in this function', line)
-        if var.name in self.globals and self.globals[var.name].where != 'const':
-            pass                                        # a local may shadow a global variable? no:
-        if var.name in self.globals and var.name not in TARGET_CONSTS and self.globals[var.name].where == 'global':
+        g = self.globals.get(var.name)                  # no local takes a global's name: a variable's, or a
+        if g is not None and g.where == 'global':       # constant's, ZX, CPM and C among them
             raise BarleyError(f'{var.name} is already a global', line)
+        if g is not None:
+            raise BarleyError(f'{var.name} is already a constant' + (' (it says which machine this is)'
+                              if getattr(g, 'target', False) else '') + ': call the local something else', line)
         self.scopes[-1][var.name] = var
 
     # -- the program
@@ -1002,7 +1074,7 @@ class Checker:
         if d.tyx:
             raise BarleyError(f'{d.name}: @{d.e.name} gives its own type', d.line)
         try:
-            data = f(*args)
+            data = f(*args, beside=file_dir(d.line))
         except TypeError:
             raise BarleyError(f'@{d.e.name} takes {f.__doc__.split(":")[0]}', d.line)
         except ValueError as err:
@@ -1250,8 +1322,6 @@ class Checker:
         k = s.k
         if k == 'var':
             s.ty = self.var_type(s)
-            if isinstance(s.ty, Gen) and s.ty.kind == 'array' and self.func is not None:
-                pass                                    # local arrays: fine where a function isn't recursive
             v = Var(s.name, s.ty, 'local')
             v.inferred = not s.tyx                      # var x = ...: its type is its value's
             self.declare(v, s.line)
@@ -1602,6 +1672,9 @@ class Checker:
                     e.cval = compare(op, e.a.cval, e.b.cval)
             elif ta != tb or not (ta in (BOOL, STR) or isinstance(ta, RecordT)):
                 raise BarleyError(f"can't compare {article(ta)} with {article(tb)}", e.line)
+            elif isinstance(ta, RecordT) and not ordered(ta):
+                raise BarleyError(f'records compare field by field, and {ta.name} has a field that can\'t be '
+                                  f'compared (a container)', e.line)
             elif ta is BOOL and op not in ('==', '!='):
                 raise BarleyError('true and false are equal or not; they have no order', e.line)
             e.ty = BOOL
@@ -1715,6 +1788,9 @@ class Checker:
             raise BarleyError(f'{article(ot)} has no .{name}()', e.line)
         if name == 'sort' and e.obj.k == 'name' and getattr(e.obj, 'var', None) is not None and e.obj.var.const:
             raise BarleyError(f"{e.obj.name} is a constant table and can't be changed", e.line)
+        if name == 'sort' and not ordered(ot.args[0]):
+            raise BarleyError('sort needs elements with an order: numbers, strs, positions, or records of them',
+                              e.line)
         params, ret = sig
         if len(args) != len(params) and not (name in ('int', 'split', 'find', 'starts', 'get') and len(args) <= len(params)):
             raise BarleyError(f'.{name}() takes {len(params)} argument{"s" * (len(params) != 1)}', e.line)

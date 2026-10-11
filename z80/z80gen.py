@@ -33,6 +33,7 @@ sys.path.insert(0, os.path.join(HERE, '..', 'interp'))
 sys.path.insert(0, HERE)
 import barley as B                                                     # noqa: E402
 from link import gather, Frag                                          # noqa: E402
+GENERATED = re.compile(r'(bly_|f_|fr_|rv_|fsz_|ppr_|pcmp_|k_)|gs$|[LS]\d+d?$')   # the names z80gen makes
 ASM_WORDS = set('and or xor not mod shl shr low high pair abs norel exist sizeof c nz z nc po pe p m'.split())
 import peephole                                                        # noqa: E402
 PEEP = os.environ.get('BLY_PEEP', '1') != '0'        # BLY_PEEP=0 turns the register cache off, to compare
@@ -587,6 +588,10 @@ class Gen:
         out.append('        org 100h' if self.target == 'cpm' else f'        org {getattr(self, "org", 0x8000)}')
         out.append('        jp bly_start')
         out.append('bly_program:')
+        if len(B.FILES) > 1:                            # included files: their names, for a failure's line to say
+            out.append('        ld hl,bly_file_names')
+            out.append('        ld (bly_files),hl')
+            self.calls.add('bly_files')
         out.append('        call bly_init_globals')
         if self.uses_input:
             out.append('        call bly_split_input')
@@ -598,6 +603,10 @@ class Gen:
         out += init + [''] + bodies
         for name, lines in self.helpers.items():
             out += lines + ['']
+        if len(B.FILES) > 1:
+            out.append('bly_file_names: dw 0, ' + ', '.join(f'bly_file_{k}' for k in range(1, len(B.FILES))))
+            for k, f in enumerate(B.FILES[1:], 1):
+                out.append(f'bly_file_{k}: db ' + ', '.join(str(c) for c in f[0].encode('latin-1')) + ', 0')
         for b, name in self.strings.items():
             data = ', '.join(str(x) for x in b) if b else ''
             out.append(f'{name}: dw {name}d, {len(b)}')
@@ -629,8 +638,8 @@ class Gen:
         isn't for this target (the twin runs there). DESIGN.md section 5, "The machine"; ABI.md section 2"""
         if getattr(f, 'asm', None) is None:
             return None
-        where = f'{f.name}\'s asm clause, line {f.asm_line}'
-        path = os.path.join(B.EMBED_DIR or '.', f.asm)
+        where = f'{f.name}\'s asm clause, {B.where(f.asm_line)}'
+        path = os.path.join(B.file_dir(f.asm_line), f.asm)
         try:
             fr = Frag(path)
         except OSError:
@@ -645,10 +654,10 @@ class Gen:
         if f.name.lower() in ASM_WORDS and f.name in (f.name.lower(), f.name.upper()):
             raise GenError(f'{f.name} is one of the assembler\'s own words ({where}): an asm function needs '
                            f'another name, as a label called {f.name} can\'t be called')
-        theirs = [p for p in fr.provides if p.startswith(('bly_', 'f_', 'fr_', 'rv_', 'fsz_')) or p == 'gs']
+        theirs = [p for p in fr.provides if GENERATED.match(p)]
         if theirs:
-            raise GenError(f'{f.asm} provides {" ".join(theirs)} ({where}): bly_, f_, fr_, rv_ and fsz_ are the '
-                           f'compiler\'s and the library\'s')
+            raise GenError(f'{f.asm} provides {" ".join(theirs)} ({where}): names that start bly_, f_, fr_, rv_, '
+                           f'fsz_, ppr_, pcmp_ or k_, and L or S with digits, are the compiler\'s and the library\'s')
         labels = set(re.findall(r'^([A-Za-z_]\w*):', fr.text, re.M)) - set(fr.provides)
         if labels:
             raise GenError(f'{f.asm} has labels its provides: doesn\'t list ({where}): {" ".join(sorted(labels))} '
@@ -2175,7 +2184,7 @@ class Gen:
         self.line(line)
         if t.kind == 'grid':
             et = B.BOOL if t.args[0] is B.BIT else t.args[0]
-            blk = self.temp(None, 24) if False else Op('mem', self.slot(None, 24), B.WORD)
+            blk = Op('mem', self.slot(None, 24), B.WORD)
             rows, cols = self.conv(args[0], B.QUAD), self.conv(args[1], B.QUAD)
             self.put(blk.val, rows, B.QUAD)
             self.put(f'{blk.val}+8', cols, B.QUAD)

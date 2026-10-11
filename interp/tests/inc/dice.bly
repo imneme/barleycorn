@@ -1,0 +1,14 @@
+-- The suite's include cases (semantics.txt): dice, which include faces.bly, which includes this back.
+include "faces.bly"
+
+func roll(n: int): int
+  return random(n) + 1
+end
+
+func roll2(): int
+  return roll(SIDES) + roll(SIDES)
+end
+
+func face(i: int): str
+  return NAMES[i]
+end

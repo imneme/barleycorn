@@ -111,12 +111,17 @@ static void bly_nl(void) { bly_out("\n", 1); }
 /* -- failure: what happened, then " at line N", as the Spectrum would print it -------------------------------- */
 
 static int bly_asm_line;              /* inside an asm function's twin: its clause's line, where a failure is */
+static const char *const *bly_files;  /* the included files' names, [1] on: a line is (file << 12) | its line */
 
 _Noreturn static void bly_fail_end(int line) {
     if (bly_asm_line) line = bly_asm_line;
     if (line > 0) {
         bly_pr_cstr(" at line ");
-        bly_pr_int(line);
+        bly_pr_int(line & 4095);
+        if (line >> 12) {             /* in an included file: say which, as barley.py's where() does */
+            bly_pr_cstr(" of ");
+            bly_pr_cstr(bly_files[line >> 12]);
+        }
     }
     bly_zx_failed();
     bly_nl();

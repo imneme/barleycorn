@@ -70,7 +70,7 @@ for row in lst:
         line_no = pending
     if m.group(2) and addr < lib_start:
         for k in range(len(m.group(2).split())):
-            owner[addr + k] = f'{func} line {line_no}'
+            owner[addr + k] = f'{func} {z80gen.B.where(line_no)}'      # (of FILE, in an included one)
 libs = sorted((v, k) for k, v in sym.items() if lib_start <= v < sym['bly_code_end'] and k.startswith('bly_'))
 lib_addrs = [v for v, k in libs]
 

@@ -1,0 +1,24 @@
+-- include "file.bly" brings another file's functions in, once: here a little dice library, from lib/ beside us
+
+include "lib/dice.bly"
+
+func main()
+  randomize(1982)                        -- a seed: the same rolls every run, on every machine
+  print "a die: "; roll(6)
+  print "three of them: "; roll_many(3, 6)
+  var tally: int[6]
+  for i in 0..600 do tally[roll(6) - 1] += 1 end
+  print "600 rolls, ones to sixes:"
+  var gap = ""
+  for t in tally do
+    print gap; t;
+    gap = " "
+  end
+  print
+end
+
+-- prints:
+-- > a die: 5
+-- > three of them: 15
+-- > 600 rolls, ones to sixes:
+-- > 116 87 96 87 115 99

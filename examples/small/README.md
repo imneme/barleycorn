@@ -42,6 +42,8 @@ them, `-- keys:` with each line typed as `-- < text`, and
 - [basics-arrays](basics-arrays.bly): `T[N]`, `.sort()`, and a `T[]`
   parameter
 - [basics-sieve](basics-sieve.bly): `bit[N]`, eight to a byte
+- [basics-include](basics-include.bly): `include`, a dice library from
+  `lib/`, and `random`
 
 ## Text and input
 

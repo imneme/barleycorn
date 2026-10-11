@@ -1,0 +1,5 @@
+-- An asm clause in an included file: its fragment is beside this file, not the program.
+func twice(n: int): int
+  return n * 2
+asm "twice.asm"
+end

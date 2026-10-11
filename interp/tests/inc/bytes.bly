@@ -1,0 +1,2 @@
+-- @embed in an included file: three.dat is beside this file.
+const THREE = @embed("three.dat")
