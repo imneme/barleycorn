@@ -54,7 +54,7 @@ def quotations():
 COMMANDS = {'bly': ['run', 'x.bly'], 'check': [], 'interp/barley.py': ['x.bly'], 'interp/tests/run.py': [],
             'c/cgen.py': ['x.bly'], 'c/tests/test_screen.py': [], 'z80/z80gen.py': ['x.bly'],
             'z80/zxbuild.py': ['x.bly'], 'z80/fuzz.py': [], 'examples/make_sudoku.py': [],
-            'tools/check_docs.py': []}
+            'tools/check_docs.py': [], 'tools/gallery.py': []}
 OMSE_COMMANDS = {'z80/zxrun.py': ['x.tap'], 'z80/zxbench.py': [], 'z80/zxsize.py': ['x.bly'],
                  'z80/zxprof.py': ['x.bly'], 'z80/tests/test_containers.py': [], 'z80/tests/test_fp.py': [],
                  'z80/tests/test_num.py': [], 'z80/tests/test_text.py': [], 'z80/tests/test_zxgfx.py': [],

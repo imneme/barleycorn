@@ -33,7 +33,8 @@ import transcript                                       # noqa: E402
 ap = argparse.ArgumentParser(prog='zxrun.py', description=__doc__,
                              formatter_class=argparse.RawDescriptionHelpFormatter)
 ap.add_argument('tap', metavar='PROG.tap', help='the tape (zxbuild.py makes them)')
-ap.add_argument('--scr', metavar='OUT.scr', help="save the 48K's screen at the end")
+ap.add_argument('--scr', metavar='OUT.scr', help="save the 48K's screen at the end (OUT.png: as a picture, its "
+                "border the 48K's, and OUT.scr beside it)")
 ap.add_argument('--minutes', type=float, default=10, metavar='N',
                 help='give up after N minutes of Spectrum time (default 10)')
 ap.add_argument('--keys', metavar='FILE', help='type these keys as the program runs (see above)')
@@ -94,7 +95,15 @@ while zx.lib.zx_tstates(zx.z) - t0 < limit:
         done = True
         break
 if a.scr:                                               # the screen memory too, for comparing pictures
-    open(a.scr, 'wb').write(bytes(zx.read(0x4000, 6912)))
+    scr = bytes(zx.read(0x4000, 6912))
+    if a.scr.endswith('.png'):                          # drawn as the interpreter draws its screen, with the border
+        import zxgfx                                    # the ULA shows (a .scr has none)
+        pic = zxgfx.Screen(bytes(768))
+        pic.mem[:] = scr
+        pic.shown_border = zx.border
+        pic.png(a.scr)
+        a.scr = os.path.splitext(a.scr)[0] + '.scr'
+    open(a.scr, 'wb').write(scr)
 sys.stdout.reconfigure(encoding='latin-1', errors='replace')    # each byte the program printed as that byte
 sys.stdout.write(transcript.answer(zx.printed()))        # without the text printed at a place: that's the screen's
 if not done:

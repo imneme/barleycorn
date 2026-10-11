@@ -202,7 +202,9 @@ def parser():
     p = command('tap', 'make a tape for a 48K Spectrum (a real one, or any emulator)')
     p.add_argument('-o', dest='out', metavar='OUT.tap', help='where to put it (default build/bly/PROGRAM.tap)')
     p = command('zx', "make the tape and run it on omse-ai's 48K, printing what the program printed")
-    p.add_argument('--scr', metavar='OUT.scr', help="save the 48K's screen at the end")
+    p.add_argument('--scr', metavar='OUT.scr',
+                   help="save the 48K's screen at the end (OUT.png: as a picture, its border the 48K's, and OUT.scr "
+                   "beside it)")
     p.add_argument('--minutes', type=float, default=10, metavar='N',
                    help='give up after N minutes of Spectrum time (default 10)')
     p = command('all', 'run it all four ways and compare what each printed, and the final screens',

@@ -62,6 +62,8 @@ examples/      programs to read and run
 tools/
   check_docs.py  the docs still quote the programs as they are; the
                  Markdown is wrapped
+  gallery.py     every example run three ways, timed, its last screen
+                 kept: a static web page to look through
 ```
 
 ## How a program goes through
