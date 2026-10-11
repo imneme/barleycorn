@@ -1627,6 +1627,16 @@ print wrongly. Two first missed for the test's sake: one mutant's text
 began with a label, and underflow at exactly exponent 0 needed cases
 aimed at the exponent's edges.
 
+**sqrt, the same day:** exact, by the bit-pair method. x = f x 2^p with
+f in [1/2, 1); the root is sqrt(f) x 2^(p/2), or sqrt(f/2) x 2^((p+1)/2)
+for an odd p, and its 33-bit floor is isqrt(M << 34) or isqrt(M << 33),
+which the bit-pair method gives exactly; the last bit rounds it. A
+negative says `sqrt({x}) has no answer`, x printed as the 48K prints it.
+Bit for bit with `fp5.sqrt` (checked itself against an 80-digit Decimal
+root on 20,000 cases), perfect squares exact; 53,268 T mean. Three
+mutants, all caught (and the division's mutant text, now found twice,
+made longer: the runner refuses a mutant it can't place exactly).
+
 ## Random numbers: Melissa's generator (random.asm, rndclock.asm)
 
 *Files: `random.asm`, `rndclock.asm` (the 48K's clock seed),

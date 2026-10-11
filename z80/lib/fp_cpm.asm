@@ -1,4 +1,4 @@
-;; provides: bly_fadd bly_fsub bly_fmul bly_fdiv bly_fc bly_pr_f
+;; provides: bly_fadd bly_fsub bly_fmul bly_fdiv bly_fsqrt bly_fc bly_pr_f
 ;; needs: bly_fx bly_fail bly_div0 bly_i_mul16 bly_pr_cstr
 ;; targets: cpm test
 ;; Floats where there's no ROM (CP/M, and the bare Z80 the tests use): the ROM's 5-byte form all the same (ABI.md
@@ -6,6 +6,7 @@
 ;; (z80gen.rom5). Held bit for bit to a model of exact Fractions.
 ;; bly_fadd bly_fsub bly_fmul bly_fdiv   in: HL=&a DE=&b BC=&r   out: (BC) = a op b, in the full form
 ;;        fails: float overflow; division by zero (/)
+;; bly_fsqrt      in: HL=&x BC=&r   out: (BC) = the root, correctly rounded   fails: sqrt({x}) has no answer (x < 0)
 ;; bly_pr_f       in: HL=&x   prints x as the ROM's PRINT-FP lays a number out (8 digits, .0001, 1E+10), its digits
 ;;                exactly rounded, through bly_out (so print's column is kept)
 ;; Every routine clobbers AF BC DE HL IX.
@@ -420,6 +421,154 @@ bly_fdiv:
         djnz .s1
         pop bc
         ret
+
+; -- sqrt: exact, by the bit-pair method ---------------------------------------------------------------------------
+; x = f x 2^p, f in [1/2, 1): the root is sqrt(f) x 2^(p/2) for an even p, sqrt(f/2) x 2^((p+1)/2) for an odd one, and
+; its mantissa's 33-bit floor is isqrt(M << 34) or isqrt(M << 33), which the bit-pair method gives exactly; the last
+; bit rounds it (ties away), as everywhere. The answer's exponent byte is ((e - 127) >> 1) + 128.
+bly_fsqrt:
+        ld (bly_fc.res),bc
+        ld (.x),hl
+        ld de,bly_fc.ua
+        call bly_fx.unpack
+        ld a,(bly_fc.ua+1)
+        or a
+        jp z,bly_fc.zero            ; sqrt(0) is 0
+        ld a,(bly_fc.ua)
+        or a
+        jp nz,.no                   ; a negative has no root
+        ld (bly_fc.sg),a
+        ld a,(bly_fc.ua+1)          ; the exponent: ((e - 127) >> 1) + 128, in 16 bits
+        ld l,a
+        ld h,0
+        ld de,-127
+        add hl,de
+        sra h
+        rr l
+        ld de,128
+        add hl,de
+        ld (bly_fc.ex),hl
+        ld hl,.rad                  ; .rad = M << 40 (or << 39 for an odd p): its top pair is the radicand's
+        xor a
+        ld b,9+5+5
+.z:     ld (hl),a                   ; (.rad, .rem and .q cleared together)
+        inc hl
+        djnz .z
+        ld hl,bly_fc.ua+2           ; M, big-endian, into .rad+8 down to .rad+5
+        ld de,.rad+8
+        ld b,4
+.ld:    ld a,(hl)
+        ld (de),a
+        inc hl
+        dec de
+        djnz .ld
+        ld a,(bly_fc.ua+1)          ; e odd is p odd (p = e - 128): one place lower
+        rra
+        jr nc,.even
+        ld hl,.rad+8
+        srl (hl)
+        dec hl
+        rr (hl)
+        dec hl
+        rr (hl)
+        dec hl
+        rr (hl)
+        dec hl
+        rr (hl)
+.even:  ld a,33                     ; 33 pairs, the root's 33 bits
+        ld (.n),a
+.step:  call .pair                  ; .rem = .rem << 2 | the next pair
+        call .pair
+        ld hl,.q                    ; .t = .q << 2 | 1
+        ld de,.t
+        ld bc,5
+        ldir
+        ld hl,.t
+        sla (hl)
+        call .rl4
+        ld hl,.t
+        sla (hl)
+        call .rl4
+        ld hl,.t
+        set 0,(hl)
+        ld hl,.t+4                  ; .rem >= .t? (high byte first)
+        ld de,.rem+4
+        ld b,5
+.cp:    ld a,(de)
+        cp (hl)
+        jr nz,.cpd
+        dec hl
+        dec de
+        djnz .cp
+.cpd:   jr c,.q0
+        ld hl,.t                    ; .rem -= .t, and a 1 into the root
+        ld de,.rem
+        ld b,5
+        or a
+.sb:    ld a,(de)
+        sbc a,(hl)
+        ld (de),a
+        inc hl
+        inc de
+        djnz .sb
+        scf
+        jr .qs
+.q0:    or a
+.qs:    ld hl,.q                    ; .q = .q << 1 | the bit
+        rl (hl)
+        call .rl4
+        ld hl,.n
+        dec (hl)
+        jr nz,.step
+        ld hl,.q+4                  ; 33 bits: the mantissa is .q >> 1, its last bit decides
+        srl (hl)
+        dec hl
+        rr (hl)
+        dec hl
+        rr (hl)
+        dec hl
+        rr (hl)
+        dec hl
+        rr (hl)
+        ld a,0
+        rra
+        ld (bly_fc.w+3),a
+        ld hl,.q
+        ld de,bly_fc.w+4
+        ld bc,4
+        ldir
+        jp bly_fc.pack
+.pair:  ld hl,.rad                  ; the radicand's top bit into .rem
+        sla (hl)
+        ld b,8
+.p1:    inc hl
+        rl (hl)
+        djnz .p1
+        ld hl,.rem
+        rl (hl)
+.rl4:   inc hl                      ; carry on through the next four bytes
+        rl (hl)
+        inc hl
+        rl (hl)
+        inc hl
+        rl (hl)
+        inc hl
+        rl (hl)
+        ret
+.no:    ld hl,.msqrt                ; sqrt({x}) has no answer
+        call bly_pr_cstr
+        ld hl,(.x)
+        call bly_pr_f
+        ld hl,.mno
+        jp bly_fail
+.x:     dw 0
+.n:     db 0
+.rad:   ds 9                        ; .rad, .rem and .q are cleared together: keep them in this order
+.rem:   ds 5
+.q:     ds 5
+.t:     ds 5
+.msqrt: db "sqrt(",0
+.mno:   db ") has no answer",0
 
 ; -- the shared part ------------------------------------------------------------------------------------------------
 bly_fc:

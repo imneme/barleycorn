@@ -42,7 +42,7 @@ if ARGS.lib:
 N = 300 if ARGS.quick else 2000
 rnd = random.Random(ARGS.seed)
 A, B, R = 0xE000, 0xE008, 0xE010
-run = Runner(['bly_fadd', 'bly_fsub', 'bly_fmul', 'bly_fdiv', 'bly_pr_f'])
+run = Runner(['bly_fadd', 'bly_fsub', 'bly_fmul', 'bly_fdiv', 'bly_fsqrt', 'bly_pr_f'])
 wrong = checks = 0
 costs = {}
 
@@ -132,7 +132,8 @@ MUTANTS = [   # (the text, what it becomes, what that breaks)
      '* with the bias off by one'),
     ('        inc (ix+4)\n        ret nz\n        inc (ix+5)', '        inc (ix+4)\n        ret nz\n        nop\n        nop\n        nop',
      "*'s partial product carries one byte"),
-    ('        ld a,0\n        rra', '        ld a,0\n        and a', "/ forgets the quotient's last bit"),
+    ('        ld a,0\n        rra\n        ld (bly_fc.w+3),a\n        ld hl,bly_fc.q',
+     '        ld a,0\n        and a\n        ld (bly_fc.w+3),a\n        ld hl,bly_fc.q', "/ forgets the quotient's last bit"),
     ('        ld b,32\n        ld hl,(bly_fc.ex)', '        ld b,33\n        ld hl,(bly_fc.ex)', '/ takes one bit too many'),
     ('.movf:  db "float overflow",0', '.movf:  db "float overflov",0', 'the message misspelt'),
     ('        jr z,.zero                  ; under', '        jr z,.range                 ; under', 'underflow as overflow'),
@@ -144,6 +145,11 @@ MUTANTS = [   # (the text, what it becomes, what that breaks)
     ('        ld hl,.t9+3\n        call .cmp4\n        jr nc,.kup', '        ld hl,.t9+3\n        call .cmp4\n        nop\n        nop',
      "print: k's guess never moves up"),
     ("        ld b,'0'-1", "        ld b,'0'", "print: the exponent's tens one high"),
+    ('        ld a,0\n        rra\n        ld (bly_fc.w+3),a\n        ld hl,.q\n',
+     '        ld a,0\n        and a\n        ld (bly_fc.w+3),a\n        ld hl,.q\n', "sqrt: the root's last bit forgotten"),
+    ('        rra\n        jr nc,.even', '        rra\n        jr .even', 'sqrt: an odd exponent not shifted'),
+    ('        ld de,-127\n        add hl,de\n        sra h', '        ld de,-126\n        add hl,de\n        sra h',
+     "sqrt: the exponent's half miscounted"),
     ('; The one trick:', '; The trick:', 'CONTROL: a comment'),
 ]
 
@@ -180,6 +186,7 @@ def mutants():
 
 
 def main():
+    global checks
     if ARGS.mutants:
         sys.exit(1 if mutants() else 0)
     ops = ['bly_fadd', 'bly_fsub', 'bly_fmul', 'bly_fdiv']
@@ -200,6 +207,24 @@ def main():
     for _ in range(N // 2):
         for op in ('bly_fmul', 'bly_fdiv'):
             case(op, *edge_pair(op))
+    print('sqrt against fp5, bit for bit')
+    roots = [rand_float() for _ in range(N)] + [fp5.pack(F(n * n)) for n in (1, 2, 3, 255, 256, 65535, 65536, 3037000499)]
+    roots += [fp5.pack(F(n * n, 4 ** k)) for n, k in ((3, 1), (5, 7), (12345, 20))]
+    for x in roots:
+        checks += 1
+        v = fp5.value(x)
+        res = run.call('bly_fsqrt', regs={'hl': A, 'bc': R}, mem={A: x, R: b'\xAA' * 8})
+        got = bytes(res.mem[R:R + 8])
+        if v < 0:
+            want = f'sqrt({fp5.show(x)}) has no answer\n'.encode()
+            if not (res.failed and res.out == want):
+                say_wrong('sqrt', x.hex(), 'should fail', want, 'got', res.out, got.hex())
+            continue
+        if res.t is not None:
+            costs.setdefault('bly_fsqrt', []).append(res.t)
+        want = fp5.sqrt(x)
+        if res.failed or got[:5] != want or got[5:] != b'\xAA' * 3:
+            say_wrong('sqrt', x.hex(), 'gave', got.hex(), repr(res.out), 'want', want.hex(), float(v))
     print('printing against fp5.show, text for text')
     import z80gen as G
     shown = [0.5, 0.01, 1e-5, 1.2345678e-5, 1e-6, 99999999.0, 1e8, 123456789.0, 999999999.0, 12345.678, 1234.5,
@@ -208,7 +233,6 @@ def main():
     cases = [G.rom5(x) for x in shown] + [bytes([0, 0, 1, 0, 0]), bytes([0, 0xFF, 0xFF, 0xFF, 0])]
     cases += [rand_float() for _ in range(N)]
     for b in cases:
-        global checks
         checks += 1
         want = fp5.show(b).encode()
         res = run.call('bly_pr_f', regs={'hl': A}, mem={A: b})
@@ -216,7 +240,7 @@ def main():
             costs.setdefault('bly_pr_f', []).append(res.t)
         if res.failed or res.out != want:
             say_wrong('print', b.hex(), 'gave', res.out, 'want', want)
-    for op in ops + ['bly_pr_f']:
+    for op in ops + ['bly_fsqrt', 'bly_pr_f']:
         t = costs[op]
         print(f'  {op:9} {len(t)} cases, {min(t):,} to {max(t):,} T, mean {sum(t) // len(t):,}')
     print(f'{checks} checks, {wrong} wrong')
