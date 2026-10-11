@@ -58,12 +58,13 @@ rig_bc: dw 0
 rig_a:  db 0
 rig_ra: db 0
 rig_rhl: dw 0
-rig_restart: dw rig_ready       ; bly_exit's return to BASIC lands here: see bly_basic_sp
 rig_x:  ds 16
 rig_y:  ds 16
 rig_r:  ds 32
         ds 512
-rig_top:
+rig_top:                        ; the calls' stack grows down from here, under
+rig_restart: dw rig_ready       ; bly_exit's return to BASIC (see bly_basic_sp): above a stack of its own, as
+                                ; bly_exit turns interrupts on, and the ROM's handler pushes below it
 """
 
 

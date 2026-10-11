@@ -1750,6 +1750,14 @@ end
 --- expect
 frame can't use random(): its numbers would depend on where the frames fell at line 3
 
+=== a print takes the rest of its line: an assignment after its items says so too (I wrote one myself)
+func main()
+  var gap = ""
+  for i in 0..3 do print gap; i; gap = " "; end
+end
+--- expect
+a print takes the rest of its line, so this = is part of it: put the assignment on a line of its own at line 3
+
 === dword: unsigned 32 bits, which wrap (+ - * / % >> << - ~, min, max, a hash), and its widenings and casts
 func hash(s: str): dword
   var h: dword = 2166136261

@@ -576,6 +576,9 @@ class Parser:
                     newline = False
             else:
                 break
+        if self.t.kind == 'op' and self.t.val in ('=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<=', '>>='):
+            raise BarleyError(f'a print takes the rest of its line, so this {self.t.val} is part of it: put the '
+                              f'assignment on a line of its own', self.t.line)
         if self.t.kind == 'nl':
             self.next()
         return N('print', line, items=items, newline=newline, stream=stream)

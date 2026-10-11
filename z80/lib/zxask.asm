@@ -133,7 +133,10 @@ bly_ask:
         and 1Fh
         jr nz,.tidy
         ld (iy+34),0                ; as INPUT does after the editor (2161h): K_CUR's high byte 0, so no cursor,
-        call 111Dh                  ; ED-COPY: the line on the lower screen as typed
+                                    ; but not its ED-COPY, which draws the line again without the cursor for
+                                    ; INPUT's end to clear at once: 3,700 T and 1,930 a letter of nothing seen
+                                    ; (the numbers me found it; 91 programs, lines of 0 to 100 letters at every
+                                    ; upper print position, leave the same screens either way)
         ld bc,(ZXA_ECHO_E)
         call 0DD9h                  ; CL-SET
         ld hl,ZXA_FLAGX

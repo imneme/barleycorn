@@ -1036,9 +1036,16 @@ lives in `zxask.asm` with `ask()`: 274 bytes for both.
 `zx_input_line.asm`, which Melissa worked out from the HiSoft BASIC
 compiler. So: stream 1 (channel K, the lower screen), CLS-LOWER, the
 prompt, FLAGX bits 5 and 7 (input mode, INPUT LINE), a workspace holding
-just ENTER, then EDITOR (0F2Ch); afterwards ED-COPY, CL-SET, INPUT's own
-ending (20A0h: the upper screen's print position, SCR_CT and CLS-LOWER),
-the workspace given back and stream 2 again. Some things were found on
+just ENTER, then EDITOR (0F2Ch); afterwards CL-SET, INPUT's own ending
+(20A0h: the upper screen's print position, SCR_CT and CLS-LOWER), the
+workspace given back and stream 2 again. INPUT's ED-COPY between the
+editor and CL-SET is left out (since 10 October): it draws the line
+again without its cursor, and INPUT's ending clears it at once. The
+numbers me measured it in the Pasta/80 bake-off, 3,700 T and 1,930 a
+letter, 69% of a 25-letter `ask()` with the two clears; 91 programs
+(lines of 0 to 100 letters, the upper print position on every row from 0
+to 21) leave the same screens, output and report with it and without,
+and a 25-letter `ask()` is 53,234 T quicker. Some things were found on
 the way:
 - **There's no BREAK in the editor.** CAPS SHIFT with SPACE just types a
   space; omse-ai showed it. INPUT LINE is left by cursor down: ED-DOWN
@@ -1541,3 +1548,28 @@ wrong place; a negative int let through; the message misspelt: **13 of
 takes it, and `mod`, `high`, `low`, `abs`, `z`, `c` and a dozen others,
 as its own words even as labels. Asking sjasmplus each word in turn gave
 the list, which `z80gen.py` keeps as `ASM_WORDS`.
+
+## Printing a byte: the path before RST 10
+
+*Files: `core.asm` (`bly_pr_str`, `bly_out`), `plat_zx.asm`
+(`bly_putc`), and `z80gen.py`'s `item`.*
+
+The numbers me counted it in the Pasta/80 bake-off ("why we lose,
+routine by routine"): a byte of a str cost 291 T before the ROM's RST
+10, against Pasta/80's 106, and `print chr(b);` about 600 T, since it
+made a one-byte str first. Since 10 October:
+- `bly_out` keeps A without saving it (`ld` and `inc` don't touch A),
+  and jumps to `bly_putc` straight from either arm: 33 T less.
+- `bly_putc` tests for the printable bytes first, as nearly every byte
+  is, and the newline only among the control codes: 24 T less. Its first
+  instruction is still the three bytes `zxlower.asm` and `zxfzx.asm`
+  patch with a JP.
+- `bly_pr_str` tests its count at the bottom of the loop.
+- A print item that's `chr(b)` sends b to `bly_out` itself.
+
+So about 218 T a byte of a str, and a `chr(b)` item about 300 T less
+than it was: a program printing 2,040 bytes of strs and 400 `chr`s was
+272,709 T quicker on the 48K. What's left is the column (`bly_col`,
+which the zones and a failure's recolouring need), `SCR_CT` every byte
+(a long enough str wraps more than 255 rows, and "scroll?" must never
+ask), and saving HL and BC around RST 10, which keeps nothing.

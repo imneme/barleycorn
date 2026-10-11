@@ -20,19 +20,16 @@ bly_col:    dw 0                    ; print's column: 0 after a newline
 bly_atop:   dw 0                    ; the arena's next free byte
 bly_alimit: dw 0                    ; the arena ends here
 
-bly_out:
-        push af
+bly_out:                            ; (A stays itself: ld and inc don't touch it)
         cp 10
         jr z,.newline
         ld hl,(bly_col)
         inc hl
         ld (bly_col),hl
-        jr .put
+        jp bly_putc
 .newline:
         ld hl,0
         ld (bly_col),hl
-.put:
-        pop af
         jp bly_putc
 
 bly_pr_cstr:
@@ -54,11 +51,10 @@ bly_pr_str:                         ; HL = &str: p at +0, n at +2
         inc hl
         ld b,(hl)
         ex de,hl                    ; HL = p, BC = n
-.loop:
         ld a,b
         or c
         ret z
-        ld a,(hl)
+.loop:  ld a,(hl)
         push hl
         push bc
         call bly_out
@@ -66,7 +62,10 @@ bly_pr_str:                         ; HL = &str: p at +0, n at +2
         pop hl
         inc hl
         dec bc
-        jr .loop
+        ld a,b
+        or c
+        jr nz,.loop
+        ret
 
 bly_nl:
         ld a,10

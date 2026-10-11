@@ -794,10 +794,10 @@ class Gen:
                     self.load_hl(y)
                     self.call('bly_zx_fzx_at')
                 else:
-                    v = self.ex(e)
+                    show = self.item(e)
                     self.line(s.line)
                     self.call('bly_zx_fzx_on')
-                    self.pr(v, e.ty)
+                    show()
                     self.call('bly_zx_fzx_off')
             if s.newline:
                 self.line(s.line)
@@ -824,8 +824,7 @@ class Gen:
                     self.load_hl(r)
                     self.call('bly_zx_lat')
                 else:
-                    v = self.ex(e)
-                    piece(lambda: self.pr(v, e.ty))
+                    piece(self.item(e))
             if s.newline:
                 piece(lambda: self.call('bly_nl'))
         elif k == 'print':
@@ -848,9 +847,9 @@ class Gen:
                     self.call('bly_zx_at')
                     placed = True
                 else:
-                    v = self.ex(e)                           # worked out first: a failure here isn't at-text
+                    show = self.item(e)                      # worked out first: a failure here isn't at-text
                     on()
-                    self.pr(v, e.ty)
+                    show()
                     off()
             if s.newline:
                 on()
@@ -884,6 +883,15 @@ class Gen:
             self.place(nxt)
         self.block(else_)
         self.place(end)
+
+    def item(self, e):
+        """a print item worked out, and what prints it: chr(b) as the byte itself, straight to bly_out, not a
+        str of one byte first (the numbers me measured print chr(b); at about 600 T, twice a letter's)"""
+        if e.k == 'call' and getattr(e, 'builtin', None) == 'chr' and getattr(e, 'func', None) is None:
+            b = self.conv(self.ex(e.args[0]), B.BYTE)
+            return lambda: (self.load_a(b), self.call('bly_out'))
+        v = self.ex(e)
+        return lambda: self.pr(v, e.ty)
 
     def pr(self, op, t):
         if t is B.FLEX:

@@ -67,20 +67,22 @@ bly_start:
         jp bly_fail
 .big:   db "the input doesn't fit in memory",0
 
-bly_putc:
+bly_putc:                           ; (its first three bytes are zxlower's and zxfzx's to patch with a JP)
         ld hl,SCRCT                 ; before every byte: wrapping scrolls too, and "scroll?" must never ask
         ld (hl),255
-        cp 10
-        jr nz,.notnl
+        cp 32                       ; the printable first, as nearly every byte is
+        jr c,.ctl
+        cp 0A5h
+        jr nc,.q
+        rst 10h
+        ret
+.ctl:   cp 10
+        jr nz,.q
         ld a,13
         rst 10h
         ret
-.notnl: cp 32
-        jr c,.q
-        cp 0A5h
-        jr c,.out
 .q:     ld a,'?'
-.out:   rst 10h
+        rst 10h
         ret
 
 bly_failed:
