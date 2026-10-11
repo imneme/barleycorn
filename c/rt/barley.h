@@ -211,14 +211,22 @@ BLY_UOPS(u8, u8, u32)
 BLY_UOPS(u16, u16, u32)
 BLY_UOPS(u32, u32, u64)
 
-/* signed: computed wider, and trapped if it doesn't fit; C's / and % truncate, as Barley's do */
+/* signed: computed wider, and trapped if it doesn't fit; C's / and % truncate, as Barley's do. Built with BLY_WRAP
+   (bly c --wrap), what doesn't fit wraps round instead, as two's complement does: by arithmetic, so C defines it */
+#ifdef BLY_WRAP
+#define BLY_FIT(N, T, W, LO, HI, TN) static inline T bly_fit_##N(W r, int l) { (void)l; return bly_wrap_##N((u64)r); }
+#else
+#define BLY_FIT(N, T, W, LO, HI, TN)                                                                              \
+    static inline T bly_fit_##N(W r, int l) { if (r < (LO) || r > (HI)) bly_overflow(TN, r, l); return (T)r; }
+#endif
 #define BLY_SOPS(N, T, W, LO, HI, TN)                                                                             \
-    static inline T add_##N(T a, T b, int l) { W r = (W)a + (W)b; if (r < (LO) || r > (HI)) bly_overflow(TN, r, l); return (T)r; } \
-    static inline T sub_##N(T a, T b, int l) { W r = (W)a - (W)b; if (r < (LO) || r > (HI)) bly_overflow(TN, r, l); return (T)r; } \
-    static inline T mul_##N(T a, T b, int l) { W r = (W)a * (W)b; if (r < (LO) || r > (HI)) bly_overflow(TN, r, l); return (T)r; } \
-    static inline T div_##N(T a, T b, int l) { if (!b) bly_divzero(l); W r = (W)a / (W)b; if (r < (LO) || r > (HI)) bly_overflow(TN, r, l); return (T)r; } \
+    BLY_FIT(N, T, W, LO, HI, TN)                                                                                  \
+    static inline T add_##N(T a, T b, int l) { return bly_fit_##N((W)a + (W)b, l); }                                 \
+    static inline T sub_##N(T a, T b, int l) { return bly_fit_##N((W)a - (W)b, l); }                                 \
+    static inline T mul_##N(T a, T b, int l) { return bly_fit_##N((W)a * (W)b, l); }                                 \
+    static inline T div_##N(T a, T b, int l) { if (!b) bly_divzero(l); return bly_fit_##N((W)a / (W)b, l); }         \
     static inline T rem_##N(T a, T b, int l) { if (!b) bly_divzero(l); return (T)((W)a % (W)b); }             \
-    static inline T neg_##N(T a, int l) { W r = -(W)a; if (r < (LO) || r > (HI)) bly_overflow(TN, r, l); return (T)r; }
+    static inline T neg_##N(T a, int l) { return bly_fit_##N(-(W)a, l); }
 BLY_SOPS(i16, i16, i32, INT16_MIN, INT16_MAX, "int")
 BLY_SOPS(i32, i32, i64, INT32_MIN, INT32_MAX, "long")
 BLY_SOPS(i64, i64, i128, INT64_MIN, INT64_MAX, "quad")

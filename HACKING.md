@@ -35,7 +35,7 @@ c/
   cgen.py      checked program -> plain C
   rt/          barley.h, and one template per container kind
   tests/       test_screen.py: the C screen against the reference, pixel
-               for pixel
+               for pixel; test_wrap.py: bly c's --wrap and -o
 z80/
   z80gen.py    checked program -> Z80 assembly
   peephole.py  the register cache and dead stores

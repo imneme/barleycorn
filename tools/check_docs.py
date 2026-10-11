@@ -52,7 +52,7 @@ def quotations():
 # every command a person types, with enough arguments that an extra option is the only thing wrong
 # (argparse checks them all before a file is opened); the second group needs omse-ai's Python
 COMMANDS = {'bly': ['run', 'x.bly'], 'check': [], 'interp/barley.py': ['x.bly'], 'interp/tests/run.py': [],
-            'c/cgen.py': ['x.bly'], 'c/tests/test_screen.py': [], 'z80/z80gen.py': ['x.bly'],
+            'c/cgen.py': ['x.bly'], 'c/tests/test_screen.py': [], 'c/tests/test_wrap.py': [], 'z80/z80gen.py': ['x.bly'],
             'z80/zxbuild.py': ['x.bly'], 'z80/fuzz.py': [], 'examples/make_sudoku.py': [],
             'examples/make_monkey.py': [], 'examples/make_towels.py': [],
             'examples/make_crt.py': [], 'examples/make_sand.py': [],

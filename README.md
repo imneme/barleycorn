@@ -99,7 +99,8 @@ In short:
 
 Every index, capacity and signed overflow is checked on every backend,
 and a failure says what happened and on which line, the same words
-everywhere.
+everywhere. (For speed, `./bly c --wrap` lets signed overflow wrap round
+instead, in a program already tested without it.)
 
 ## What you need
 
@@ -129,6 +130,7 @@ screen, sound or memory need the ROM, even in the interpreter.
 ```
 ./bly run PROG.bly [INPUT]    # the interpreter (--screen x.png: its screen)
 ./bly c   PROG.bly [INPUT]    # compile to C and run it
+./bly c -o prog PROG.bly      # keep the executable instead, to run: ./prog [INPUT]
 ./bly cpm PROG.bly [INPUT]    # compile for CP/M and run it under tnylpo
 ./bly tap PROG.bly [INPUT] -o x.tap   # a tape: BASIC loader, input, program
 ./bly zx  PROG.bly [INPUT]    # that tape on omse-ai's 48K, and what it prints

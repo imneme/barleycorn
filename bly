@@ -58,16 +58,18 @@ def typed(keys):
     return {} if keys is None else {'input': keys.encode('latin-1')}
 
 
-def run_c(prog, inp, work, capture=False, keys=None):
+def run_c(prog, inp, work, capture=False, keys=None, out=None, wrap=False):
+    """out: build the executable there, to keep, and don't run it. wrap: integer overflow wraps (BLY_WRAP)"""
     stem = os.path.splitext(os.path.basename(prog))[0]
-    c, exe = os.path.join(work, stem + '.c'), os.path.join(work, stem)
+    c, exe = os.path.join(work, stem + '.c'), out or os.path.join(work, stem)
     g = subprocess.run([sys.executable, os.path.join(ROOT, 'c', 'cgen.py'), prog], capture_output=True, text=True)
     if g.returncode:
         return g.returncode, (g.stdout + g.stderr)
     open(c, 'w').write(g.stdout)
     cc = paths.need(paths.CC, 'a C compiler', 'set CC (paths.py)')
-    b = subprocess.run([cc, '-std=c11', '-O2', '-I', os.path.join(ROOT, 'c', 'rt'), c, '-lm', '-o', exe])
-    if b.returncode:
+    b = subprocess.run([cc, '-std=c11', '-O3'] + (['-DBLY_WRAP'] if wrap else []) +
+                       ['-I', os.path.join(ROOT, 'c', 'rt'), c, '-lm', '-o', exe])
+    if b.returncode or out:
         return b.returncode, ''
     r = subprocess.run([exe] + inp, capture_output=capture, **typed(keys))
     return r.returncode, (r.stdout.decode('latin-1') if capture else '')
@@ -178,6 +180,7 @@ EXAMPLES = """examples:
   ./bly run examples/maze.bly                    in the interpreter
   ./bly all interp/tests/aoc2022d01.bly interp/tests/aoc2022d01.in
   ./bly tap examples/life.bly -o life.tap        a tape for a real Spectrum
+  ./bly c -o life examples/life.bly              an executable to keep: ./life
   ./bly COMMAND -h                               more about one command
 """
 
@@ -199,7 +202,15 @@ def parser():
     p.add_argument('--screen', metavar='OUT.png',
                    help="save the Spectrum's screen at the end as a picture (and OUT.scr beside it)")
     p.add_argument('--sound', metavar='OUT.txt', help='save a log of the notes it played')
-    command('c', 'compile it to C, build that with the C compiler, and run it')
+    p = command('c', 'compile it to C, build that with the C compiler, and run it',
+                "Compile it to C, build that with the C compiler (-O3, no sanitizers: the tests build theirs with "
+                "them), and run it. With -o, keep the executable and don't run it, so it can be run, and timed, on "
+                "its own: OUT [INPUT].")
+    p.add_argument('-o', dest='out', metavar='OUT', help="keep the executable here, and don't run it")
+    p.add_argument('--wrap', action='store_true',
+                   help="integer overflow wraps round instead of stopping the program: a quarter to a third less time where "
+                   "the arithmetic is the work, for a program already tested without it (indexes and division by "
+                   "zero are still checked)")
     command('cpm', 'compile it for CP/M, assemble it, and run it under tnylpo')
     p = command('tap', 'make a tape for a 48K Spectrum (a real one, or any emulator)')
     p.add_argument('-o', dest='out', metavar='OUT.tap', help='where to put it (default build/bly/PROGRAM.tap)')
@@ -234,7 +245,11 @@ def main(argv):
     work = tempfile.mkdtemp(prefix=stem + '-', dir=paths.build_dir('bly'))    # this run's own folder
     try:
         if a.cmd == 'c':
-            code, msg = run_c(prog, inp, work)
+            if a.out and inp:
+                sys.exit('bly c -o: the input goes to the executable when it runs (OUT INPUT), not to the build')
+            code, msg = run_c(prog, inp, work, out=a.out, wrap=a.wrap)
+            if a.out and not code:
+                print(a.out)
             sys.exit(msg.rstrip() if code and msg else code)
         if a.cmd == 'cpm':
             code, msg = run_cpm(prog, inp, work)

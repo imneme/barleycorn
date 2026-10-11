@@ -35,8 +35,8 @@ FRAG = ['test_core', 'test_gen', 'test_int', 'test_num', 'test_text', 'test_cont
 def stages(quick):
     return [
         ('interp', 'the suite in the interpreter (the spec)', lambda: None, [[PY, SUITE]]),
-        ('c', 'the suite as C, with the sanitizers', lambda: None if have(paths.CC) else f'needs a C compiler ({paths.CC})',
-         [[PY, SUITE, '--c']]),
+        ('c', 'the suite as C, with the sanitizers; bly c --wrap and -o', lambda: None if have(paths.CC) else
+         f'needs a C compiler ({paths.CC})', [[PY, SUITE, '--c'], [PY, os.path.join(ROOT, 'c', 'tests', 'test_wrap.py')]]),
         ('cpm', 'the suite as CP/M programs under tnylpo',
          lambda: None if have(paths.SJASMPLUS) and have(paths.TNYLPO) else 'needs sjasmplus and tnylpo',
          [[PY, SUITE, '--z80']]),
