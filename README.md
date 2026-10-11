@@ -12,9 +12,11 @@ across the screen as it runs, a note from the beeper when it gets there.
 | [Life](examples/life.bly) | [all 92 queens](examples/queens92.bly) | [sudoku, by backtracking](examples/sudoku.bly) |
 | <img src="docs/ant.png" width="256" alt="Langton's ant's scribble, and its highway"> | <img src="docs/collatz.png" width="256" alt="Collatz steps for every number below 10,240, with the record holder circled"> | <img src="docs/towers.png" width="256" alt="Seven discs on the right-hand peg, all seven lights on"> |
 | [Langton's ant](examples/ant.bly) | [Collatz, played as a tune](examples/collatz.bly) | [the Towers of Hanoi](examples/towers.bly) |
+| <img src="docs/fern.png" width="256" alt="A green Barnsley fern on black, drawn point by point"> | <img src="docs/monkey-d22.png" width="256" alt="Two isometric cubes dotted with walls, a cat drawn in walls on top of the left one"> | <img src="docs/towels-d19.png" width="256" alt="A design in coloured stripes between magenta rules, its ways, and the total"> |
+| [a Barnsley fern, with no float](examples/fern.bly) | [Melissa's Monkey Map, on a cube](examples/monkey_d22.bly) | [Melissa's Linen Layout, past 2^32](examples/towels_d19.bly) |
 
 Each is the last screen of one of the examples, which draw it as they
-work and beep as they go; a 48K Spectrum ends on exactly the same
+work, and most beep as they go; a 48K Spectrum ends on exactly the same
 picture, byte for byte. The examples, and how to run them, are in
 [examples/](examples/README.md).
 
