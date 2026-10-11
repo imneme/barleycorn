@@ -1,5 +1,5 @@
 """fp_cpm.asm against its model, fp5.py: floats where there's no ROM (CP/M),
-on the bare Z80.
+on the bare Z80, with fp_sqrt.asm and fp_pack.asm, which the 48K shares.
 
 + - * / come out correctly rounded (nearest, ties away from zero, as
 z80gen.rom5 rounds a literal), so they're held to fp5's exact Fractions
@@ -11,8 +11,8 @@ all-ones mantissas, ties, the short form, zero); answers whose exponent
 lands at its edges; divisions aimed at /'s rare path (a remainder's high
 word equal to the divisor's); roots aimed at each of sqrt's eleven paths;
 and the failures word for word (float overflow, division by zero).
---mutants breaks fp_cpm.asm on purpose (a copy of the library) and checks
-these tests notice. Run it with omse-ai's Python ($OMSE_AI_PYTHON).
+--mutants breaks the library on purpose (a copy of it) and checks these
+tests notice. Run it with omse-ai's Python ($OMSE_AI_PYTHON).
 """
 import argparse
 import math
@@ -171,6 +171,7 @@ def case(op, a, b):
                   float(fp5.value(a)), float(fp5.value(b)))
 
 
+UNDER_TEST = ('fp_cpm.asm', 'fp_sqrt.asm', 'fp_pack.asm')     # the files these tests hold (not the 48K's fp.asm)
 MUTANTS = [   # (the text, what it becomes, what that breaks)
     ('        jr nc,.rd\n        inc l', '        jr .rd\n        inc l', 'never rounds up'),
     ('.packc: ld a,(.w+3)', '.packc: ld a,(.w+2)', 'rounds on the wrong bit'),
@@ -256,12 +257,13 @@ def mutants():
             for name in os.listdir(lib):
                 if name.endswith('.asm'):
                     shutil.copy(os.path.join(lib, name), d)
-            f = os.path.join(d, 'fp_cpm.asm')
-            text = open(f).read()
-            if text.count(old) != 1:
-                print(f'MISS {why}: its text is found {text.count(old)} times')
+            found = [n for n in UNDER_TEST for _ in range(open(os.path.join(d, n)).read().count(old))]
+            if len(found) != 1:                 # the text names its file: once in the files under test, exactly
+                print(f'MISS {why}: its text is found {len(found)} times')
                 missed += 1
                 continue
+            f = os.path.join(d, found[0])
+            text = open(f).read()               # read first: open(f, 'w') would empty it before the read
             open(f, 'w').write(text.replace(old, new_))
             p = subprocess.run([sys.executable, __file__, '--quick', '--lib', d], capture_output=True, text=True)
             if 'sjasmplus' in p.stderr:

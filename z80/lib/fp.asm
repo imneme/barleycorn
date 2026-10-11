@@ -1,4 +1,4 @@
-;; provides: bly_fp bly_fadd bly_fsub bly_fmul bly_fdiv bly_fpow bly_fsqrt bly_fsin bly_fcos bly_ftan bly_fasin bly_facos bly_fatan bly_fln bly_fexp bly_pr_f
+;; provides: bly_fp bly_fadd bly_fsub bly_fmul bly_fdiv bly_fpow bly_fsin bly_fcos bly_ftan bly_fasin bly_facos bly_fatan bly_fln bly_fexp bly_pr_f
 ;; needs: bly_out bly_pr_cstr bly_fail bly_div0 bly_fx bly_fabs bly_fneg
 ;; targets: zx48
 ;; Floats on the 48K Spectrum: the ROM's own 5-byte form, worked by the ROM's calculator (RST 28h). ABI.md section 11.
@@ -10,7 +10,7 @@
 ;; bly_fadd bly_fsub bly_fmul bly_fdiv bly_fpow   in: HL=&a DE=&b BC=&r   out: (BC) = a + b and so on
 ;;        fails: float overflow; division by zero (/); float ** has no answer (0 ** b with b < 0, or a < 0 with b
 ;;        not a whole number)
-;; bly_fsqrt bly_fsin bly_fcos bly_ftan bly_fasin bly_facos bly_fatan bly_fln bly_fexp   in: HL=&x BC=&r
+;; bly_fsin bly_fcos bly_ftan bly_fasin bly_facos bly_fatan bly_fln bly_fexp   in: HL=&x BC=&r
 ;;        fails: {name}({x}) has no answer   (the ROM's "A Invalid argument" and "6 Number too big")
 ;; bly_pr_f            in: HL=&x   prints x as the ROM's PRINT-FP does, through bly_out (so print's column is kept);
 ;;                     leaves stream 2 (the upper screen) open, as bly_start does
@@ -106,9 +106,6 @@ bly_fpow:
 .odd:   db 0
 
 ; -- the functions: the ROM's -----------------------------------------------------------------------------------------
-bly_fsqrt:
-        ld a,28h
-        jr bly_fp.fun
 bly_fsin:
         ld a,1Fh
         jr bly_fp.fun
@@ -256,7 +253,7 @@ bly_fp:
 .mno:   db " has no answer",0
 .mclose: db ") has no answer",0
 .names: db 0Fh,"+",0, 03h,"-",0, 04h,"*",0, 05h,"/",0, 06h,"**",0
-        db 28h,"sqrt",0, 1Fh,"sin",0, 20h,"cos",0, 21h,"tan",0, 22h,"asin",0, 23h,"acos",0, 24h,"atan",0
+        db 1Fh,"sin",0, 20h,"cos",0, 21h,"tan",0, 22h,"asin",0, 23h,"acos",0, 24h,"atan",0
         db 25h,"ln",0, 26h,"exp",0
 
 ; -- printing: the ROM's PRINT-FP, caught in a buffer and sent on through bly_out ------------------------------------

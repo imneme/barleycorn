@@ -1761,6 +1761,26 @@ multiply is about 90 T a bit, 32 of them, so this is near what shifting
 and adding can do; a quarter-squares table costs more than it saves
 without a spare register for it.
 
+**sqrt on the 48K too (the same day):** Melissa: "We should link against
+our own square root then when compiling on the speccy. It's common
+enough to be used and terrible performance-wise to use the ROM." The
+ROM's SQR is x↑0.5, EXP(LN x / 2): 385,551 T on average for the same 400
+roots ours takes 9,614 for, about 40 times as long. So the root moved to
+`fp_sqrt.asm` (cpm, zx48 and test) and the shared rounding and writing
+to `fp_pack.asm` (`bly_fc`), and `fp.asm` stopped handing sqrt to the
+ROM. The first try made a sqrt program 1,571 bytes bigger on a 48K: its
+one 16-bit square called `bly_i_mul16`, and fragments come whole, so
+int16.asm, intmul32.asm and intmisc.asm (709 bytes) came with it. A
+20-byte square of its own made the difference 880 bytes. The 48K's sqrt
+is now correctly rounded, as CP/M's, bit for bit with fp5; `test_fp.py`
+(with the ROM's tolerances) and the suite on the 48K pass as they were.
+asin and acos on a 48K are still the ROM's. The mutant runner finds each
+mutant's file by its text now, among the three files under test. Its
+first version wrote `open(f, 'w').write(open(f).read()...)`, which
+empties the file before reading it: every mutant ran on an empty
+fp_cpm.asm and looked caught, and only the CONTROL mutant, a changed
+comment, gave it away by failing too. That's what it's for.
+
 ## Random numbers: Melissa's generator (random.asm, rndclock.asm)
 
 *Files: `random.asm`, `rndclock.asm` (the 48K's clock seed),

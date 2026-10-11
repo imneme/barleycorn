@@ -622,7 +622,10 @@ nearest, ties away from zero, as a literal), and `bly_pr_f` laid out as
 PRINT-FP lays a number out, its digits exactly rounded, and
 `bly_str_float` (`s.float()`) reading its first 40 significant digits
 exactly. They're held to a model of exact Fractions (`z80/fp5.py`) bit
-for bit and text for text (`tests/test_fpcpm.py`).
+for bit and text for text (`tests/test_fpcpm.py`). **`sqrt` is
+`lib/fp_sqrt.asm`'s on every machine**, the 48K's too: the ROM's SQR is
+EXP(LN x / 2), about 385,000 T-states to its 9,600. It rounds and writes
+its answer with `lib/fp_pack.asm` (`bly_fc`), which `fp_cpm.asm` shares.
 
 **Constants** are made by the generator (`z80gen.rom5`): the nearest 5
 bytes, rounded half away from zero, the short form when the value is

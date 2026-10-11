@@ -348,11 +348,14 @@ depend on where the frames fell.
 `float` is the machine's own. **On a Spectrum that's the ROM's 5-byte
 floating point**, worked by the ROM's calculator (RST 28h), with its
 precision (a 32-bit mantissa, about nine and a half digits), its speed
-(thousands of T-states an operation) and its functions: SQR, SIN, COS,
-TAN, ASN, ACS, ATN, LN, EXP, `**`. The compiler can emit calculator
-scripts directly: `a * b + c` is push a, push b, *multiply*, push c,
-*addition*, *end-calc*. The calculator needs IY = 5C3Ah and its stack
-between STKBOT and STKEND, which Barley's rules already keep.
+(thousands of T-states an operation) and its functions: SIN, COS, TAN,
+ASN, ACS, ATN, LN, EXP, `**`. Not SQR, which is EXP(LN x / 2), 385,000
+T-states: `sqrt` is our own on every machine, correctly rounded, in
+about 9,600 (Melissa's call, 11 October: "common enough to be used and
+terrible performance-wise" from the ROM). The compiler can emit
+calculator scripts directly: `a * b + c` is push a, push b, *multiply*,
+push c, *addition*, *end-calc*. The calculator needs IY = 5C3Ah and its
+stack between STKBOT and STKEND, which Barley's rules already keep.
 
 Elsewhere it's what's to hand. In C it's a `double`. In the interpreter
 it's Python's float (and one day, when exact agreement matters, the real
@@ -1200,7 +1203,10 @@ run them on inputs made for this repository
 | `long` add | ~100 | two 16-bit adds with the carry between |
 | `long` multiply | ~3,000 | library |
 | `quad` add / multiply | ~300 / ~12,000 | library, in memory |
-| `float` anything | thousands | the ROM's calculator; you get what you get |
+| `float` `+ -` / `*` / `/` | ~2,700-5,800 / ~6,200 / ~9,400 on a 48K; ~1,900 / ~4,800 / ~5,400 on CP/M | the ROM's calculator on a 48K (its + and - vary with the operands); our own, correctly rounded, on CP/M |
+| `sqrt(x)` | ~9,600 | our own on every machine, correctly rounded (the ROM's SQR is ~385,000) |
+| `sin` `cos` `exp` / `ln` `atan` | ~140,000 / ~220,000 on a 48K; ~70,000-105,000 on CP/M | measured: `test_fp.py --costs`, `test_fpcpm.py` |
+| `tan` / `asin` `acos` / `**` | ~290,000 / ~610,000 / ~377,000 on a 48K; ~143,000 / ~120,000 / ~189,000 on CP/M | asin and acos through atan |
 | `xs[i]` on a `list[word]` | ~50 | a shift, an add, two loads (plus ~30 checked) |
 | `xs.push(v)` | ~70 | plus the capacity check |
 | `m[k]`, a `word` key that hits | ~300-500 | hash, probe, compare |
