@@ -9,12 +9,13 @@ the whole exponent range; the edges where rounding and alignment break
 (exponents 0, 1, 31-33 and 63-65 apart, equal magnitudes, powers of two,
 all-ones mantissas, ties, the short form, zero); answers whose exponent
 lands at its edges; divisions aimed at /'s rare path (a remainder's high
-word equal to the divisor's); and the failures word for word (float
-overflow, division by zero). --mutants breaks fp_cpm.asm on purpose (a
-copy of the library) and checks these tests notice. Run it with omse-ai's
-Python ($OMSE_AI_PYTHON).
+word equal to the divisor's); roots aimed at each of sqrt's eleven paths;
+and the failures word for word (float overflow, division by zero).
+--mutants breaks fp_cpm.asm on purpose (a copy of the library) and checks
+these tests notice. Run it with omse-ai's Python ($OMSE_AI_PYTHON).
 """
 import argparse
+import math
 import os
 import random
 import sys
@@ -80,6 +81,38 @@ def edge_pair(op):
     mk = lambda e, mm: bytes([e, (mm >> 24) | (0x80 if rnd.random() < 0.5 else 0), (mm >> 16) & 255, (mm >> 8) & 255,
                               mm & 255])
     return mk(ea, m()), mk(eb, m())
+
+
+def sqrt_path(m, odd):
+    """sqrt's two halves for the mantissa m (top bit set), as fp_cpm.asm takes them: (the integer part of r1 / q1,
+    d0's bits above 2^16, how many corrections)"""
+    mp, k = (2 * m, 16) if odd else (m, 17)
+    q1 = math.isqrt(mp)
+    r1 = mp - q1 * q1
+    d0, rem = divmod(r1 << (k - 1), q1)
+    res, d, fixes = (rem << (k + 1)) - d0 * d0, d0, 0
+    while res < 0:
+        res += (q1 << (k + 1)) + 2 * d - 1
+        d, fixes = d - 1, fixes + 1
+    return r1 // q1, d0 >> 16, fixes
+
+
+def sqrt_paths():
+    """positive floats whose roots take each of sqrt's eleven paths (odd p or not, the integer part, d0's bits above
+    2^16, the corrections): two of each from random mantissas, but the integer part 2 is too rare to find (r1 = 2 q1:
+    M = s^2 - 1, or 2M = s^2 - 1 for an odd p), so it's made, and a perfect square (r1 = 0) besides"""
+    mk = lambda m, odd: bytes([rnd.randrange(3, 254, 2) if odd else rnd.randrange(2, 254, 2), (m >> 24) & 0x7F,
+                               (m >> 16) & 255, (m >> 8) & 255, m & 255])
+    out = [mk(s_ * s_ - 1, False) for s_ in (46341, 50000, 65535)] + [mk(s_ * s_, False) for s_ in (46341, 65535)]
+    out += [mk((s_ * s_ - 1) // 2, True) for s_ in (65537, 80001, 92681)]
+    seen = {}
+    for _ in range(4000):
+        m, odd = rnd.randrange(1 << 31, 1 << 32), rnd.random() < 0.5
+        key = (odd,) + sqrt_path(m, odd)
+        if seen.get(key, 0) < 2:
+            seen[key] = seen.get(key, 0) + 1
+            out.append(mk(m, odd))
+    return out
 
 
 def div_paths():
@@ -172,9 +205,17 @@ MUTANTS = [   # (the text, what it becomes, what that breaks)
     ('        ld hl,.t9+3\n        call .cmp4\n        jr nc,.kup', '        ld hl,.t9+3\n        call .cmp4\n        nop\n        nop',
      "print: k's guess never moves up"),
     ("        ld b,'0'-1", "        ld b,'0'", "print: the exponent's tens one high"),
-    ('        ld a,0\n        rra\n        ld (bly_fc.w+3),a\n        ld hl,.q\n',
-     '        ld a,0\n        and a\n        ld (bly_fc.w+3),a\n        ld hl,.q\n', "sqrt: the root's last bit forgotten"),
-    ('        rra\n        jr nc,.even', '        rra\n        jr .even', 'sqrt: an odd exponent not shifted'),
+    ("        ld a,0\n        rra\n        ld (bly_fc.w+3),a           ; (sqrt's",
+     "        ld a,0\n        and a\n        ld (bly_fc.w+3),a           ; (sqrt's", "sqrt: the root's last bit forgotten"),
+    ('        ld a,1\n        jr nc,.even', '        ld a,1\n        jr .even', 'sqrt: an odd exponent taken as even'),
+    ('        inc e\n        inc e\n        inc e\n        jr .pn', '        inc e\n        inc e\n        nop\n        jr .pn',
+     'sqrt: t becomes 2t + 2, not 2t + 3'),
+    ('        ld (.ip),a\n        jr .ipl', '        ld (.ip),a\n        jr .ipd', "sqrt: r1 // q1 never more than 1"),
+    ('        rla\n        jr nc,.fixed', '        rla\n        jr .fixed', 'sqrt: no corrections'),
+    ('        ld de,.qk\n        call .add5\n        jr .fix', '        ld de,.qk\n        call .add5\n        jr .fixed',
+     'sqrt: one correction at most'),
+    ('        jr nc,.d1\n        ld hl,.d+2', '        jr .d1\n        ld hl,.d+2', "sqrt: an odd p's d0 not halved"),
+    ('        ld a,4\n.a2:', '        ld a,2\n.a2:', "sqrt: d0's a^2 taken as 2a"),
     ('        ld de,-127\n        add hl,de\n        sra h', '        ld de,-126\n        add hl,de\n        sra h',
      "sqrt: the exponent's half miscounted"),
     ('        cp 2\n        call nz,.xdn', '        cp 1\n        call nz,.xdn', "read: a fraction's leading zeros don't count"),
@@ -249,6 +290,7 @@ def main():
         case('bly_fdiv', *div_paths())
     print('sqrt against fp5, bit for bit')
     roots = [rand_float() for _ in range(N)] + [fp5.pack(F(n * n)) for n in (1, 2, 3, 255, 256, 65535, 65536, 3037000499)]
+    roots += sqrt_paths()
     roots += [fp5.pack(F(n * n, 4 ** k)) for n, k in ((3, 1), (5, 7), (12345, 20))]
     for x in roots:
         checks += 1

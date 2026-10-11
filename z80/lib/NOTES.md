@@ -1633,9 +1633,10 @@ for an odd p, and its 33-bit floor is isqrt(M << 34) or isqrt(M << 33),
 which the bit-pair method gives exactly; the last bit rounds it. A
 negative says `sqrt({x}) has no answer`, x printed as the 48K prints it.
 Bit for bit with `fp5.sqrt` (checked itself against an 80-digit Decimal
-root on 20,000 cases), perfect squares exact; 53,268 T mean. Three
-mutants, all caught (and the division's mutant text, now found twice,
-made longer: the runner refuses a mutant it can't place exactly).
+root on 20,000 cases), perfect squares exact; 53,268 T mean (later
+9,478: "A faster sqrt", below). Three mutants, all caught (and the
+division's mutant text, now found twice, made longer: the runner refuses
+a mutant it can't place exactly).
 
 **Reading, `s.float()` without a ROM:** exact decimal to binary needs,
 in principle, every digit (a halfway point between two 5-byte floats can
@@ -1703,6 +1704,27 @@ grows in A behind a marker bit, so there's no counter. **5,449 T mean on
 uniform mantissas** (5,049 to 5,823; 5,191 on the test's mix), under our
 `*` on the same inputs (6,202) and the ROM's `/`; tan, atan, asin, acos
 and ln got 6 to 13% quicker with it. Seven mutants for `/`, all caught.
+
+**A faster sqrt (the same day, later still):** the bit-pair method
+walked a 9-byte radicand, a 5-byte remainder and a 5-byte trial value in
+memory, 1,500 T a bit. Now the root comes in two halves small enough for
+registers. With N = M' x 2^2k (M' = M and k = 17, or 2M and 16 for an
+odd p), q1 and r1, the root and remainder of M' alone, come from the
+bit-pair method with the remainder in C:HL and t = 4q + 1 in B:DE (t
+becomes 2t + 3 or 2t - 1, so q is never rebuilt), the pairs shifted out
+of IX. An odd p's first pair is always 0 and M's top bit, so it starts
+at t = 5 and both take 16 pairs. Then y = q1 2^k + d, and one division
+gives d0 = r1 2^(k-1) // q1, never too small: the exact residue 2^(k+1)
+D0 - d0^2 (D0 the division's remainder) says how far, and each step down
+adds q1 2^(k+1) + 2d - 1 back, twice at most. A Python model held this
+to `math.isqrt` on 600,000 roots before any Z80 was written, and it
+found the eleven paths a root can take, two of which almost never happen
+at random (an integer part of 2 in r1 / q1, when M or 2M is s^2 - 1), so
+the tests make those. **9,478 T mean on uniform mantissas** (8,722 to
+11,542), from about 53,000; asin and acos about a quarter quicker with
+it. Nine mutants for sqrt, all caught. Found on the way: `sbc a,(de)`
+isn't a Z80 instruction (only `(hl)` and the index registers are), and
+sjasmplus read `(de)` as a label.
 
 ## Random numbers: Melissa's generator (random.asm, rndclock.asm)
 
