@@ -223,9 +223,11 @@ spectrum-minilib (`zxask.asm`).
   deletion is caught in 40 programs. Any disagreement is kept in
   `build/fuzz-failures/`.
 - **One program, every backend**: `./bly all PROGRAM [INPUT]` compares
-  the text each prints and the final screens. The tape's loader does a
-  CLS before the program starts, so the 48K's screen starts as clear as
-  the interpreter's.
+  the text each prints and the final screens. CP/M's and the 48K's
+  floats may differ from the interpreter's by 1e-7 of themselves, and in
+  spelling (PRINT-FP's 8 digits), as the suite's `floats_agree` allows.
+  The tape's loader does a CLS before the program starts, so the 48K's
+  screen starts as clear as the interpreter's.
 - **RUN again** (`z80/tests/rerun_check.py`): every example from its
   tape, then again by typing RUN, which starts at the loader's line 10
   without reloading. The two runs must match: report, text and screen.

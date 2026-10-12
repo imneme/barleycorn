@@ -151,12 +151,18 @@ def run_all(prog, inp, work, minutes, keys):
     sys.stdout.buffer.write(outs['interp'].encode('latin-1'))     # the bytes it printed, as they were
     sys.stdout.flush()
     ok = True
+    sys.path.insert(0, os.path.join(ROOT, 'interp', 'tests'))
+    from run import floats_agree                # the suite's: a float may differ by 1e-7 of itself, and in spelling
+    tolerated = False
     for k in ('c', 'cpm', 'zx'):
         want = outs['interp-cpm'] if k == 'cpm' else outs['interp']
         if k == 'cpm' and outs[k] == want and 'Spectrum-only' in outs[k]:     # agreeing, but neither ran to the end
             print(f'  cpm: both stop the same way: {outs[k].strip().splitlines()[-1]}')
         elif outs[k] == want:
             print(f'  {k}: the same text' + (' (as the interpreter prints it --as cpm)' if k == 'cpm' and want != outs['interp'] else ''))
+        elif k in ('cpm', 'zx') and floats_agree(outs[k], want):
+            tolerated = True                    # PRINT-FP's 8 digits against the interpreter's 10
+            print(f"  {k}: the same text, its floats to 1e-7 (printed as the ROM's PRINT-FP prints them, 8 digits)")
         elif k == 'cpm' and 'Spectrum-only' in outs[k]:
             print(f'  cpm: not run (the program uses the Spectrum outside if ZX)')
         else:
@@ -170,7 +176,8 @@ def run_all(prog, inp, work, minutes, keys):
         diff = [i for i in range(6912) if upper(i) and a[i] != b[i]]
         if diff:
             ok = False
-            print(f'  screen: {len(diff)} bytes differ between the interpreter and the 48K, first at {0x4000 + diff[0]:04X}h')
+            print(f'  screen: {len(diff)} bytes differ between the interpreter and the 48K, first at {0x4000 + diff[0]:04X}h'
+                  + (' (floats printed on it have different digits)' if tolerated else ''))
         else:
             print('  screen: the interpreter\'s and the 48K\'s are the same (upper 22 rows)')
     return 0 if ok else 1
