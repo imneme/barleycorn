@@ -235,14 +235,19 @@ IN AND OUT  lines() (for line in lines(), or .next())   grid()   input()
             at most): if c then print x; return end is a print of return
 
 SCREEN      cls  ink(0..9)  paper(0..9)  bright(0, 1, 8)  flash(0, 1, 8)
-            (8: a square keeps its own; 9: the contrast)  inverse over border
+            (8: a square keeps its own; 9: the contrast)  inverse(b)
+            over(b): with it on, drawing a thing again rubs it out (the
+            way to erase: ink 0 would paint black)    border(0..7)
             plot(x, y)  line(x0, y0, x1, y1)  circle(x, y, r)  point(x, y)
+            (each paints the 8x8 squares it touches in the current ink,
+            paper, bright and flash; 8 keeps a square's own)
             attr(r, c[, a])  udg(n, bytes)  pause(frames)  ticks()
             key(): a key pressed since it last looked (Pascal's
             KeyPressed and ReadKey)  inkey(): the key held now (INKEY$).
             Held, or tapped since the last look (Melissa's snake):
             var c = inkey()  then  if c == 0 then c = key() end
             print at r, c; ...           a place on the screen (not output)
+            print wraps at the 32nd column, mid-word: break lines yourself
             print #1; at 0, c; ...  (or #0)  the lower screen's two lines
             (a status line wants its at: two plain ones need three lines)
             fzx(F)  print #4; at y, x; ...   text in an FZX font, in
