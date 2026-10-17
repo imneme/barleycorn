@@ -1,5 +1,5 @@
 ;; provides: bly_fp bly_fadd bly_fsub bly_fmul bly_fdiv bly_fpow bly_fsin bly_fcos bly_ftan bly_fasin bly_facos bly_fatan bly_fln bly_fexp bly_pr_f
-;; needs: bly_out bly_pr_cstr bly_fail bly_div0 bly_fx bly_fabs bly_fneg
+;; needs: bly_out bly_pr_cstr bly_fail bly_div0 bly_fx bly_fabs bly_fneg bly_zx_chan_k
 ;; targets: zx48
 ;; Floats on the 48K Spectrum: the ROM's own 5-byte form, worked by the ROM's calculator (RST 28h). ABI.md section 11.
 ;; This file is what the ROM does: arithmetic, the functions, printing. What's exact in Z80 (compare, negate, abs,
@@ -274,8 +274,13 @@ bly_pr_f:
         ld (fp_CURCHL),hl           ; and its characters come to .take, not the printer
         call fp_PRINT_FP
         ld a,(.back)
-        call fp_CHAN_OPEN           ; that stream again
-        ld hl,(.stk)
+        dec a
+        jr nz,.up
+        call bly_zx_chan_k          ; the lower screen's again, a key not yet looked at kept for key() (zxchank.asm)
+        jr .again
+.up:    ld a,2
+        call fp_CHAN_OPEN           ; the screen's again
+.again: ld hl,(.stk)
         ld (fp_STKEND),hl
         ld hl,(.at)
         ld (hl),0

@@ -16,6 +16,8 @@
 ;; The screen and sound's platform half (ABI.md section 10; zxgfx.py is their meaning). The colours (ink, paper,
 ;; border, bright, flash, inverse, over) are zxcolour.asm, a fragment of their own, as beep is zxbeep.asm.
 ;; bly_zx_cls                          the ROM's CLS, then print starts at the top left    clobbers: all but IY
+;;            (a key not yet looked at kept for key(): the CLS opens channel K twice, CL-CHAN's stream FDh,
+;;            and CHAN-K would clear FLAGS bit 5, as zxchank.asm says, so FDh points at a stand-in meanwhile)
 ;; bly_zx_at    in: HL=r DE=c          fails: print at ({r}, {c}) is off the screen        clobbers: AF BC DE HL
 ;; bly_zx_scr_on, _off are zxattext.asm, linked only by a program that prints at a place
 ;; bly_zx_beep is zxbeep.asm, its own fragment: its tables and 32-bit arithmetic are 2K a program doesn't need
@@ -164,12 +166,23 @@ TV_FLAG equ 5C3Ch
 S_POSN  equ 5C88h
 
 bly_zx_cls:
+        ld hl,(5C10h)               ; STRMS, stream FDh: CL-CHAN's (0D94h), channel K
+        push hl
+        ld de,(5C4Fh)               ; CHANS
+        ld hl,.chan+1
+        or a
+        sbc hl,de                   ; the stand-in's offset from CHANS, + 1, as STRMS holds it
+        ld (5C10h),hl
         call 0D6Bh                  ; the ROM's CLS: the screen in ATTR_P, print back to the top left
+        pop hl
+        ld (5C10h),hl               ; FDh channel K's again
         ld a,2
-        call 1601h                  ; and printing to the upper screen again
-        ld hl,0
+        call 1601h                  ; and printing to the upper screen again (which leaves the flags CHAN-K would
+        ld hl,0                     ; have changed as CHAN-K's CLS leaves them: TV_FLAG bit 0, FLAGS2 bit 4)
         ld (bly_col),hl
         ret
+.chan:  ds 4                        ; CL-CHAN writes PRINT-OUT and KEY-INPUT here, as into channel K's own record
+        db 0                        ; a letter CHAN-OPEN doesn't know: it sets CURCHL and goes no further (1627h)
 
 bly_zx_at:
         ld a,h

@@ -938,6 +938,27 @@ aB7
 37 120 121 
 255 z 0 191 0 121 113
 
+=== key() keeps a key pressed between its looks, through print #0 (a float's too) and cls(): on the 48K they open channel K, whose CHAN-K forgot it
+func main()
+  var n = 0
+  var last: byte = 0
+  while true do
+    cls()
+    print #0; at 0, 0; "keys: "; n; " "; 1.5
+    var k = key()
+    if k == 'z' then break end
+    if k != 0 then
+      n += 1
+      last = k
+    end
+  end
+  print n; " "; last
+end
+--- keys
+abcdefghijz
+--- expect
+10 106
+
 === on CP/M, ask() takes a key at a time: DELETE and backspace rub out, other control keys are not taken, ^C is a STOP
 func main()
   print "["; ask("> "); "]"

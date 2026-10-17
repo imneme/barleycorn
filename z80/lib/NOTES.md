@@ -1182,6 +1182,29 @@ newline from below the bottom fails with the same words a character
 there would, so a case that ended with one couldn't tell which check had
 fired. Those cases now end with `;`, and one tests the newline alone.
 
+**A key pressed meanwhile is still `key()`'s** (Saturday 17 October).
+Opening channel K clears FLAGS bit 5 (CHAN-K, 1634h), which `ask()`
+wants and `key()` doesn't: a key pressed between two looks was lost if
+the program printed on the lower screen in between, even a float there,
+or cleared the screen. The interpreter and C kept it. Melissa's Sokoban
+found it: it prints its boxes left on the lower screen while it waits
+for a key, and of the 34 keys typed, few moved anything on the 48K. So
+`bly_zx_chan_k` (`zxchank.asm`) opens stream 1 as CHAN-OPEN does, all
+but that one line, and `zxlower.asm` and `bly_pr_f` use it. It first
+opens stream 3, as `bly_pr_f` does, since omse-ai's transcript follows
+CHAN-OPEN: without it, the lower screen's text came out as output.
+Saving the bit around CHAN-OPEN would have left a window, as a key
+arriving between the save and CHAN-K's RES would be lost all the same,
+and `di` across it would lose frames. The ROM's CLS opens channel K
+twice, through CL-CHAN's stream FDh (0D94h), so `cls()` points FDh at a
+stand-in channel record meanwhile, with a letter CHAN-OPEN doesn't know:
+it sets CURCHL and goes no further (1627h). Compared with the ROM's own
+CLS, on a program with colours, a border, and text on both screens
+before and after, the screen and every system variable came out the
+same. One suite case types ten keys through all three, and each of the
+three had been seen losing them first. Four mutants, each undoing one of
+the four calls, were all caught.
+
 ## FZX text: print #4, and @embed
 
 Saturday 10 October, from Melissa: "It'd be cool if we could support FZX

@@ -569,12 +569,13 @@ prompt and echo as output, which leaves print's column at 0.
 
 **The lower screen.** `zxlower.asm`'s `bly_zx_lower` and `bly_zx_upper`
 (no arguments, clobbering AF BC DE HL) bracket each piece of a
-`print #0` or `#1`. The first opens channel K, gives `bly_col` the lower
-screen's column and patches `bly_putc` to check the ROM's position
-first; the second undoes all three and opens stream 2. `bly_zx_lat`
-takes HL = r and DE = c (ints) and fails with
-`print at ({r}, {c}) is off the lower screen`. A byte that would grow
-the lower screen fails with
+`print #0` or `#1`. The first opens channel K (by `zxchank.asm`'s
+`bly_zx_chan_k`, which keeps a key not yet looked at for `key()`, as the
+ROM's CHAN-K doesn't), gives `bly_col` the lower screen's column and
+patches `bly_putc` to check the ROM's position first; the second undoes
+all three and opens stream 2. `bly_zx_lat` takes HL = r and DE = c
+(ints) and fails with `print at ({r}, {c}) is off the lower screen`. A
+byte that would grow the lower screen fails with
 `print would grow the lower screen past its two lines`.
 
 **FZX text.** `zxfzx.asm`: `bly_zx_fzx` takes HL = the font, a constant

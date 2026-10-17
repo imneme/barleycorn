@@ -1,5 +1,5 @@
 ;; provides: bly_zx_lower bly_zx_upper bly_zx_lat
-;; needs: bly_putc bly_col bly_fail bly_pr_cstr bly_pr_i16
+;; needs: bly_putc bly_col bly_fail bly_pr_cstr bly_pr_i16 bly_zx_chan_k
 ;; targets: zx48
 ;; print #0 and #1: the lower screen's two rows, through the ROM's channel K (zxgfx.py's lat and lout are the
 ;; meaning). The generated code brackets each piece of such a print (an item, a zone, the newline) with
@@ -15,8 +15,7 @@
 ZXL_S_POSNL equ 5C8Ah               ; the lower screen's position: 33 - its column, then its line, which with two
                                     ; lines is 24 for row 22, 23 for row 23, 22 for pending below the bottom
 bly_zx_lower:
-        ld a,1
-        call 1601h                  ; CHAN-OPEN: stream 1, channel K
+        call bly_zx_chan_k          ; channel K, a key not yet looked at kept for key()
         ld hl,(bly_col)
         ld (.col),hl
         ld a,(ZXL_S_POSNL)
@@ -91,8 +90,7 @@ bly_zx_lat:
         jr nc,.bad
         push de
         push hl
-        ld a,1
-        call 1601h                  ; channel K, AT row, column, and back
+        call bly_zx_chan_k          ; channel K, AT row, column, and back
         ld a,22
         rst 10h
         pop hl
