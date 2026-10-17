@@ -795,6 +795,7 @@ SCREEN_FUNCS = {                                   # the Spectrum's screen and s
     'point': ([INT, INT], BOOL), 'attr': ([INT, INT, BYTE], VOID), 'udg': ([INT, Gen('array', BYTE, n=None)], VOID),
     'fzx': ([Gen('array', BYTE, n=None)], VOID), 'frames': (['flag'], VOID),
     'key': ([], BYTE), 'inkey': ([], BYTE), 'ticks': ([], LONG), 'pause': ([INT], VOID), 'beep': ([INT, INT], VOID)}
+COLOUR_ITEMS = ('ink', 'paper', 'bright', 'flash', 'inverse', 'over')    # in a print, for the rest of it, as BASIC's
 MACHINE_FUNCS = {                                  # the machine's 64K: an address is any whole number, as an index is
     'peek': (['addr'], BYTE), 'poke': (['addr', BYTE], VOID),
     'inp': (['port'], BYTE), 'outp': (['port', BYTE], VOID)}   # and its ports (IN and OUT), numbered the same way
@@ -1372,7 +1373,7 @@ class Checker:
         elif k == 'assert':
             self.want_bool(s.e)
         elif k == 'print':
-            for kind, e in s.items:
+            for i, (kind, e) in enumerate(s.items):
                 if kind == 'at':
                     for x in e:
                         self.expr(x)
@@ -1380,6 +1381,15 @@ class Checker:
                     continue
                 if kind == 'item':
                     t = self.expr(e)
+                    if e.k == 'call' and e.name in COLOUR_ITEMS and getattr(e, 'func', None) is None:
+                        if getattr(s, 'stream', 2) == 4:
+                            raise BarleyError('print #4 has no colours: FZX text is pixels alone', e.line)
+                        if not any(k2 in ('item', 'zone') for k2, _ in s.items[i + 1:]):
+                            raise BarleyError(f'{e.name}() in a print colours the rest of that print, and nothing '
+                                              f'printed follows it here: for {e.name} from here on, put it on a line '
+                                              f'of its own', e.line)
+                        s.items[i] = ('colour', e)    # BASIC's PRINT INK 2; ...: the temporary colours alone
+                        continue
                     if t is FLEX:
                         self.settle_default(e)
                     elif t is VOID and e.k in ('call', 'method') and (kind, e) != s.items[0]:
@@ -2367,17 +2377,44 @@ class Interp:
                 if kind == 'item':
                     text = self.show(self.ev(e, env), e.ty).encode('latin-1')
                     self.screen_call(lambda: [sc.fzx_out(b) for b in text], s.line)
+                    sc.temps()                          # each piece ends with stream 2 again on the 48K: TEMPS
                 else:
                     y, x = self.ev(e[0], env), self.ev(e[1], env)
                     self.screen_call(lambda: sc.fzx_at(y, x), s.line)
             if s.newline:
                 self.screen_call(lambda: sc.fzx_out(10), s.line)
+                sc.temps()
         elif k == 'print' and getattr(s, 'stream', 2) != 2:     # #0, #1: the lower screen's, and not output
             sc = self.screen
-            put = lambda text: self.screen_call(lambda: [sc.lout(b) for b in text.encode('latin-1')], s.line)
+            seen = False            # a colour item has gone by in this print: each piece after it puts the
+                                    # print's temporary colours back (channel K's TEMPS starts from the border's),
+                                    # from one place, as the 48K keeps them (zxlower.asm's three bytes)
+
+            def piece(f, colour=False):         # as the 48K's bly_zx_lower ... bly_zx_upper, TEMPS at each end
+                nonlocal seen
+                if seen:
+                    sc.set_temps(sc.lower_kept)
+                else:
+                    sc.lower_temps()
+                seen = seen or colour
+                try:
+                    self.screen_call(f, s.line)
+                except BarleyError:
+                    sc.temps()
+                    raise
+                if seen:
+                    sc.lower_kept = sc.get_temps()
+                sc.temps()
+
+            def put(text):
+                piece(lambda: [sc.lout(b) for b in text.encode('latin-1')])
             for kind, e in s.items:
                 if kind == 'item':
                     put(self.show(self.ev(e, env), e.ty))
+                elif kind == 'colour':
+                    v = self.ev(e.args[0], env)
+                    self.screen_call(lambda: sc.check_colour(e.name, v), s.line)     # worked out first, upstairs
+                    piece(lambda: self.colour(e.name, v, temp=True), colour=True)
                 elif kind == 'at':
                     r, c = self.ev(e[0], env), self.ev(e[1], env)
                     self.screen_call(lambda: sc.lat(r, c), s.line)
@@ -2387,7 +2424,14 @@ class Interp:
                 put('\n')
         elif k == 'print':
             placed = False                                  # from the first at on, the text is the screen's alone
+            colours = any(kind == 'colour' for kind, _ in s.items)
+            if colours:                                     # TEMPS: a print with colour items starts from the
+                self.screen.temps()                         # permanent ones, and ends with them again
             for kind, e in s.items:
+                if kind == 'colour':
+                    v = self.ev(e.args[0], env)
+                    self.screen_call(lambda: self.colour(e.name, v, temp=True), s.line)
+                    continue
                 if kind == 'item':
                     self.write(self.show(self.ev(e, env), e.ty), placed)
                 elif kind == 'at':
@@ -2399,6 +2443,8 @@ class Interp:
                     self.write(' ' * (16 - self.col % 16), placed)
             if s.newline:
                 self.write('\n', placed)
+            if colours:
+                self.screen.temps()
 
     def walk(self, it, t, s):
         """what for walks, one item at a time, live: a for sees element changes, and stops if the container's
@@ -2537,6 +2583,12 @@ class Interp:
             return f()
         except self.zx.ScreenError as err:
             raise BarleyError(str(err), line)
+
+    def colour(self, name, v, temp=False):
+        """ink(v) and the rest, as a statement (the permanent colours and the temporary ones) or as an item of a
+        print (temp: the temporary ones alone)"""
+        sc = self.screen
+        ({'inverse': sc.set_inverse, 'over': sc.set_over}.get(name) or getattr(sc, name))(v, temp=temp)
 
     def grid_rc(self, e, env):
         if len(e.idx) == 2:

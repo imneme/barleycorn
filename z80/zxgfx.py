@@ -153,12 +153,15 @@ class Screen:
         """glyphs: the font (96 characters of 8 bytes); by default the ROM's. A program that never looks at the screen
         can pass bytes(768), and needs no ROM: what it prints still moves the cursor, and nothing can see the rest"""
         self.mem = bytearray(6912)
-        self.attr_p = WHITE_ON_BLACK          # ATTR_P, and ATTR_T, which the runtime keeps the same
-        self.mask = 0                         # MASK_P (and MASK_T): the attribute bits a square keeps (8: transparent)
+        self.attr_p = WHITE_ON_BLACK          # ATTR_P
+        self.mask = 0                         # MASK_P: the attribute bits a square keeps (8: transparent)
         self.ink9 = self.paper9 = False       # P_FLAG's INK 9 and PAPER 9 (contrast) bits
         for i in range(768):
             self.mem[6144 + i] = self.attr_p
         self.inverse = self.over = False
+        self.lower_kept = None                # a lower print's colour items' colours (zxlower.asm keeps them)
+        self.temps()                          # and the temporary ones, which drawing uses: ATTR_T, MASK_T and
+                                              # P_FLAG's even bits. A colour item in a print sets them alone
         self.border_colour = 7                        # BORDCR's
         self.shown_border, self.ear = 7, 0            # what the ULA was last told: the border showing, and bit 4
         self.keys = None                              # the keyboard (Keys), if anything's been typed
@@ -177,57 +180,100 @@ class Screen:
             raise ScreenError(f'{name} {n} is not a colour 0..{top}')
         return n
 
-    def set_colour(self, name, n, bits, shift):
+    def set_colour(self, name, n, bits, shift, temp=False):
         """ink or paper, as the ROM's CO-TEMP sets them (2234h): 0..7 a colour; 8 transparent, the mask's bits set;
         9 the contrast: the mask's bits set too, the colour white if the other one is dark (0..3), else black, and
-        P_FLAG's bit set, so each square gets its own contrast as it's drawn on"""
+        P_FLAG's bit set, so each square gets its own contrast as it's drawn on. A statement works from the
+        permanent colours and sets both, as zxcolour.asm does; a colour item in a print (temp) the temporary ones"""
         n = self.colour(name, n, 9)
+        attr, mask = (self.attr_t, self.mask_t) if temp else (self.attr_p, self.mask)
         if n < 8:
-            self.attr_p = (self.attr_p & ~bits & 0xFF) | (n << shift)
+            attr = (attr & ~bits & 0xFF) | (n << shift)
         elif n == 9:
-            other_dark = not self.attr_p & (0x20 if name == 'ink' else 0x04)
-            self.attr_p = (self.attr_p & ~bits & 0xFF) | (bits if other_dark else 0)
-        self.mask = (self.mask & ~bits & 0xFF) | (bits if n >= 8 else 0)
+            other_dark = not attr & (0x20 if name == 'ink' else 0x04)
+            attr = (attr & ~bits & 0xFF) | (bits if other_dark else 0)
+        mask = (mask & ~bits & 0xFF) | (bits if n >= 8 else 0)
+        if not temp:
+            self.attr_p, self.mask = attr, mask
+        self.attr_t, self.mask_t = attr, mask
         return n == 9
 
-    def ink(self, n):
-        self.ink9 = self.set_colour('ink', n, 0x07, 0)
+    def ink(self, n, temp=False):
+        nine = self.set_colour('ink', n, 0x07, 0, temp)
+        if not temp:
+            self.ink9 = nine
+        self.ink9_t = nine
 
-    def paper(self, n):
-        self.paper9 = self.set_colour('paper', n, 0x38, 3)
+    def paper(self, n, temp=False):
+        nine = self.set_colour('paper', n, 0x38, 3, temp)
+        if not temp:
+            self.paper9 = nine
+        self.paper9_t = nine
 
-    def level(self, name, v, bit):
+    def level(self, name, v, bit, temp=False):
         """bright and flash, as CO-TEMP sets them (2273h): 0 off, 1 on, 8 transparent (the bit off, the mask's on)"""
         n = int(v)
         if n not in (0, 1, 8):
             raise ScreenError(f'{name} {n} is not 0, 1 or 8')
-        self.attr_p = (self.attr_p & ~bit & 0xFF) | (bit if n == 1 else 0)
-        self.mask = (self.mask & ~bit & 0xFF) | (bit if n == 8 else 0)
+        attr, mask = (self.attr_t, self.mask_t) if temp else (self.attr_p, self.mask)
+        attr = (attr & ~bit & 0xFF) | (bit if n == 1 else 0)
+        mask = (mask & ~bit & 0xFF) | (bit if n == 8 else 0)
+        if not temp:
+            self.attr_p, self.mask = attr, mask
+        self.attr_t, self.mask_t = attr, mask
 
-    def bright(self, v):
-        self.level('bright', v, 0x40)
+    def bright(self, v, temp=False):
+        self.level('bright', v, 0x40, temp)
 
-    def flash(self, v):
-        self.level('flash', v, 0x80)
+    def flash(self, v, temp=False):
+        self.level('flash', v, 0x80, temp)
+
+    def check_colour(self, name, v):
+        """a colour item's value checked before it's set, as a print's item is worked out before it's printed"""
+        if name in ('ink', 'paper'):
+            self.colour(name, v, 9)
+        elif name in ('bright', 'flash') and int(v) not in (0, 1, 8):
+            raise ScreenError(f'{name} {int(v)} is not 0, 1 or 8')
+
+    def temps(self):
+        """the ROM's TEMPS (0D4Dh) for the upper screen: the temporary colours the permanent ones again"""
+        self.attr_t, self.mask_t, self.ink9_t, self.paper9_t = self.attr_p, self.mask, self.ink9, self.paper9
+        self.inverse_t, self.over_t = self.inverse, self.over
+
+    def lower_temps(self):
+        """TEMPS for the lower screen, as channel K's opening calls it: the border's colours (BORDCR), no mask, and
+        P_FLAG's temporary bits clear (no INVERSE, OVER or 9s)"""
+        self.attr_t, self.mask_t, self.ink9_t, self.paper9_t = self.bordcr(), 0, False, False
+        self.inverse_t = self.over_t = False
+
+    def get_temps(self):
+        return (self.attr_t, self.mask_t, self.ink9_t, self.paper9_t, self.inverse_t, self.over_t)
+
+    def set_temps(self, t):
+        self.attr_t, self.mask_t, self.ink9_t, self.paper9_t, self.inverse_t, self.over_t = t
 
     def paint(self, cell):
         """a square printed or plotted on gets the colours, as the ROM's PO-ATTR gives them (0BDBh)"""
-        a = ((self.mem[6144 + cell] ^ self.attr_p) & self.mask) ^ self.attr_p
-        if self.paper9:
+        a = ((self.mem[6144 + cell] ^ self.attr_t) & self.mask_t) ^ self.attr_t
+        if self.paper9_t:
             a &= 0xC7
             if not a & 0x04:                  # a dark ink gets a white paper
                 a ^= 0x38
-        if self.ink9:
+        if self.ink9_t:
             a &= 0xF8
             if not a & 0x20:                  # a dark paper gets a white ink
                 a ^= 0x07
         self.mem[6144 + cell] = a
 
-    def set_inverse(self, b):
-        self.inverse = bool(b)
+    def set_inverse(self, b, temp=False):
+        if not temp:
+            self.inverse = bool(b)
+        self.inverse_t = bool(b)
 
-    def set_over(self, b):
-        self.over = bool(b)
+    def set_over(self, b, temp=False):
+        if not temp:
+            self.over = bool(b)
+        self.over_t = bool(b)
 
     def border(self, n):
         self.border_colour = self.colour('border', n)
@@ -257,6 +303,7 @@ class Screen:
             self.mem[6144 + i] = self.bordcr()
         self.row = self.col = 0
         self.lrow, self.lcol = 23, 0
+        self.temps()                          # the 48K's cls ends by opening stream 2: TEMPS
 
     # -- pixels ------------------------------------------------------------------------------------------------
     @staticmethod
@@ -277,8 +324,8 @@ class Screen:
         """plot an on-screen point: no checking"""
         self.drawn = True
         off, bit = self.pixel(x, y)
-        value = 0 if self.inverse else bit
-        if self.over:
+        value = 0 if self.inverse else bit   # OVER and INVERSE from P_FLAG's permanent bits, as zxgfx.asm reads them
+        if self.over:                         # (the colours from the temporary ones)
             self.mem[off] ^= value
         else:
             self.mem[off] = (self.mem[off] & ~bit & 0xFF) | value
@@ -355,6 +402,7 @@ class Screen:
         if not (0 <= y <= 191 and 0 <= x <= 255):
             raise ScreenError(f'print #4; at ({y}, {x}) is off the screen (192 by 256 pixels)')
         self.fzx_line, self.fzx_x = 191 - y, x
+        self.temps()                          # as each piece of a print #4 ends: stream 2 again, TEMPS
 
     def fzx_newline(self):
         f = self.fzx_font
@@ -401,6 +449,7 @@ class Screen:
         if not (0 <= r <= 1 and 0 <= c <= 31):
             raise ScreenError(f'print at ({r}, {c}) is off the lower screen')
         self.lrow, self.lcol = 22 + r, c
+        self.temps()                          # the 48K's bly_zx_lat ends by opening stream 2, whose CHAN-S calls TEMPS
 
     def lout(self, ch):
         """one byte printed to the lower screen (print #0 or #1). Row 24 is pending, below the bottom line"""
@@ -413,10 +462,7 @@ class Screen:
             self.lrow, self.lcol = self.lrow + 1, 0
         if self.lrow == 24:
             raise ScreenError('print would grow the lower screen past its two lines')
-        g = self.glyph(ch)
-        for i in range(8):
-            self.mem[self.cell(self.lrow, i, self.lcol)] = g[i]
-        self.mem[6144 + self.lrow * 32 + self.lcol] = self.bordcr()
+        self.draw(ch, self.lrow, self.lcol)  # in the temporary colours, which channel K's TEMPS made the border's
         self.lcol += 1
 
     def at(self, r, c):
@@ -478,13 +524,17 @@ class Screen:
         if self.row == 22:
             self.scroll()
             self.row = 21
+        self.draw(ch, self.row, self.col)
+        self.col += 1
+
+    def draw(self, ch, r, c):
+        """a character at row r, column c, in the temporary colours, as the ROM's PRINT-OUT draws one"""
         g = self.glyph(ch)
         for i in range(8):
-            v = (~g[i] & 0xFF) if self.inverse else g[i]
-            k = self.cell(self.row, i, self.col)
-            self.mem[k] = (self.mem[k] ^ v) if self.over else v
-        self.paint(self.row * 32 + self.col)
-        self.col += 1
+            v = (~g[i] & 0xFF) if self.inverse_t else g[i]
+            k = self.cell(r, i, c)
+            self.mem[k] = (self.mem[k] ^ v) if self.over_t else v
+        self.paint(r * 32 + c)
 
     def failed(self, n):
         """a failure's words, the last n printed, made readable as the 48K's runtime makes them (plat_zx.asm's
@@ -530,6 +580,7 @@ class Screen:
                 self.mem[start:start + 32] = bytes(32)
             self.mem[6144 + 32 * row:6144 + 32 * row + 32] = bytes([self.bordcr()]) * 32
         self.lrow, self.lcol = 23, 0
+        self.temps()                          # and stream 2 again, as INPUT ends: TEMPS
 
     # -- saving ------------------------------------------------------------------------------------------------
     def scr(self):

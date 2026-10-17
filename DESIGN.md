@@ -251,6 +251,9 @@ SCREEN      cls  ink(0..9)  paper(0..9)  bright(0, 1, 8)  flash(0, 1, 8)
             print wraps at the 32nd column, mid-word: break lines yourself
             print #1; at 0, c; ...  (or #0)  the lower screen's two lines
             (a status line wants its at: two plain ones need three lines)
+            print ink(2); "x"; paper(6); ...   colours for the rest of
+            that print alone, as BASIC's PRINT INK 2; (all six; on #0
+            and #1 from the border's colours, their one way to colour)
             fzx(F)  print #4; at y, x; ...   text in an FZX font, in
             pixels, y down from the top of the screen
             frame do ... end   runs every frame, once frames(true)
@@ -676,6 +679,21 @@ a square's byte back, as BASIC's `ATTR` does; `attr(r, c, a)` sets it.
 `z80/tests/co_temp_check.py` holds the model's colours to BASIC itself,
 typed in on omse-ai's 48K, and `rom_text_check.py` its drawing to the
 ROM.
+
+**Colours inside a print are for that print alone**, as BASIC's
+`PRINT INK 2; "red"; PAPER 6; ...` are:
+`print ink(2); "red"; paper(6); " on yellow"`. All six take part, 8 and
+9 too, and the next print starts from the colours as they were. On the
+lower screen, `print #1; ink(6); "Score"`, they start from the border's
+colours (the lower screen's own, as in BASIC), and they're the only way
+to colour it. They're the ROM's temporary colours (ATTR_T, MASK_T and
+P_FLAG's even bits), set as its CO-TEMP sets them, so
+`z80/tests/print_check.py` holds them to BASIC itself, screen for
+screen, and C's and the 48K's to the interpreter's. One habit is
+refused: a colour item that nothing printed follows
+(`print "x"; ink(2)`) would do nothing, and it's also the habit of `;`
+ending a statement, so it's an error that says to put `ink(2)` on a line
+of its own.
 
 **Proportional text** is FZX, the Spectrum's standard for it: Andrew
 Owen's font format, and Einar Saukas's driver, which Barleycorn's 48K

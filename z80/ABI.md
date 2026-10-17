@@ -535,7 +535,16 @@ fail with `{name} {n} is not a colour 0..9`; `bly_zx_border` takes HL =
 n and fails with `border {n} is not a colour 0..7`; `bly_zx_bright` and
 `bly_zx_flash` take HL = n (true is 1) and fail with
 `{name} {n} is not 0, 1 or 8`; `bly_zx_inverse` and `bly_zx_over` take A =
-0 or 1.
+0 or 1. Each has a twin for a colour item of a print, `bly_zx_tink` and
+so on, which sets the temporary colours alone, from ATTR_T, as the ROM's
+CO-TEMP does; `bly_zx_ink_ok`, `_paper_ok`, `_bright_ok` and `_flash_ok`
+check a value alone, failing as the colour would, before a `print #0` or
+`#1` opens channel K; and `bly_zx_temps` is the ROM's TEMPS, which a
+print with colour items calls at its start and its end. In a `print #0`
+or `#1` with colour items, `zxlower.asm`'s `bly_zx_lsave` keeps the
+temporary colours after each piece from the first item on, and
+`bly_zx_lload` puts them back after the next piece's `bly_zx_lower`,
+whose channel K starts from the border's.
 
 `plot` colours its cell (as BASIC's PLOT does); INVERSE and OVER act as
 in the reference (INVERSE clears, OVER XORs, both together leave the

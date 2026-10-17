@@ -235,7 +235,7 @@ def build(ops):
 
 def set_flag(sc, f):
     """P_FLAG's bits that count: OVER and INVERSE (permanent, 1 and 3), INK 9 and PAPER 9 (temporary, 4 and 6)"""
-    sc.over, sc.inverse, sc.ink9, sc.paper9 = bool(f & 2), bool(f & 8), bool(f & 0x10), bool(f & 0x40)
+    sc.over, sc.inverse, sc.ink9_t, sc.paper9_t = bool(f & 2), bool(f & 8), bool(f & 0x10), bool(f & 0x40)
 
 
 def model(ops, scr0, udgs0, attr0, flag0, mask0=0):
@@ -243,7 +243,7 @@ def model(ops, scr0, udgs0, attr0, flag0, mask0=0):
     sc = zxgfx.Screen()
     sc.mem[:] = scr0
     sc.udgs[:] = udgs0
-    sc.attr_p, sc.mask = attr0, mask0
+    sc.attr_t, sc.mask_t = attr0, mask0               # ATTR_T and MASK_T, as the Z80's are set
     set_flag(sc, flag0)
     points = []
     try:
@@ -254,9 +254,9 @@ def model(ops, scr0, udgs0, attr0, flag0, mask0=0):
             elif k == 'attrr':
                 points.append(sc.attr(*a))
             elif k == 'ink':
-                sc.attr_p = a[0]
+                sc.attr_t = a[0]
             elif k == 'mask':
-                sc.mask = a[0]
+                sc.mask_t = a[0]
             elif k == 'flag':
                 set_flag(sc, a[0])
             elif k == 'udg':

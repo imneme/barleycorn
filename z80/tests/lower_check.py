@@ -59,16 +59,19 @@ def basic(stream, items, newline):
 
 
 def model(sc, items, newline):
+    def piece(f):                       # channel K's TEMPS (the border's colours) for each piece, as the runtime's
+        sc.lower_temps()
+        f()
+        sc.temps()
     for k, v in items:
         if k == 'text':
-            for ch in v.encode():
-                sc.lout(ch)
+            piece(lambda: [sc.lout(ch) for ch in v.encode()])
         elif k == 'at':
             sc.lat(*v)
         else:
-            sc.lout(10)
+            piece(lambda: sc.lout(10))
     if newline:
-        sc.lout(10)
+        piece(lambda: sc.lout(10))
 
 
 def lower(mem):

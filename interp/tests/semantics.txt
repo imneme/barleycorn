@@ -138,6 +138,72 @@ end
 --- screen
 --- expect
 
+=== print's colour items colour the rest of that print alone, as BASIC's PRINT INK 2; ...: all six, 8 and 9 too, a float between, at, and plot after (the picture is compared too)
+func main()
+  paper(7)
+  ink(0)
+  cls()
+  print ink(2); "red"; paper(6); " on yellow"; bright(1); " bright"
+  print "black again"
+  print inverse(1); "inverse"; over(1); "over"
+  print ink(9); paper(1); "contrast"; ink(8); paper(8); " kept", flash(1); bright(8); "flash"
+  print 1.5; ink(4); 2.5; " after a float"; 3
+  print at 9, 0; inverse(1); "inverse at"; over(1); at 9, 0; "OVER", "zone"
+  print at 10, 0; ink(9); "nine"
+  paper(1)
+  print at 11, 0; "after nine"
+  plot(0, 0)
+end
+--- screen
+--- expect
+red on yellow bright
+black again
+inverseover
+contrast kept   flash
+1.52.5 after a float3
+
+=== print #0 and #1 take colour items too, from the border's colours, for the rest of that print (the rows' checksums are)
+func row(r: int): long
+  var h: long = 0
+  for line in 0..8 do
+    for c in 0..32 do
+      h = (h * 31 + peek(0x4000 + ((r & 0x18) << 8) + (line << 8) + ((r & 7) << 5) + c)) % 1000003
+    end
+  end
+  for c in 0..32 do
+    h = (h * 31 + peek(0x5800 + r * 32 + c)) % 1000003
+  end
+  return h
+end
+
+func main()
+  border(1)
+  ink(3)
+  cls()
+  print #1; ink(6); "yellow"; paper(2); " on red", 2.5; inverse(1); "inv"
+  print #0; at 0, 0; "plain"; bright(1); " bright"; over(1); at 0, 2; "##"
+  print "after", row(22); " "; row(23)
+end
+--- screen
+--- expect
+after           681089 694422
+
+=== a colour item that nothing printed follows is an error: it would do nothing, and it's the habit of ; ending a statement
+func main()
+  print "x"; ink(2)
+end
+--- expect
+ink() in a print colours the rest of that print, and nothing printed follows it here: for ink from here on, put it on a line of its own at line 2
+
+=== a colour item's value is checked as the statement's is, upstairs before a print #1's channel K opens
+func main()
+  print "start"
+  print #1; "a"; paper(10); "b"
+end
+--- expect
+start
+paper 10 is not a colour 0..9 at line 3
+
 === ranges are half-open; rev walks down; slices use the same notation
 func main()
   for i in 0..4 do print i; end

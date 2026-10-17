@@ -261,6 +261,10 @@ bly_pr_f:
         ld de,(fp_STKEND)
         ld (.stk),de                ; (PRINT-FP of a number between -1 and 1 leaves a 0 behind: the ROM's STR$ bug)
         call bly_fp.push
+        ld hl,(5C8Fh)               ; the temporary colours (ATTR_T, MASK_T, P_FLAG), which opening a stream again
+        ld (.temps),hl              ; resets (TEMPS): a print's colour items still colour what comes after
+        ld a,(5C91h)
+        ld (.temps+2),a
         ld hl,.buf
         ld (.at),hl
         ld a,2                      ; the stream to come back to: the screen's, or the lower screen's (print #1,
@@ -282,11 +286,16 @@ bly_pr_f:
         call fp_CHAN_OPEN           ; the screen's again
 .again: ld hl,(.stk)
         ld (fp_STKEND),hl
+        ld hl,(.temps)              ; the temporary colours back
+        ld (5C8Fh),hl
+        ld a,(.temps+2)
+        ld (5C91h),a
         ld hl,(.at)
         ld (hl),0
         ld hl,.buf
         jp bly_pr_cstr
 .stk:   dw 0
+.temps: ds 3
 .back:  db 2
 .take:  ld hl,(.at)                 ; A = a character (RST 10 runs this in the alternate set, and saved HL')
         ld (hl),a

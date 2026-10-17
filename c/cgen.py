@@ -392,21 +392,38 @@ class Gen:
             if s.newline:
                 self.emit(f'BLY_FZX(bly_nl(), {line});')
         elif k == 'print' and getattr(s, 'stream', 2) != 2:     # #0, #1: the lower screen's alone
+            seen = False                      # a colour item has gone by: each piece after it puts the print's
+                                              # temporary colours back, and keeps them (BLY_LOWERC)
+
+            def lower(x, colour=False):
+                nonlocal seen
+                load, seen = seen, seen or colour
+                return f'BLY_LOWERC({x}, {line}, {int(load)}, 1)' if seen else f'BLY_LOWER({x}, {line})'
             for kind, e in s.items:
                 if kind == 'zone':
-                    self.emit(f'BLY_LOWER(bly_zone(), {line});')
+                    self.emit(lower('bly_zone()') + ';')
                 elif kind == 'at':
                     r, c = (self.conv(self.ex(x), x.ty, B.INT) for x in e)
                     self.emit(f'bly_zx_lat({r}, {c}, {line});')
+                elif kind == 'colour':
+                    args = [self.ex(a) for a in e.args]
+                    if e.name in ('ink', 'paper', 'bright', 'flash'):
+                        self.screen(e.name, e, args, suffix='_ok')      # checked first, upstairs
+                    self.screen(e.name, e, args, suffix='_t', wrap=lambda call: lower(call, colour=True))
                 else:
                     v = self.ex(e)
-                    self.emit(f'BLY_LOWER(' + self.pr(v, e.ty) + f', {line});')
+                    self.emit(lower(self.pr(v, e.ty)) + ';')
             if s.newline:
-                self.emit(f'BLY_LOWER(bly_nl(), {line});')
+                self.emit(lower('bly_nl()') + ';')
         elif k == 'print':                    # what print itself writes also lands on the screen: BLY_SHOW, or
             show = 'BLY_SHOW'                 # from the first at on, the screen's alone: BLY_ATTEXT
+            colours = any(kind == 'colour' for kind, _ in s.items)
+            if colours:                       # TEMPS: a print with colour items starts from the permanent colours,
+                self.emit('bly_zx_temps();')  # and ends with them again
             for kind, e in s.items:
-                if kind == 'zone':
+                if kind == 'colour':
+                    self.screen(e.name, e, [self.ex(a) for a in e.args], suffix='_t')
+                elif kind == 'zone':
                     self.emit(f'{show}(bly_zone());')
                 elif kind == 'at':
                     r, c = (self.conv(self.ex(x), x.ty, B.INT) for x in e)
@@ -418,6 +435,8 @@ class Gen:
                     self.emit(f'{show}(' + self.pr(v, e.ty) + ');')
             if s.newline:
                 self.emit(f'{show}(bly_nl());')
+            if colours:
+                self.emit('bly_zx_temps();')
         else:
             raise CGenError(f'no C for statement {k}')
 
@@ -983,9 +1002,10 @@ class Gen:
             return self.temp(ct, f'({ct})bly_mod128((i128){args[0]}, (i128){args[1]}, {line})')
         raise CGenError(f'no C for {name}()')
 
-    def screen(self, name, e, args):
+    def screen(self, name, e, args, suffix='', wrap=None):
         """a screen or sound builtin: its arguments, already computed in order, as the reference's types; then one
-        call into bly_zx.h, which checks them as zxgfx.py does"""
+        call into bly_zx.h, which checks them as zxgfx.py does. A colour item of a print calls the same name with a
+        suffix (_t: the temporary colours alone; _ok: its value checked), the call wrapped (in BLY_LOWERC) if need be"""
         params, ret = B.SCREEN_FUNCS[name]
         if name == 'attr' and len(args) == 2:                # attr(r, c) reads a square back
             name, params, ret = 'attr_read', [B.INT, B.INT], B.BYTE
@@ -1005,10 +1025,10 @@ class Gen:
         if name == 'frames':                                 # frame do ... end on or off: it runs as the
             self.emit(f'bly_frames_on = {cargs[0]};')        # model's frames pass (pause, ticks)
             return None
-        call = f'bly_zx_{name}({", ".join(cargs)})'
+        call = f'bly_zx_{name}{suffix}({", ".join(cargs)})'
         frames = name in ('pause', 'ticks') and 'frame' in self.ck.funcs
         if ret is B.VOID:
-            self.emit(call + ';')
+            self.emit((wrap(call) if wrap else call) + ';')
             if frames:
                 self.emit(f'if (bly_frames_on) for (i16 k = 0; k < {cargs[0]}; k++) f_frame();')
             return None

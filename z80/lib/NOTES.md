@@ -1221,6 +1221,62 @@ same. One suite case types ten keys through all three, and each of the
 three had been seen losing them first. Four mutants, each undoing one of
 the four calls, were all caught.
 
+## Colours inside a print: print ink(2); ...
+
+Saturday 17 October. Melissa chose print to be BASIC's on purpose
+("print is layout, not formatting"), and BASIC's PRINT takes colour
+items: `PRINT INK 2; "red"; PAPER 6; ...` colours the rest of that
+print, and on the lower screen it's the only way to colour at all (four
+wave 2 ports wanted it). In the ROM they're the temporary colours:
+ATTR_T, MASK_T and P_FLAG's even bits, which TEMPS (0D4Dh) makes the
+permanent ones again (on the lower screen, the border's: BORDCR, no
+mask, the temporary bits clear) whenever a stream opens.
+
+**The model** (`zxgfx.py`, and C's copy) now keeps both sets, as the ROM
+does. A statement (`ink(2)`) works from the permanent colours and sets
+both, as `zxcolour.asm` always did; a colour item sets the temporary
+ones, from the temporary ones, as CO-TEMP does. Text and the colours of
+drawing use the temporary ones; `plot`, `line` and `circle` take OVER
+and INVERSE from the permanent bits, as `zxgfx.asm` reads them. TEMPS
+happens where it happens on the 48K: at the start and end of a print
+with colour items, after each piece of a `print #0`, `#1` or `#4` (each
+ends by opening stream 2 again), after a lower `at`, and in `cls` and
+`ask()`. So a print nested in another (a function called from an item)
+does the same everywhere.
+
+**On the 48K:** `zxcolour.asm` runs one path for both, a byte (`zxc_t`)
+choosing ATTR_P or ATTR_T to work from, whether to store the permanent
+colours too, and which of P_FLAG's bits (the 9s' masks ANDed with 55h).
+A `print #0` or `#1` brackets each piece with channel K, whose TEMPS
+starts from the border's colours every time, so from the first colour
+item on the print's own are kept in three bytes (`bly_zx_lsave`, after a
+piece) and put back (`bly_zx_lload`, after the next `bly_zx_lower`);
+z80gen knows statically which pieces need it, so a print without colours
+is as it was. A colour item's value is checked upstairs first
+(`bly_zx_ink_ok`), as an item is worked out before its bracket. Two
+places had assumed the temporary colours were always the permanent ones,
+and print_check found both: `bly_pr_f` opens stream 3 and back, whose
+TEMPS lost the colours at a float (it now saves and restores the three
+bytes), and the at-text markers (`zxattext.asm`) printed INVERSE and
+OVER with the permanent bits' values, which RST 10 makes the temporary
+ones (they now send the temporary bits' own).
+
+**How it's tested.** `z80/tests/print_check.py` gained colour items (all
+six, 8 and 9 often) after random permanent colours: 662 runs agreed with
+BASIC before C and the 48K were built. With `--machines` it holds C's
+screen and the 48K's (held in a loop at the end, so BASIC's report
+doesn't cover the lower screen) to the interpreter's. Five suite cases:
+both screens, a float between, `at` after an item, the refused trailing
+item, a value checked before channel K. Eleven mutants (the 48K's flag,
+its 9 bits, its base, the inverse item's bits, the kept colours' load
+and save, the float's restore, z80gen's closing TEMPS, C's load, the
+interpreter's closing TEMPS and lower pieces): all caught. One survived
+at first: a temporary INK 9 also setting the permanent bit, which shows
+only in a later print, on a paper where the contrast differs from the
+ink. The suite case now ends its print on `ink(9)` and prints after
+`paper(1)`. Building it, print_check also found the scroll's fill
+(above).
+
 ## FZX text: print #4, and @embed
 
 Saturday 10 October, from Melissa: "It'd be cool if we could support FZX

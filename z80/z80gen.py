@@ -827,14 +827,28 @@ class Gen:
             if self.target != 'zx48':
                 raise GenError(f'print #{s.stream} is Spectrum-only: put it inside if ZX then ... end')
 
-            def piece(f):                                    # each piece on channel K, worked out before
+            seen = False                                     # a colour item has gone by: each piece after it
+
+            def piece(f, colour=False):                      # each piece on channel K, worked out before;
+                nonlocal seen                                # from the first colour item on, its colours kept
                 self.line(s.line)
                 self.call('bly_zx_lower')
+                if seen:
+                    self.call('bly_zx_lload')
+                seen = seen or colour
                 f()
+                if seen:
+                    self.call('bly_zx_lsave')
                 self.call('bly_zx_upper')
             for kind, e in s.items:
                 if kind == 'zone':
                     piece(lambda: self.call('bly_zone'))
+                elif kind == 'colour':
+                    args = [self.ex(a) for a in e.args]
+                    if e.name in ('ink', 'paper', 'bright', 'flash'):        # checked first, upstairs
+                        self.line(s.line)
+                        self.screen_call(e.name, args, routine=f'bly_zx_{e.name}_ok')
+                    piece(lambda: self.screen_call(e.name, args, routine=f'bly_zx_t{e.name}'), colour=True)
                 elif kind == 'at':
                     r, c = self.conv(self.ex(e[0]), B.INT), self.conv(self.ex(e[1]), B.INT)
                     self.line(s.line)
@@ -848,10 +862,17 @@ class Gen:
                 piece(lambda: self.call('bly_nl'))
         elif k == 'print':
             placed = False                                   # from the first at on: the screen's alone (bracketed)
+            colours = any(kind == 'colour' for kind, _ in s.items)
+            if colours:                                      # TEMPS: a print with colour items starts from the
+                self.call('bly_zx_temps')                    # permanent colours, and ends with them again
             on = lambda: placed and self.markers and self.call('bly_zx_scr_on')
             off = lambda: placed and self.markers and self.call('bly_zx_scr_off')
             for kind, e in s.items:
-                if kind == 'zone':
+                if kind == 'colour':
+                    args = [self.ex(a) for a in e.args]
+                    self.line(s.line)
+                    self.screen_call(e.name, args, routine=f'bly_zx_t{e.name}')
+                elif kind == 'zone':
                     on()
                     self.call('bly_zone')
                     off()
@@ -874,6 +895,8 @@ class Gen:
                 on()
                 self.call('bly_nl')
                 off()
+            if colours:
+                self.call('bly_zx_temps')
         else:
             raise GenError(f'no Z80 for statement {k}')
 
@@ -2630,10 +2653,11 @@ class Gen:
             return r
         return None
 
-    def screen_call(self, name, args):
-        """the Spectrum's screen and sound (ABI.md section 10)"""
+    def screen_call(self, name, args, routine=None):
+        """the Spectrum's screen and sound (ABI.md section 10). routine: another for the same arguments (a colour
+        item's: bly_zx_tink, or bly_zx_ink_ok to check its value)"""
         ints = lambda i: self.conv(args[i], B.INT)
-        routine = 'bly_zx_' + name
+        routine = routine or 'bly_zx_' + name
         if name == 'cls':
             self.call(routine)
         elif name in ('ink', 'paper', 'border', 'pause'):

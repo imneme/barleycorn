@@ -48,6 +48,9 @@ static int bly_showing;
 #define BLY_ATTEXT(x) do { bly_showing = 2; x; bly_showing = 0; } while (0)
 /* print #0 and #1: the lower screen's alone, showing 3, with print's column the lower screen's (for the zones) */
 #define BLY_LOWER(x, l) do { bly_zx_lower(l); x; bly_zx_upper(); } while (0)
+/* ... in a print with colour items: from the first on, each piece puts them back (load) and keeps them (save) */
+#define BLY_LOWERC(x, l, load, save) \
+    do { bly_zx_lower(l); if (load) bly_zx_lower_load(); x; if (save) bly_zx_lower_save(); bly_zx_upper(); } while (0)
 /* print #4: FZX text, the screen's alone, showing 4 */
 #define BLY_FZX(x, l) do { bly_zx_fzx_begin(l); x; bly_zx_fzx_end(); } while (0)
 static void bly_zx_out(u8 ch);

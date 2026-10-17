@@ -1,4 +1,4 @@
-;; provides: bly_zx_lower bly_zx_upper bly_zx_lat
+;; provides: bly_zx_lower bly_zx_upper bly_zx_lat bly_zx_lload bly_zx_lsave
 ;; needs: bly_putc bly_col bly_fail bly_pr_cstr bly_pr_i16 bly_zx_chan_k
 ;; targets: zx48
 ;; print #0 and #1: the lower screen's two rows, through the ROM's channel K (zxgfx.py's lat and lout are the
@@ -10,6 +10,9 @@
 ;;               and a jump to zxl_putc put in their place                               clobbers: AF BC DE HL
 ;; bly_zx_upper  all three put back, and stream 2 again                                 clobbers: AF BC DE HL
 ;; bly_zx_lat    in: HL=r DE=c (ints)   print at, on the lower screen (rows 0 and 1)    clobbers: AF BC DE HL
+;; bly_zx_lload, _lsave  in a print #0 or #1 with colour items, from the first on: each piece's channel K starts
+;;               from the border's colours (TEMPS), so the print's own are kept here (bly_zx_lsave, after a piece)
+;;               and put back (bly_zx_lload, after bly_zx_lower): ATTR_T, MASK_T and P_FLAG's even bits   clobbers: AF HL
 ;;               fails: print at ({r}, {c}) is off the lower screen
 
 ZXL_S_POSNL equ 5C8Ah               ; the lower screen's position: 33 - its column, then its line, which with two
@@ -36,6 +39,25 @@ bly_zx_lower:
         ret
 .col:   dw 0
 .keep:  ds 3
+
+bly_zx_lload:
+        ld hl,(zxl_kept)
+        ld (5C8Fh),hl               ; ATTR_T and MASK_T
+        ld a,(5C91h)                ; P_FLAG: its permanent bits as they are, the temporary ones kept
+        and 0AAh
+        ld hl,zxl_kept+2
+        or (hl)
+        ld (5C91h),a
+        ret
+
+bly_zx_lsave:
+        ld hl,(5C8Fh)
+        ld (zxl_kept),hl
+        ld a,(5C91h)
+        and 55h
+        ld (zxl_kept+2),a
+        ret
+zxl_kept: ds 3
 
 bly_zx_upper:
         ld hl,bly_zx_lower.keep
