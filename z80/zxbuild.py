@@ -18,6 +18,15 @@ set, says when the tape was made, for a build that comes out the same. The
 first CODE block is the input at 8000h (a length word, then the text, so a
 missing input is just a zero), the second is the program, assembled twice so
 it sits flush under the UDGs at FF58h, with its slots just beneath it.
+
+With several inputs, the tape runs the program on each in turn, as Melissa's
+robots tape loaded each floor after the last was solved. The further inputs
+follow the program on the tape, and line 10 goes on to line 30 instead of the
+year: IF PEEK n THEN POKE n,PEEK n-1: LOAD "" CODE: GO TO 10, where n is a
+byte in the program (bly_inputs_left) that line 20 sets to how many follow.
+RUN keeps it, so RUN runs the program again on the input it has, and the tape
+carries on from there. Every input goes to the same place, room made for the
+largest. A tape with one input is as it always was.
 """
 import argparse
 import datetime
@@ -86,11 +95,12 @@ def made():
 AUTOSTART = 20                                          # the tape's: line 20 loads the code; RUN starts at 10
 
 
-def loader(start, input_at=INPUT, when=None):
+def loader(start, input_at=INPUT, when=None, more=0, left=0):
     """line 10 runs the program, line 20 loads it first, and line YEAR's last statement is the month's, for BASIC's
-    0 OK report"""
+    0 OK report. more: how many inputs follow the program on the tape; line 30 loads each in turn (left: the byte
+    that counts them)"""
     CLEAR, LOAD, CODE, CLS, RANDOMIZE, USR, REM, GOTO = 0xFD, 0xEF, 0xAF, 0xFB, 0xF9, 0xC0, 0xEA, 0xEC
-    POKE, BORDER = 0xF4, 0xE7
+    POKE, BORDER, IF, THEN, PEEK = 0xF4, 0xE7, 0xFA, 0xCB, 0xBE
     year, month = when or made()
 
     def line(n, body):
@@ -98,14 +108,18 @@ def loader(start, input_at=INPUT, when=None):
     fresh = b':'.join([bytes([POKE]) + number(a) + b',' + number(v) for a, v in ((23693, 56), (23694, 0), (23697, 0))] +
                       [bytes([BORDER]) + number(7)])                # ATTR_P, MASK_P, P_FLAG: a fresh 48K's
     run = (fresh + b':' + bytes([CLS]) + b':' +                  # as a 48K starts, the loader's words away: the
-           bytes([RANDOMIZE, USR]) + number(start) + b':' + bytes([GOTO]) + number(year))     # interpreter's start
+           bytes([RANDOMIZE, USR]) + number(start) + b':' + bytes([GOTO]) + number(30 if more else year))
     load = (bytes([CLEAR]) + number(input_at - 1) + b':' + bytes([LOAD]) + b'""' + bytes([CODE]) + b':' +
-            bytes([LOAD]) + b'""' + bytes([CODE]) + b':' + bytes([GOTO]) + number(10))
+            bytes([LOAD]) + b'""' + bytes([CODE]) + b':' +
+            (bytes([POKE]) + number(left) + b',' + number(more) + b':' if more else b'') + bytes([GOTO]) + number(10))
     date = b':' * (month - 1) if month > 1 else bytes([REM])                      # a line can't be empty: January's REM
-    return line(10, run) + line(AUTOSTART, load) + line(year, date)
+    nxt = (bytes([IF, PEEK]) + number(left) + bytes([THEN, POKE]) + number(left) + b',' + bytes([PEEK]) + number(left)
+           + b'-' + number(1) + b':' + bytes([LOAD]) + b'""' + bytes([CODE]) + b':' + bytes([GOTO]) + number(10))
+    return line(10, run) + line(AUTOSTART, load) + (line(30, nxt) if more else b'') + line(year, date)
 
 
-def build(src, text=b'', markers=True, unchecked=False):
+def build(src, text=b'', markers=True, unchecked=False, more=()):
+    """the tape, and what's where. more: further inputs, each run in turn after the first"""
     asm1 = z80gen.compile_program(src, 'zx48', org=0x8000, bss_at=0, markers=markers, unchecked=unchecked) + \
         '\nbly_input_at equ 8000h\n'
     code1, sym1 = assemble(asm1)
@@ -116,9 +130,11 @@ def build(src, text=b'', markers=True, unchecked=False):
     # the input goes at 8000h when it fits up there; otherwise lower, into contended RAM, which a text read once in
     # order minds least (DESIGN.md section 6). The arena keeps at least ARENA_MIN between it and the stack.
     input_at = INPUT
-    need = ARENA_MIN + 4 * (text.count(b'\n') + 1)       # and the line table: a str (4 bytes) for every input line
-    if input_at + 2 + len(text) > bss_at - STACKROOM - need:
-        input_at = bss_at - STACKROOM - need - 2 - len(text)
+    room = lambda t: len(t) + 4 * (t.count(b'\n') + 1)    # the text and its line table: a str (4 bytes) a line
+    big = max([text] + list(more), key=room)              # every input goes to the same place: room for the largest
+    need = ARENA_MIN + 4 * (big.count(b'\n') + 1)
+    if input_at + 2 + len(big) > bss_at - STACKROOM - need:
+        input_at = bss_at - STACKROOM - need - 2 - len(big)
     if input_at < LOWEST:
         raise SystemExit(f'too big for a 48K: code {size}, slots {bss}, input {len(text)}, stack {STACKROOM}')
     code, sym = assemble(z80gen.compile_program(src, 'zx48', org=org, bss_at=bss_at, markers=markers,
@@ -128,12 +144,15 @@ def build(src, text=b'', markers=True, unchecked=False):
     if size2 != size:                                  # a fragment whose size depends on where it lands (an align, say)
         raise SystemExit(f'the code is {size} bytes at 8000h but {size2} at {org:04X}h: the two passes must agree')
     code = code[:size]
-    prog = loader(org, input_at)
+    prog = loader(org, input_at, more=len(more), left=sym['bly_inputs_left'])
     tap = header(0, 'barley', len(prog), AUTOSTART, len(prog)) + block(0xFF, prog)
     inp = len(text).to_bytes(2, 'little') + text
     tap += header(3, 'input', len(inp), input_at, 32768) + block(0xFF, inp)
     tap += header(3, 'program', len(code), org, 32768) + block(0xFF, code)
-    return tap, {'org': org, 'code': size, 'slots': bss, 'arena': bss_at - STACKROOM - (input_at + 2 + len(text)),
+    for k, t in enumerate(more, 2):                    # the rest, each loaded when the run before it has ended
+        inp = len(t).to_bytes(2, 'little') + t
+        tap += header(3, f'input {k}', len(inp), input_at, 32768) + block(0xFF, inp)
+    return tap, {'org': org, 'code': size, 'slots': bss, 'arena': bss_at - STACKROOM - (input_at + 2 + len(big)),
                  'input_at': input_at, 'sym': sym}
 
 
@@ -141,7 +160,8 @@ def main(argv):
     ap = argparse.ArgumentParser(prog='zxbuild.py', description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('program', metavar='PROGRAM.bly', help='the program')
-    ap.add_argument('input', metavar='INPUT', nargs='?', help='its input, as a block on the tape')
+    ap.add_argument('input', metavar='INPUT', nargs='*',
+                    help='its input, as a block on the tape; several, and the tape runs it on each in turn')
     ap.add_argument('-o', dest='out', metavar='OUT.tap', help='the tape (default: PROGRAM.tap beside the program)')
     ap.add_argument('--plain', action='store_true',
                     help='without the transcript markers around text printed at a place: for a real Spectrum, '
@@ -151,12 +171,13 @@ def main(argv):
     a = ap.parse_args(argv)
     try:
         src = open(a.program).read()
-        text = open(a.input, 'rb').read() if a.input else b''
+        texts = [open(f, 'rb').read() for f in a.input]
         z80gen.B.EMBED_DIR = os.path.dirname(os.path.abspath(a.program))     # embed's files are beside it
     except OSError as err:
         sys.exit(f'zxbuild.py: {err.filename}: {err.strerror}')
     try:
-        tap, info = build(src, text, markers=not a.plain, unchecked=a.unchecked)
+        tap, info = build(src, texts[0] if texts else b'', markers=not a.plain, unchecked=a.unchecked,
+                          more=texts[1:])
     except z80gen.B.BarleyError as err:
         print(err)                                     # the checker's words, as the interpreter prints them
         sys.exit(1)

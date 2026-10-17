@@ -135,8 +135,8 @@ screen, sound or memory need the ROM, even in the interpreter.
 ./bly c   PROG.bly [INPUT]    # compile to C and run it
 ./bly c -o prog PROG.bly      # keep the executable instead, to run: ./prog [INPUT]
 ./bly cpm PROG.bly [INPUT]    # compile for CP/M and run it under tnylpo
-./bly tap PROG.bly [INPUT] -o x.tap   # a tape: BASIC loader, input, program
-./bly zx  PROG.bly [INPUT]    # that tape on omse-ai's 48K, and what it prints
+./bly tap PROG.bly [INPUT...] -o x.tap   # a tape: BASIC loader, input, program
+./bly zx  PROG.bly [INPUT...]   # that tape on omse-ai's 48K, and what it prints
 ./bly all PROG.bly [INPUT]    # all four, compared: their text and final screens
 ```
 
@@ -156,6 +156,11 @@ Spectrum the input travels on the tape and loads like any other block.
 What's typed at the keyboard comes through `ask()` (a line), `inkey()`
 and `key()`. Off the Spectrum it comes on stdin, and `./bly zx` has
 omse-ai type it.
+
+A tape can carry several inputs: `./bly tap prog.bly a.txt b.txt c.txt`
+runs the program on each in turn, loading the next when a run ends, as
+Melissa's robots tape loaded each floor once the last was solved. RUN
+runs it again on the input it has, and the tape carries on from there.
 
 ## Testing and measuring
 

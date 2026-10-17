@@ -53,7 +53,7 @@ def quotations():
 # (argparse checks them all before a file is opened); the second group needs omse-ai's Python
 COMMANDS = {'bly': ['run', 'x.bly'], 'check': [], 'interp/barley.py': ['x.bly'], 'interp/tests/run.py': [],
             'c/cgen.py': ['x.bly'], 'c/tests/test_screen.py': [], 'c/tests/test_wrap.py': [], 'z80/z80gen.py': ['x.bly'],
-            'z80/zxbuild.py': ['x.bly'], 'z80/fuzz.py': [], 'z80/tests/unchecked_check.py': [], 'examples/make_sudoku.py': [],
+            'z80/zxbuild.py': ['x.bly'], 'z80/fuzz.py': [], 'z80/tests/unchecked_check.py': [], 'z80/tests/multi_input_check.py': [], 'examples/make_sudoku.py': [],
             'examples/make_monkey.py': [], 'examples/make_towels.py': [],
             'examples/make_crt.py': [], 'examples/make_sand.py': [], 'examples/make_rope.py': [], 'examples/make_lisp.py': [], 'examples/make_robots.py': [], 'examples/make_claw.py': [], 'examples/make_mirrors.py': [], 'examples/make_galaxies.py': [], 'examples/make_crates.py': [],
             'tools/check_docs.py': [], 'tools/gallery.py': []}

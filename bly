@@ -212,10 +212,12 @@ def parser():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest='cmd', metavar='COMMAND', required=True)
 
-    def command(name, help, description=None):
+    def command(name, help, description=None, inputs='?'):
         p = sub.add_parser(name, help=help, description=description or help[0].upper() + help[1:] + '.')
         p.add_argument('program', metavar='PROGRAM.bly', help='the program')
-        p.add_argument('input', metavar='INPUT', nargs='?', help='its input: what lines(), grid() and input() read')
+        p.add_argument('input', metavar='INPUT', nargs=inputs, help='its input: what lines(), grid() and input() read'
+                       + ('; several, and the tape runs it on each in turn, loading the next when a run ends'
+                          if inputs == '*' else ''))
         return p
 
     p = command('run', "run it in the interpreter, which is the language's specification")
@@ -237,10 +239,10 @@ def parser():
                  "program already proven with them checked (a wrong index then reads or writes wherever it points)")
     p = command('cpm', 'compile it for CP/M, assemble it, and run it under tnylpo')
     p.add_argument('--unchecked', action='store_true', help=unchecked)
-    p = command('tap', 'make a tape for a 48K Spectrum (a real one, or any emulator)')
+    p = command('tap', 'make a tape for a 48K Spectrum (a real one, or any emulator)', inputs='*')
     p.add_argument('-o', dest='out', metavar='OUT.tap', help='where to put it (default build/bly/PROGRAM.tap)')
     p.add_argument('--unchecked', action='store_true', help=unchecked)
-    p = command('zx', "make the tape and run it on omse-ai's 48K, printing what the program printed")
+    p = command('zx', "make the tape and run it on omse-ai's 48K, printing what the program printed", inputs='*')
     p.add_argument('--unchecked', action='store_true', help=unchecked)
     p.add_argument('--scr', metavar='OUT.scr',
                    help="save the 48K's screen at the end (OUT.png: as a picture, its border the 48K's, and OUT.scr "
@@ -259,7 +261,7 @@ def parser():
 def main(argv):
     a = parser().parse_args(argv)
     prog = a.program
-    inp = [os.path.abspath(a.input)] if a.input else []
+    inp = [os.path.abspath(f) for f in (a.input if isinstance(a.input, list) else [a.input] if a.input else [])]
     for path in [prog] + inp:
         if not os.path.exists(path):
             sys.exit(f'bly: {path}: no such file')

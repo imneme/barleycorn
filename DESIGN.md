@@ -989,8 +989,11 @@ routines with the same names on each machine:
 
 **How the input gets in:** `./bly tap prog.bly input.txt` puts it on the
 same TAP as its own CODE block, which the loader puts in place, so you
-load your puzzle input from tape like a real one. On CP/M it's the file
-named on the command line. The interpreter and the C take a file name.
+load your puzzle input from tape like a real one. Several inputs make a
+tape that runs the program on each in turn, loading the next when a run
+ends (Melissa's robots tape did that with her floors; a feature driven
+by use). On CP/M it's the file named on the command line. The
+interpreter and the C take a file name.
 
 ## 8. What writing in it looks like
 

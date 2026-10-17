@@ -247,6 +247,10 @@ spectrum-minilib (`zxask.asm`).
   `,` and `;` anywhere) typed as BASIC on omse-ai's 48K and run in the
   interpreter, the whole screen compared; with `--machines`, C's and the
   48K's screens are held to the interpreter's too.
+- **Several inputs** (`z80/tests/multi_input_check.py`, in the zx
+  stage): a tape with three inputs, the largest not the first, runs the
+  program three times, an input each, in order, and BASIC ends with 0
+  OK.
 - **Unchecked** (`z80/tests/unchecked_check.py`, in the cpm stage):
   `--unchecked` (`bly tap`, `zx`, `cpm`) leaves the Z80's 8- and 16-bit
   indexes unchecked. A program whose indexes are good prints the same in

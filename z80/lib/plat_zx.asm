@@ -1,4 +1,5 @@
 ;; provides: bly_putc bly_exit bly_failed bly_start bly_text bly_tlen bly_basic_sp bly_zx_cls bly_zx_at bly_zx_key bly_zx_ticks bly_zx_pause
+;; provides: bly_inputs_left
 ;; needs: bly_atop bly_alimit bly_fail bly_pr_cstr bly_pr_i16 bly_out bly_col
 ;; uses: bly_program bly_bss bly_bss_end bly_input_at
 ;; targets: zx48
@@ -151,6 +152,8 @@ zxp_stop:                           ; (fprig.py makes this a RET, so a failure c
         rst 08h                     ; a failure: the program stopped, and BASIC says so
         db 8                        ; 9 STOP statement
 zxp_failed: db 0
+bly_inputs_left: db 0               ; a tape with several inputs: how many are still to load (the loader's line 30
+                                    ; PEEKs and POKEs it; the program never touches it, and RUN leaves it be)
 
 ; -- the screen and sound -----------------------------------------------------------------------------------------
 ATTR_P  equ 5C8Dh

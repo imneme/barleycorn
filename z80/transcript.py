@@ -10,12 +10,14 @@ BYTES = {**{ch: chr(0x80 + i) for i, ch in enumerate(BLOCKS)},              # om
 
 
 def answer(printed):
-    """the program's output: the transcript after LOAD's lines, without the text it printed at a place. The runtime
+    """the program's output: the transcript after LOAD's lines (and the lines of the inputs loaded after the first,
+    on a tape with several), without the text it printed at a place. The runtime
     brackets each piece of that text with INVERSE and OVER at their own values (invisible on the screen), and AT is
     the place; user code never sends either (print turns control bytes into ?). The characters omse-ai writes for
     the bytes that aren't ASCII (the block graphics, the UDGs, the pound and the copyright sign) are those bytes
     again, as latin-1 characters, so a caller writing latin-1 gets the bytes the program printed"""
     out = printed[printed.index(LOADED) + len(LOADED):] if LOADED in printed else 'LOADER: ' + printed
+    out = re.sub(r'\nBytes: input \d+ *\n', '', out)        # a tape with several inputs: LOAD's line for each after
     out = re.sub(r'\{INVERSE \d\}.*?\{OVER \d\}', '', out, flags=re.S)
     out = re.sub(r'\{AT \d+,\d+\}', '', out)
     return ''.join(BYTES.get(ch, ch) for ch in out)        # each byte as itself, as the interpreter and C print it
