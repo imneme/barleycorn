@@ -181,7 +181,8 @@ func main()
   end
 end
 
--- Typed here: dataset 1, and then she asks again, and the run stops there (STOP in ask: there are no more keys).
+-- Typed here: dataset 1, and when she asks again, 42, which stops it.
 -- At a Spectrum, type 0 or 1 for a dataset, and 42 to stop.
 -- keys:
 -- < 1
+-- < 42

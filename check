@@ -42,7 +42,7 @@ def stages(quick):
          [[PY, SUITE, '--z80']]),
         ('zx', 'the suite on the 48K Spectrum (omse-ai)',
          lambda: None if have(paths.SJASMPLUS) and omse_ready() else 'needs sjasmplus, omse-ai and the 48K ROM',
-         [[PY, SUITE, '--zx']]),
+         [[PY, SUITE, '--zx'], [PY, os.path.join(ROOT, 'z80', 'tests', 'zxrun_check.py')]]),
         ('fragments', "each library fragment against its Python model, on a bare Z80",
          lambda: None if have(paths.SJASMPLUS) and omse_ready() else 'needs sjasmplus, omse-ai and the 48K ROM',
          [[OPY, os.path.join(ROOT, 'z80', 'tests', t + '.py')] + (['--quick'] if quick and t not in ('test_core', 'test_gen', 'test_int') else [])

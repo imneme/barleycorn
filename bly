@@ -33,6 +33,19 @@ def reads_keys(prog):
         return False
 
 
+def asks_only(prog):
+    """does the program read keys only through ask(), never key() or inkey()? Then each line typed for the 48K can
+    wait for its question, however long the program works before asking (zxrun.py --wait-ask)"""
+    sys.path.insert(0, os.path.join(ROOT, 'interp'))
+    import barley
+    barley.EMBED_DIR = os.path.dirname(os.path.abspath(prog))
+    try:
+        d = barley.Parser(open(prog).read()).program()
+    except barley.BarleyError:
+        return False
+    return barley.uses_keys(d, ('ask',)) and not barley.uses_keys(d, ('inkey', 'key'))
+
+
 def typed_keys():
     """the keys on stdin for zx and all, which need them before the program runs: a file's, whole; a pipe's, as
     much as has come and keeps coming without a pause (so a pipe nobody writes to or closes, a tool harness's,
@@ -106,10 +119,10 @@ def make_tap(prog, inp, tap, plain=False):
     return t.returncode
 
 
-def run_zx(tap, scr, minutes, capture=False, keys=None):
+def run_zx(tap, scr, minutes, capture=False, keys=None, wait_ask=False):
     paths.omse_ai()
     cmd = [paths.OMSE_AI_PYTHON, os.path.join(ROOT, 'z80', 'zxrun.py'), tap, '--minutes', str(minutes)] + \
-        (['--scr', scr] if scr else [])
+        (['--scr', scr] if scr else []) + (['--wait-ask'] if wait_ask else [])
     if keys is not None:
         kf = os.path.splitext(tap)[0] + '.keys'
         open(kf, 'w', encoding='latin-1').write(keys)
@@ -144,7 +157,8 @@ def run_all(prog, inp, work, minutes, keys):
     codes['cpm'], outs['cpm'] = run_cpm(prog, inp, work, capture=True, keys=keys)
     tap, zscr = os.path.join(work, 'prog.tap'), os.path.join(work, 'zx.scr')
     if make_tap(prog, inp, tap) == 0:
-        codes['zx'], outs['zx'] = run_zx(tap, zscr, minutes, capture=True, keys=keys)
+        codes['zx'], outs['zx'] = run_zx(tap, zscr, minutes, capture=True, keys=keys,
+                                         wait_ask=bool(keys) and asks_only(prog))
     else:
         codes['zx'], outs['zx'] = 1, '(the tape failed to build)'
     sys.stdout.flush()
@@ -270,7 +284,7 @@ def main(argv):
         if a.cmd == 'tap':
             print(tap)
             return
-        code, _ = run_zx(tap, a.scr, a.minutes, keys=keys)
+        code, _ = run_zx(tap, a.scr, a.minutes, keys=keys, wait_ask=bool(keys) and asks_only(prog))
         sys.exit(code)
     finally:
         shutil.rmtree(work, ignore_errors=True)

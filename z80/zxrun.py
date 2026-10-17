@@ -38,6 +38,8 @@ ap.add_argument('--scr', metavar='OUT.scr', help="save the 48K's screen at the e
 ap.add_argument('--minutes', type=float, default=10, metavar='N',
                 help='give up after N minutes of Spectrum time (default 10)')
 ap.add_argument('--keys', metavar='FILE', help='type these keys as the program runs (see above)')
+ap.add_argument('--wait-ask', action='store_true',
+                help="the program reads keys only through ask(): each key waits for its question, however long")
 a = ap.parse_args()
 if not os.path.exists(a.tap):
     sys.exit(f'zxrun.py: {a.tap}: no such file')
@@ -56,10 +58,13 @@ def state(frames=1):
 
 
 def type_key(ch):
-    """one key: into the editor if the program asks within half a second, else pressed and let go"""
-    for _ in range(25):
+    """one key: into the editor if the program asks within half a second (with --wait-ask, whenever it asks), else
+    pressed and let go"""
+    tries = 0
+    while True:
         st = state()
-        if st:
+        tries += 1
+        if st or (tries >= 25 and not a.wait_ask) or zx.lib.zx_tstates(zx.z) - t0 >= limit:
             break
     if st == 'done':
         return False

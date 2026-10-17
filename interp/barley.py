@@ -2891,11 +2891,12 @@ def uses_machine(decls):
     return walk(decls)
 
 
-def uses_keys(decls):
-    """does the program read the keyboard (ask, inkey, key)? Only then does anything need stdin"""
+def uses_keys(decls, names=('ask', 'inkey', 'key')):
+    """does the program read the keyboard (ask, inkey, key; or just those in names)? Only then does anything need
+    stdin"""
     def walk(x):
         if isinstance(x, N):
-            if x.k == 'call' and getattr(x, 'name', None) in ('ask', 'inkey', 'key') and not hasattr(x, 'func'):
+            if x.k == 'call' and getattr(x, 'name', None) in names and not hasattr(x, 'func'):
                 return True
             return any(walk(v) for k, v in x.__dict__.items() if k not in ('func', 'var', 'ty', 'record', 'cast'))
         if isinstance(x, (list, tuple)):
