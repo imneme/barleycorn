@@ -39,7 +39,7 @@ def stages(quick):
          f'needs a C compiler ({paths.CC})', [[PY, SUITE, '--c'], [PY, os.path.join(ROOT, 'c', 'tests', 'test_wrap.py')]]),
         ('cpm', 'the suite as CP/M programs under tnylpo',
          lambda: None if have(paths.SJASMPLUS) and have(paths.TNYLPO) else 'needs sjasmplus and tnylpo',
-         [[PY, SUITE, '--z80']]),
+         [[PY, SUITE, '--z80'], [PY, os.path.join(ROOT, 'z80', 'tests', 'unchecked_check.py')]]),
         ('zx', 'the suite on the 48K Spectrum (omse-ai)',
          lambda: None if have(paths.SJASMPLUS) and omse_ready() else 'needs sjasmplus, omse-ai and the 48K ROM',
          [[PY, SUITE, '--zx'], [PY, os.path.join(ROOT, 'z80', 'tests', 'zxrun_check.py')]]),

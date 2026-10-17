@@ -150,6 +150,7 @@ class Gen:
     def __init__(self, ck, target):
         self.ck, self.target = ck, target
         self.markers = True                 # the transcript's markers around text printed at a place
+        self.unchecked = False              # bly --unchecked: 8- and 16-bit indexes go unchecked
         self.code = []
         self.nlabel = 0
         self.strings = {}
@@ -1751,8 +1752,13 @@ class Gen:
 
     # -- indexing --------------------------------------------------------------------------------------------------
     def check_index(self, i, n_bc_already, line):
-        """with the length in BC, check index op i and leave it in DE as a word"""
+        """with the length in BC, check index op i and leave it in DE as a word (unchecked: an 8- or 16-bit one is
+        just loaded, so a program already proven with its indexes checked runs a quarter faster where indexing is the
+        work; a wrong one then reads or writes wherever it points)"""
         it = i.ty
+        if self.unchecked and (it in (B.BYTE, B.WORD, B.INT) or i.kind == 'imm' and 0 <= i.val <= 65535):
+            self.load_de(i)
+            return
         if it in (B.BYTE, B.WORD) or i.kind == 'imm' and 0 <= i.val <= 65535:
             self.load_de(i)
             self.emit('ld h,d')
@@ -3198,16 +3204,18 @@ COUNT64 = ['bly_count64:                        ; HL = &count (quad) -> DE = it,
            '        cp 65', '        ret c', '        ld e,64', '        ret']
 
 
-def compile_program(src, target='cpm', org=None, bss_at=None, markers=True):
+def compile_program(src, target='cpm', org=None, bss_at=None, markers=True, unchecked=False):
     """org and bss_at place the code and the slots (the Spectrum's builder puts code high, slots beneath it).
     markers=False leaves out the two invisible control codes around each piece of text printed at a place, which
-    only the tests' transcript needs (HACKING.md): a tape for a real Spectrum is faster without them"""
+    only the tests' transcript needs (HACKING.md): a tape for a real Spectrum is faster without them. unchecked:
+    8- and 16-bit indexes go unchecked (bly --unchecked)"""
     FLOATS['on'] = target in ('zx48', 'cpm')     # the ROM's on the 48K; fp_cpm.asm's on CP/M
     decls = B.Parser(src).program()
     ck = B.Checker(decls, 'cpm' if target == 'cpm' else 'zx48')
     ck.check()
     g = Gen(ck, target)
     g.markers = markers
+    g.unchecked = unchecked
     if org is not None:
         g.org = org
     if bss_at is not None:
@@ -3222,6 +3230,8 @@ def main(argv):
                                  epilog='then, for CP/M: sjasmplus --raw=prog.com prog.asm (zxbuild.py makes tapes)')
     ap.add_argument('program', metavar='PROGRAM.bly', help='the program; its assembly goes to standard output')
     ap.add_argument('--target', choices=['cpm', 'zx48'], default='cpm', help='the machine (default cpm)')
+    ap.add_argument('--unchecked', action='store_true',
+                    help='8- and 16-bit indexes go unchecked: only for a program already proven with them checked')
     a = ap.parse_args(argv)
     try:
         B.EMBED_DIR = os.path.dirname(os.path.abspath(a.program))
@@ -3229,7 +3239,7 @@ def main(argv):
     except OSError as err:
         sys.exit(f'z80gen.py: {a.program}: {err.strerror}')
     try:
-        sys.stdout.write(compile_program(src, a.target))
+        sys.stdout.write(compile_program(src, a.target, unchecked=a.unchecked))
     except B.BarleyError as err:
         print(err)
         sys.exit(1)

@@ -242,7 +242,16 @@ spectrum-minilib (`zxask.asm`).
   our adapted one on the 48K. It uses `interp/tests/sprig.fzx`, and any
   fonts in `FZX_FONTS`, since fonts aren't ours to ship.
   `tools/make_fzx.py` draws `sprig.fzx`, and with `--stray`, a font that
-  breaks the rules on purpose.
+  breaks the rules on purpose. `z80/tests/print_check.py` holds `print`
+  itself to BASIC's PRINT: random statements (text, `at`, colour items,
+  `,` and `;` anywhere) typed as BASIC on omse-ai's 48K and run in the
+  interpreter, the whole screen compared; with `--machines`, C's and the
+  48K's screens are held to the interpreter's too.
+- **Unchecked** (`z80/tests/unchecked_check.py`, in the cpm stage):
+  `--unchecked` (`bly tap`, `zx`, `cpm`) leaves the Z80's 8- and 16-bit
+  indexes unchecked. A program whose indexes are good prints the same in
+  less code; a read past an array's end, which stops checked, runs on
+  unchecked; a `long` index is still checked.
 - **The docs** (`tools/check_docs.py`): a code block that starts like a
   program in `interp/tests` or `examples` quotes it, and must be all of
   it, exactly; DESIGN.md quotes five. Every command's `-h` must work and

@@ -88,11 +88,12 @@ def run_c(prog, inp, work, capture=False, keys=None, out=None, wrap=False):
     return r.returncode, (r.stdout.decode('latin-1') if capture else '')
 
 
-def run_cpm(prog, inp, work, capture=False, keys=None):
+def run_cpm(prog, inp, work, capture=False, keys=None, unchecked=False):
     stem = os.path.splitext(os.path.basename(prog))[0]
     name = ''.join(ch for ch in stem.lower() if ch.isalnum())[:8] or 'prog'   # a CP/M name: 8 letters or digits
     asm, com = os.path.join(work, stem + '.asm'), os.path.join(work, name + '.com')
-    g = subprocess.run([sys.executable, os.path.join(ROOT, 'z80', 'z80gen.py'), prog], capture_output=True, text=True)
+    g = subprocess.run([sys.executable, os.path.join(ROOT, 'z80', 'z80gen.py'), prog] +
+                       (['--unchecked'] if unchecked else []), capture_output=True, text=True)
     if g.returncode:
         return g.returncode, (g.stdout + g.stderr)
     open(asm, 'w').write(g.stdout)
@@ -111,9 +112,9 @@ def run_cpm(prog, inp, work, capture=False, keys=None):
     return r.returncode, (r.stdout.decode('latin-1') if capture else '')
 
 
-def make_tap(prog, inp, tap, plain=False):
+def make_tap(prog, inp, tap, plain=False, unchecked=False):
     t = subprocess.run([sys.executable, os.path.join(ROOT, 'z80', 'zxbuild.py'), prog] + inp + ['-o', tap] +
-                       (['--plain'] if plain else []),
+                       (['--plain'] if plain else []) + (['--unchecked'] if unchecked else []),
                        capture_output=True, text=True)
     sys.stderr.write(t.stdout + t.stderr)                   # the build's report isn't the program's output
     return t.returncode
@@ -232,10 +233,15 @@ def parser():
                    help="integer overflow wraps round instead of stopping the program: a quarter to a third less time where "
                    "the arithmetic is the work, for a program already tested without it (indexes and division by "
                    "zero are still checked)")
-    command('cpm', 'compile it for CP/M, assemble it, and run it under tnylpo')
+    unchecked = ("8- and 16-bit indexes go unchecked: a quarter less time where indexing is the work, for a "
+                 "program already proven with them checked (a wrong index then reads or writes wherever it points)")
+    p = command('cpm', 'compile it for CP/M, assemble it, and run it under tnylpo')
+    p.add_argument('--unchecked', action='store_true', help=unchecked)
     p = command('tap', 'make a tape for a 48K Spectrum (a real one, or any emulator)')
     p.add_argument('-o', dest='out', metavar='OUT.tap', help='where to put it (default build/bly/PROGRAM.tap)')
+    p.add_argument('--unchecked', action='store_true', help=unchecked)
     p = command('zx', "make the tape and run it on omse-ai's 48K, printing what the program printed")
+    p.add_argument('--unchecked', action='store_true', help=unchecked)
     p.add_argument('--scr', metavar='OUT.scr',
                    help="save the 48K's screen at the end (OUT.png: as a picture, its border the 48K's, and OUT.scr "
                    "beside it)")
@@ -273,13 +279,14 @@ def main(argv):
                 print(a.out)
             sys.exit(msg.rstrip() if code and msg else code)
         if a.cmd == 'cpm':
-            code, msg = run_cpm(prog, inp, work)
+            code, msg = run_cpm(prog, inp, work, unchecked=a.unchecked)
             sys.exit(msg.rstrip() if code and msg else code)
         keys = typed_keys() if a.cmd in ('zx', 'all') and reads_keys(prog) else None     # tap never types
         if a.cmd == 'all':
             sys.exit(run_all(prog, inp, work, a.minutes, keys))
         tap = (a.out if a.cmd == 'tap' else None) or os.path.join(paths.build_dir('bly'), stem + '.tap')
-        if make_tap(prog, inp, tap, plain=a.cmd == 'tap'):          # a tape to keep: for a real Spectrum
+        # tap's is a tape to keep, for a real Spectrum: plain, without the transcript's markers
+        if make_tap(prog, inp, tap, plain=a.cmd == 'tap', unchecked=a.unchecked):
             sys.exit(1)
         if a.cmd == 'tap':
             print(tap)
