@@ -353,16 +353,15 @@ static inline i32 bly_zx_cell(i32 r, i32 i, i32 c) { return ((r & 0x18) << 8) | 
 
 /* the 22 upper rows move up one; the new bottom row is cleared in the permanent colours. (Moving it by thirds, seven
  * rows at a time, measured no faster: the cost is the 5.4K moved, not the number of moves. See z80/lib/NOTES.md.) */
-static void bly_zx_scroll(void) {          /* as zxgfx.py's: the ROM's CL-SC-ALL, rows 1 to 23 up one, then rows 21
-                                             and 23 swap attributes */
-    u8 row22[32];
-    memcpy(row22, bly_zx_mem + 6144 + 22 * 32, 32);
+static void bly_zx_scroll(void) {          /* as zxgfx.py's: the ROM's CL-SC-ALL, rows 1 to 23 up one, then row 21
+                                             in ATTR_P and row 23 in the colour of row 22's first square */
+    u8 first22 = bly_zx_mem[6144 + 22 * 32];
     for (i32 r = 0; r < 23; r++) {
         for (i32 i = 0; i < 8; i++) memcpy(bly_zx_mem + bly_zx_cell(r, i, 0), bly_zx_mem + bly_zx_cell(r + 1, i, 0), 32);
         memcpy(bly_zx_mem + 6144 + r * 32, bly_zx_mem + 6144 + (r + 1) * 32, 32);
     }
     for (i32 i = 0; i < 8; i++) memset(bly_zx_mem + bly_zx_cell(23, i, 0), 0, 32);
-    memcpy(bly_zx_mem + 6144 + 23 * 32, row22, 32);
+    memset(bly_zx_mem + 6144 + 23 * 32, first22, 32);
     memset(bly_zx_mem + 6144 + 21 * 32, bly_zx_attr_p, 32);
 }
 

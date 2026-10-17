@@ -1032,7 +1032,7 @@ end
 upstairs
 still           114403 894899 904645
 
-=== the upper screen's scroll moves the lower screen's lines up with it, as the ROM's CL-SC-ALL does: its top line's pixels join the upper screen (the picture and the rows' checksums are compared)
+=== the upper screen's scroll moves the lower screen's lines up with it, as the ROM's CL-SC-ALL does: its top line's pixels join the upper screen, and row 23 takes the colour of row 22's first square (the picture and the rows' checksums are compared)
 func row(r: int): long
   var h: long = 0
   for line in 0..8 do
@@ -1053,6 +1053,7 @@ func main()
   cls()
   print at 21, 0; "up"
   print #1; at 0, 0; "TOP"; at 1, 0; "low";
+  attr(22, 0, 0x57)
   print "x";
   var a = row(21)
   var b = row(22)
@@ -1061,7 +1062,7 @@ func main()
 end
 --- screen
 --- expect
-x542312 84417 334216
+x542312 84417 338448
 
 === the lower screen starts on its bottom line, and cls puts it back there
 func row(r: int): long

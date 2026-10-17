@@ -1185,13 +1185,18 @@ fired. Those cases now end with `;`, and one tests the newline alone.
 **The upper screen's scroll moves the lower screen too** (Saturday 17
 October, found by print_check.py). The ROM's PO-SCR-3 (0CD2h) calls
 CL-SC-ALL, which moves rows 1 to 23 up one, the lower screen's two with
-them, and clears row 23 in ATTR_P; then rows 21 and 23 swap attributes.
-So the lower screen's top line keeps its pixels in row 21, in the
-permanent colours, its bottom line becomes row 22, and row 23 is blank
-in what row 22's colours were. The model had moved only rows 0 to 21,
-which agrees whenever the lower screen is blank, and that's why nothing
-caught it before. A program that prints on the lower screen and then
-scrolls the upper one was the first to tell them apart.
+them, and clears row 23 in ATTR_P. Then it reads one attribute from row
+21 and one from row 23 (each row's first square) and fills each row with
+the other's: the loop at 0CF0 writes the same two bytes 32 times. So the
+lower screen's top line keeps its pixels in row 21, in the permanent
+colours, its bottom line becomes row 22, and row 23 is blank, all of it
+in the colour of row 22's first square. The model had moved only rows 0
+to 21, which agrees whenever the lower screen is blank, and that's why
+nothing caught it before. My first fix read PO-SCR-3's loop as a swap of
+whole rows, which agrees whenever row 22 is one colour; print_check's
+next 400 runs found the one that wasn't (a `print #1; bright(1); "Z"`),
+and stepping the 48K through the scroll, stopped at CL-SC-ALL and after
+the loop, showed the fill.
 
 **A key pressed meanwhile is still `key()`'s** (Saturday 17 October).
 Opening channel K clears FLAGS bit 5 (CHAN-K, 1634h), which `ask()`

@@ -438,9 +438,10 @@ class Screen:
 
     def scroll(self):
         """the ROM's upper scroll (PO-SCR-3, 0CD2h): CL-SC-ALL moves rows 1 to 23 up one, the lower screen's two with
-        them, and clears row 23 in the permanent colours; then rows 21 and 23 swap attributes. So the new row 21 is
-        in the permanent colours with the lower screen's top line's pixels (blank, unless something's printed there),
-        row 22 is the lower screen's bottom line, and row 23 is blank in the colours row 22 had"""
+        them, and clears row 23 in the permanent colours. Then PO-SCR-3 reads one attribute from row 21 and one from
+        row 23, their first squares', and fills each row with the other's. So the new row 21 is in the permanent
+        colours with the lower screen's top line's pixels (blank, unless something's printed there), row 22 is the
+        lower screen's bottom line, and row 23 is blank, all of it in the colour of row 22's first square"""
         old = bytes(self.mem)
         for r in range(23):
             for i in range(8):
@@ -450,7 +451,7 @@ class Screen:
         for i in range(8):
             for c in range(32):
                 self.mem[self.cell(23, i, c)] = 0
-        self.mem[6144 + 23 * 32:6144 + 24 * 32] = old[6144 + 22 * 32:6144 + 23 * 32]
+        self.mem[6144 + 23 * 32:6144 + 24 * 32] = bytes([old[6144 + 22 * 32]]) * 32
         self.mem[6144 + 21 * 32:6144 + 22 * 32] = bytes([self.attr_p]) * 32
 
     @staticmethod
