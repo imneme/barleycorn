@@ -1032,6 +1032,37 @@ end
 upstairs
 still           114403 894899 904645
 
+=== the upper screen's scroll moves the lower screen's lines up with it, as the ROM's CL-SC-ALL does: its top line's pixels join the upper screen (the picture and the rows' checksums are compared)
+func row(r: int): long
+  var h: long = 0
+  for line in 0..8 do
+    for c in 0..32 do
+      h = (h * 31 + peek(0x4000 + ((r & 0x18) << 8) + (line << 8) + ((r & 7) << 5) + c)) % 1000003
+    end
+  end
+  for c in 0..32 do
+    h = (h * 31 + peek(0x5800 + r * 32 + c)) % 1000003
+  end
+  return h
+end
+
+func main()
+  border(1)
+  paper(6)
+  ink(2)
+  cls()
+  print at 21, 0; "up"
+  print #1; at 0, 0; "TOP"; at 1, 0; "low";
+  print "x";
+  var a = row(21)
+  var b = row(22)
+  var c = row(23)
+  print a; " "; b; " "; c
+end
+--- screen
+--- expect
+x542312 84417 334216
+
 === the lower screen starts on its bottom line, and cls puts it back there
 func row(r: int): long
   var h: long = 0

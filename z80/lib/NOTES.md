@@ -1182,6 +1182,17 @@ newline from below the bottom fails with the same words a character
 there would, so a case that ended with one couldn't tell which check had
 fired. Those cases now end with `;`, and one tests the newline alone.
 
+**The upper screen's scroll moves the lower screen too** (Saturday 17
+October, found by print_check.py). The ROM's PO-SCR-3 (0CD2h) calls
+CL-SC-ALL, which moves rows 1 to 23 up one, the lower screen's two with
+them, and clears row 23 in ATTR_P; then rows 21 and 23 swap attributes.
+So the lower screen's top line keeps its pixels in row 21, in the
+permanent colours, its bottom line becomes row 22, and row 23 is blank
+in what row 22's colours were. The model had moved only rows 0 to 21,
+which agrees whenever the lower screen is blank, and that's why nothing
+caught it before. A program that prints on the lower screen and then
+scrolls the upper one was the first to tell them apart.
+
 **A key pressed meanwhile is still `key()`'s** (Saturday 17 October).
 Opening channel K clears FLAGS bit 5 (CHAN-K, 1634h), which `ask()`
 wants and `key()` doesn't: a key pressed between two looks was lost if
