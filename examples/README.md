@@ -540,6 +540,24 @@ the interpreter and C) only. Each paragraph says which.
   magenta rules, with its ways and the total,
   46145737803](../docs/towels-d19.png)
 
+## Melissa's games
+
+Small games Melissa wrote in ZX Spectrum BASIC for the BASIC challenges
+in her course, ported to Barley.
+
+- `snake.bly`: Snake. Ported by Speccy-Zone Fern. The snake is a queue
+  of squares; Q, A, O and P turn it, F is food (eat it and the snake
+  grows), X is a wall, and the edge, an X or the snake itself is "Game
+  over!". Her program kept its state on the screen and read it back with
+  SCREEN$; Barley has no SCREEN$, so a board of bytes mirrors the
+  screen. Left to itself, as here, it runs straight on until it hits
+  something; on a Spectrum, steer it.
+
+      ./bly zx examples/snake.bly
+
+  ![The snake's last square, marked @, against a yellow X on a blue
+  board, with food and walls about, and "Game over!"](../docs/snake.png)
+
 The benchmark programs in `../z80/bench/` (fib, tak, Ackermann, queens,
 a sieve, two sorts, a tree, an expression evaluator, Life, a CRC, Hanoi
 and some argument shuffles) are small and readable too, and the Advent

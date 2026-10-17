@@ -1,0 +1,80 @@
+-- Snake: Melissa O'Neill's ZX Spectrum BASIC (her own, from the BASIC challenges in her course), ported to Barley by
+-- Speccy-Zone Fern. The snake is a queue of squares, X and Y, head at qi and tail at qo; Q, A, O and P turn it, F is
+-- food (eat it and the snake grows, and another appears), X is a wall, and the screen's edge, an X or the snake
+-- itself is "Game over!". Her program kept its state on the screen and read it back with SCREEN$; Barley has no
+-- SCREEN$, so a board of bytes mirrors the screen, a square for each. Two changes: a pause(4) a step, since
+-- compiled it would be over before you saw it; and the game ends at "Game over!" without waiting for a key. Typed
+-- keys arrive at different moments on different machines, so it's left to run on its own here: straight on until
+-- it hits something. On a Spectrum, steer it.
+
+var xs: byte[500]                           -- her X and Y: the snake's squares, a ring
+var ys: byte[500]
+var board: byte[704]                        -- what's on each of the 32 x 22 squares (0: nothing), her SCREEN$
+
+func put(r: int, c: int, ch: byte)
+  board[r * 32 + c] = ch
+  print at r, c; chr(ch);
+end
+
+func place(ch: byte)                        -- her @place: ch somewhere free
+  while true do
+    var rx = 1 + int(random(30))
+    var ry = 1 + int(random(20))
+    if board[ry * 32 + rx] == 0 then
+      put(ry, rx, ch)
+      return
+    end
+  end
+end
+
+func main()
+  randomize(1982)
+  var qi = 0                                -- her qi and qo (from 0 here, not 1)
+  var qo = 0
+  xs[0] = 10
+  ys[0] = 10
+  var dx = 1
+  var dy = 0
+  border(0); paper(1); ink(6); cls()
+  place('F')
+  for i in 0..10 do place('X') end
+  while true do
+    var c = inkey()                         -- her INKEY$, or the last key pressed (LAST-K)
+    if c == 0 then c = key() end
+    if dx != 0 then
+      if c == 'q' then
+        dy = -1; dx = 0
+      elif c == 'a' then
+        dy = 1; dx = 0
+      end
+    elif dy != 0 then
+      if c == 'o' then
+        dx = -1; dy = 0
+      elif c == 'p' then
+        dx = 1; dy = 0
+      end
+    end
+    var px = int(xs[qi]) + dx
+    var py = int(ys[qi]) + dy
+    if px < 0 or px > 31 or py < 0 or py > 21 then break end
+    var here = board[py * 32 + px]
+    if here == 'O' then break end
+    qi = (qi + 1) % 500
+    xs[qi] = byte(px)
+    ys[qi] = byte(py)
+    if here == 'X' then
+      put(py, px, '@')
+      break
+    end
+    put(py, px, 'O')
+    if here != 'F' then
+      put(int(ys[qo]), int(xs[qo]), 0)
+      print at int(ys[qo]), int(xs[qo]); " ";
+      qo = (qo + 1) % 500
+    else
+      place('F')
+    end
+    pause(4)
+  end
+  print #0; "Game over!";
+end
