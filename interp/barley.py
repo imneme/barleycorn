@@ -590,7 +590,8 @@ class Parser:
         return self.block()
 
     def print_(self):
-        """BASIC's PRINT: ; joins, , moves to the next 16-column zone, a trailing ; or , keeps the line open.
+        """BASIC's PRINT: ; joins, , moves to the next 16-column zone, a trailing ; or , keeps the line open. As in
+        BASIC, they can come anywhere: first, twice or more in a row, and straight after at's column.
         A print takes the rest of its line. print #n; ... prints to stream n: #2 is the screen, as print alone,
         and #0 and #1 the lower screen's two lines, as BASIC's."""
         line = self.expect('print').line
@@ -612,32 +613,30 @@ class Parser:
                 if ends():
                     newline = False
 
+        need_sep = False                                    # an item went by, so a separator comes next
         while not ends():
+            if self.at(';', 'op') or self.at(',', 'op'):    # anywhere, as BASIC's: first, twice, after at's column
+                if self.next().val == ',':
+                    if stream == 4:
+                        raise BarleyError('print #4 has no zones: use ; or at', line)
+                    items.append(('zone', None))
+                need_sep, newline = False, False
+                continue
+            if need_sep:
+                break
             if self.t.kind == 'name' and self.t.val == 'at' and self.peek().kind not in ('nl', 'eof') \
                     and self.peek().val not in (';', ','):        # at is a keyword only here, as in BASIC
                 self.next()
                 r = self.expr()
                 self.expect(',')
                 items.append(('at', (r, self.expr())))
-                if self.at(';', 'op') or self.at(',', 'op'):
-                    self.next()
-                    if ends():
-                        newline = False
+                newline = True
                 continue
             if self.t.kind == 'kw' and self.t.val not in ('not', 'true', 'false'):
                 raise BarleyError(f'a print takes the rest of its line, so {self.t.val} here would be something to '
                                   f'print: put it on a line of its own', self.t.line)
             items.append(('item', self.expr()))
-            if self.at(';', 'op') or self.at(',', 'op'):
-                sep = self.next().val
-                if sep == ',' and stream == 4:
-                    raise BarleyError('print #4 has no zones: use ; or at', line)
-                if sep == ',':
-                    items.append(('zone', None))
-                if ends():
-                    newline = False
-            else:
-                break
+            need_sep, newline = True, True
         if self.t.kind == 'op' and self.t.val in ('=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<=', '>>='):
             raise BarleyError(f'a print takes the rest of its line, so this {self.t.val} is part of it: put the '
                               f'assignment on a line of its own', self.t.line)

@@ -113,6 +113,31 @@ end
 a               bc              7
 xy
 
+=== print's , and ; can come anywhere, as BASIC's: first, twice or more in a row, and last
+func main()
+  print , "b"
+  print "a",, "c"
+  print ;"d";; "e",
+  print "f"
+  print ,
+  print "g"
+end
+--- expect
+                b
+a                               c
+de              f
+                g
+
+=== print at's column can have a , straight after it, as BASIC's: at 3, 14,, rubs out to the row's end (the picture is compared too)
+func main()
+  print at 3, 12; "ABCDEFGHIJKLMNOPQRST"
+  print at 3, 14,, "x"
+  print at 6, 14, "y"
+  print at 21, 30,,, "z";
+end
+--- screen
+--- expect
+
 === ranges are half-open; rev walks down; slices use the same notation
 func main()
   for i in 0..4 do print i; end

@@ -230,7 +230,8 @@ IN AND OUT  lines() (for line in lines(), or .next())   grid()   input()
             ask(prompt): a line typed. For a number,
             var n: int = ask("n? ").int()  (with nothing to say, a long)
             print a; b, c;   BASIC's: ; joins, , pads to the next
-            16-column zone, a trailing ; or , keeps the line open.
+            16-column zone, a trailing ; or , keeps the line open,
+            and either goes anywhere: print ,, "x"  print at 3, 14,,
             A print takes the rest of its line (to an else, elif or end
             at most): if c then print x; return end is a print of return
 
@@ -634,6 +635,18 @@ up on a Spectrum already knows it, and AoC output is "Part 1: " and a
 number. Two details make it agree everywhere: the zones are padded with
 spaces on every target (not a tab on CP/M), and a `print` takes the rest
 of its line, so its `;` never gets mistaken for the statement separator.
+As in BASIC, `;` and `,` can come anywhere in a print: first, twice or
+more in a row, or straight after `at`'s column, so `print at 3, 14,,`
+rubs out to the end of row 3, as Melissa's own programs do.
+
+**Print is layout, not formatting** (chosen on purpose, 17 October, when
+Melissa asked whether print should be BASIC's, C's, Python's or C++'s).
+It places pieces, each a byte or two through the Spectrum's own print
+channel, whose language BASIC's separators are (`,` is control code 6,
+AT is 22), and it never builds a string, since Barley has no string
+building. So there are no format strings, no `sep` or `end`, and no
+streams; if numbers are ever formatted otherwise, it will be as print
+items, as BASIC's TAB is.
 
 ### Screen and sound: making it sing
 
