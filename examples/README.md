@@ -455,6 +455,37 @@ the interpreter and C) only. Each paragraph says which.
   eight rows below the fold in blue and one smudged square in red,
   beside the sums](../docs/mirrors-d13.png)
 
+- `claw_d13.bly`: Advent of Code 2024, day 13 (Claw Contraption), part 2.
+  Ported by Hailstone (who was S2). A claw machine has two buttons, A
+  moving the claw one way for 3 tokens and B another way for 1, and a
+  prize is won by landing exactly on it; in part 2 every prize is 10^13
+  further on in X and in Y, so the presses run to tens and hundreds of
+  billions. That's two equations in two unknowns, and Cramer's rule
+  gives the presses: a machine pays out only if both come out whole and
+  not negative. A Spectrum float is exact only to 2^32, so her BASIC
+  built 64-bit arithmetic out of pairs of numbers in base 10^8, with a
+  `DEF FN` for each step; Barley has `quad`, so here it's her Perl's
+  formulas, done directly. Her screen shows each machine's buttons and
+  prize, where the prize really is, the presses, and then the cost or a
+  red NO SOLUTION!, with the running total in a blue banner whose top
+  and bottom edges a progress bar rubs away from opposite ends. She asks
+  which dataset to run, 0 or 1, and asks again when it's done. The
+  machines, `claw_d13.txt`, come from `make_claw.py`: a small sample of
+  four and a challenge of 280, most made from presses chosen first, the
+  rest with no answer (a prize the presses can't land on exactly, or two
+  buttons that would need a negative number of presses). Python works
+  out the totals too: 789058856096 tokens for the sample, 96466071253189
+  for the challenge. The challenge takes 42 seconds on a 48K; her
+  compiled BASIC took 165 for her 320 machines. On her own machines the
+  port gets her answer to the token. On CP/M it prints the same, without
+  the screen.
+
+      printf '1\n' | ./bly zx examples/claw_d13.bly examples/claw_d13.txt
+      ./bly run --screen claw.png examples/claw_d13.bly examples/claw_d13.txt
+
+  ![A claw machine's buttons, prize and presses, its cost, and a total
+  of 96466071253189 tokens in a blue banner](../docs/claw-d13.png)
+
 - `towels_d19.bly`: Advent of Code 2024, day 19 (Linen Layout), part 2.
   Ported by the Fern who wrote Barleycorn. In how many ways can a heap
   of striped towels, laid end to end, make each design? It counts them

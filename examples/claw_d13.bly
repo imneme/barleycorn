@@ -1,0 +1,187 @@
+-- Advent of Code 2024, day 13 (Claw Contraption): Melissa O'Neill's ZX Spectrum BASIC, ported to Barley by Hailstone.
+-- A claw machine has two buttons: A moves the claw (dx1, dy1) and costs 3 tokens, B moves it (dx2, dy2) and costs 1,
+-- and a prize is won by landing the claw exactly on it. Her program does part 2, where every prize is 10^13 further
+-- on in X and in Y: two equations in two unknowns, so Cramer's rule gives the presses, and a machine pays out only
+-- if both come out whole and not negative. Her screen shows each machine's buttons and prize, where the prize
+-- really is, the presses a and b, and then either the cost (3a + b) or a red NO SOLUTION!, with the running total in
+-- a blue banner whose edges a progress bar eats away from both ends. She asks which dataset (0 or 1) to run, and
+-- asks again when it's done, until she's told 42. claw_d13.txt comes from make_claw.py, with machines of our own (a
+-- puzzle's input isn't ours to share), in the puzzle's format with a title line before each dataset, where her DATA
+-- (made by her Perl) had a count and a title. Ported as literally as I could, with these changes: her BASIC does
+-- the 64-bit arithmetic as pairs of numbers in base 10^8 through DEF FNs, because a Spectrum float is exact only to
+-- 2^32, and Barley has quad, so it's her Perl's Cramer's rule (in her comments) done directly. So the numbers print
+-- whole: her zero padding came from STR$ 100000000, which the Spectrum writes as 1E+8, so on her screen a low half
+-- under 10^7 lost its zeros. Where there's no solution, her a and b were floats shown to the Spectrum's eight
+-- digits; here they're the quotients, truncated. Her progress bars DRAW 255 / Count; here that's rounded, as DRAW
+-- rounds it. And the "Dataset:" line below takes the lower screen's colours, not her magenta. Her prize line isn't
+-- cleared between machines, so a shorter number is followed by a digit left from the one before, here as on hers.
+
+const FAR = 10000000000000                       -- 10^13: in part 2, each prize is this much further on, in X and Y
+const TOP = "\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83"
+const BOTTOM = "\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C"
+
+func show_banner(b: str)                         -- her @showBanner, in a blue bar between half-blocks
+  if ZX then
+    paper(1); ink(7)
+    print TOP
+    ink(6)
+    print " "; b,
+    ink(7)
+    print BOTTOM
+    paper(7); ink(0)
+  else
+    print " "; b
+  end
+end
+
+func title(line: str): bool                      -- a dataset starts with its title
+  return line != "" and not line.starts("Button") and not line.starts("Prize")
+end
+
+func machines(k: int): int                       -- how many machines dataset k has (her DATA's Count)
+  var seen = -1
+  var count = 0
+  for line in lines() do
+    if title(line) then
+      seen += 1
+    elif seen == k and line.starts("Prize") then
+      count += 1
+    end
+  end
+  return count
+end
+
+func named(k: int): str                          -- and its title (her Title$)
+  var seen = -1
+  for line in lines() do
+    if title(line) then
+      seen += 1
+      if seen == k then return line end
+    end
+  end
+  return ""
+end
+
+func progress(iter: int, count: int)             -- her two bars, rubbed out of the TOTAL banner's edges
+  if ZX then
+    var x = int(long(iter) * 255 / count)        -- her INT(Iter / Count * 255): iter * 255 is past an int
+    var piece = (510 + count) / (2 * count)      -- 255 / Count, rounded, as DRAW rounds it
+    paper(1); ink(7); inverse(true)
+    plot(x, 17)                                  -- along the bottom edge, left to right
+    if count < 255 then
+      ink(9)
+      line(x, 17, x + piece, 17)
+      ink(7)
+    end
+    plot(255 - x, 38)                            -- along the top edge, right to left
+    if count < 255 then
+      ink(9)
+      line(255 - x, 38, 255 - x - piece, 38)
+    end
+    inverse(false); paper(7); ink(0)
+  end
+end
+
+func claw(dx1: int, dy1: int, dx2: int, dy2: int, x_low: int, y_low: int): quad    -- one machine: its cost, or 0
+  if ZX then print at 4, 12; end
+  print "X+"; dx1; ", Y+"; dy1
+  if ZX then print at 5, 12; end
+  print "X+"; dx2; ", Y+"; dy2
+  if ZX then print at 6, 9; end
+  print "X="; x_low; ", Y="; y_low
+  var xp: quad = FAR + x_low
+  var yp: quad = FAR + y_low
+  print "\nActually: \n  X="; xp;
+  print "\n  Y="; yp;
+  var denom = dx2 * dy1 - dx1 * dy2
+  var a_numer = dx2 * yp - dy2 * xp
+  var a = a_numer / denom
+  print "\n=>\n  a = "; a;
+  print "",
+  var b_numer = dy1 * xp - dx1 * yp
+  var b = b_numer / denom
+  print "\n  b = "; b;
+  print "",
+  if a < 0 or b < 0 or a_numer % denom != 0 or b_numer % denom != 0 then       -- her @bad
+    print "\n\n  ";
+    if ZX then paper(2); ink(7); bright(true) end
+    print "  NO SOLUTION!  ";
+    if ZX then paper(7); ink(0); bright(false) end
+    print "", "",
+    return 0
+  end
+  var cost = 3 * a + b
+  print "\n=>\n  cost (3a+b) = "; cost;
+  print "",
+  return cost
+end
+
+func play(k: int)                                -- one dataset, from her READ Count, Title$ to @finish
+  var count = machines(k)
+  if ZX then
+    print #0; "Dataset: "; named(k)
+  else
+    print "Dataset: "; named(k)
+  end
+  print "\n  Button A:"
+  print "  Button B:"
+  print "  Prize:"
+  if ZX then print at 17, 0; end
+  show_banner("    TOTAL:      ")
+  var total: quad = 0
+  var iter = 0
+  var dx1 = 0
+  var dy1 = 0
+  var dx2 = 0
+  var dy2 = 0
+  var seen = -1
+  for line in lines() do
+    if title(line) then
+      seen += 1
+      if seen > k then break end
+    elif seen == k then
+      if line.starts("Button A") then
+        dx1 = line.int(0); dy1 = line.int(1)
+      elif line.starts("Button B") then
+        dx2 = line.int(0); dy2 = line.int(1)
+      elif line.starts("Prize") then
+        progress(iter, count)
+        iter += 1
+        if ZX then
+          ink(3)
+          print at 4, 25; iter; "/"; count
+          ink(0)
+        else
+          print iter; "/"; count
+        end
+        var cost = claw(dx1, dy1, dx2, dy2, line.int(0), line.int(1))
+        if cost > 0 then
+          total += cost
+          if ZX then
+            print at 18, 12;
+            paper(1); ink(5); bright(true)
+          end
+          print total
+          if ZX then paper(7); ink(0); bright(false) end
+        end
+      end
+    end
+  end
+end
+
+func main()
+  if ZX then cls() end
+  while true do                                  -- her @start
+    show_banner("AoC 2024 D13: Claw Contraption")
+    var dataset = ask("Which dataset? (0-1): ").int()
+    if dataset == 42 then stop end
+    if dataset < 0 or dataset > 1 then continue end
+    play(int(dataset))
+    if ZX then print at 0, 0; end                -- her @finish, and back to @start
+  end
+end
+
+-- Typed here: dataset 1, and then she asks again, and the run stops there (STOP in ask: there are no more keys).
+-- At a Spectrum, type 0 or 1 for a dataset, and 42 to stop.
+-- keys:
+-- < 1
