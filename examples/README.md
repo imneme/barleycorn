@@ -275,6 +275,36 @@ the interpreter and C) only. Each paragraph says which.
   then steps down into the yellow ground, the brackets along the top,
   and where Santa first entered the basement](../docs/lisp-d01.png)
 
+- `crates_d05.bly`: Advent of Code 2022, day 5 (Supply Stacks), part 2.
+  Ported by Ink-and-Paper Fern. A crane, the CrateMover 9001, moves
+  crates between nine stacks, lifting a whole run of them at once so
+  they land in the order they were in, and the answer is the top crate
+  of each stack, in order. Her screen gives each stack two rows: its
+  number, then its crates as letters, each letter bright in colours of
+  its own, and every square a crate leaves stays yellow, so the yellow
+  shows how tall each stack has ever been. The move is shown at the
+  bottom and the turn above it, beside her "CrateMover 9001" banner. Her
+  BASIC read DATA her Perl had made from the input; this reads the
+  stacks as the puzzle draws them and does what her Perl did. The stacks
+  and moves, `crates_d05.txt`, come from `make_crates.py`, which follows
+  every crate through 320 random moves and then letters the ones that
+  end on top, so the tops spell MERRYXMAS (or a word of your own, up to
+  nine letters), and works the answer out too. Given her own input, it
+  ends on her tape's last screen exactly. It waits for a key to start,
+  as hers does, so the commands below type one. Her `PAUSE 1` a crate
+  and `PAUSE 3` a move are kept, so it takes 50 seconds on a 48K after
+  the key, 37 of them pausing. Her move line was blue, but the lower
+  screen takes the border's colours in Barley, so here it's black. On
+  CP/M it prints the answer.
+
+      echo | ./bly zx examples/crates_d05.bly examples/crates_d05.txt
+      echo | ./bly run --screen crates.png examples/crates_d05.bly examples/crates_d05.txt
+
+  ![Nine stacks of crates as bright coloured letters, each trailing the
+  yellow of how tall it has been, one of them wrapped onto a second row,
+  above a blue CrateMover 9001 banner and the answer,
+  MERRYXMAS](../docs/crates-d05.png)
+
 - `rope_d09.bly`: Advent of Code 2022, day 9 (Rope Bridge). Ported by
   Fronds. A rope of ten knots is dragged about by its head, and each
   knot steps after the one before whenever they're two apart. The

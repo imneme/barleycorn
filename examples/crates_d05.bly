@@ -1,0 +1,136 @@
+-- Advent of Code 2022, day 5 (Supply Stacks): Melissa O'Neill's ZX Spectrum BASIC, ported to Barley by Ink-and-Paper Fern.
+-- Stacks of crates and a crane, the CrateMover 9001, which lifts a whole run of crates at once, so they land in the
+-- order they were in (part 2). Her screen gives each stack two rows, its number and its crates as letters, each
+-- letter in colours of its own, bright, and every square a crate has left stays yellow, so the yellow shows how tall
+-- each stack has ever been. A stack taller than 30 carries on along its second row. The move is shown at the bottom
+-- and the turn above it, then the top crate of each stack, in order, is the answer. crates_d05.txt comes from
+-- make_crates.py, with stacks and moves of our own (a puzzle's input isn't ours to share), lettered so the tops
+-- spell MERRYXMAS. Her BASIC read DATA her Perl had made from the input; here the program reads the input as the
+-- puzzle gives it, the stacks drawn as a picture, and does what her Perl did. Her move line was blue, but the lower
+-- screen takes the border's colours in Barley, so here it's black. It waits for a key to start, as hers does. The
+-- screen is all inside if ZX, so on CP/M it prints the answer straight away.
+
+const MOST = 54                            -- her DIM S$(9, 54): the most crates a stack can hold
+
+var crates = grid[byte](10, MOST + 1)      -- her S$(stack, height), both counted from 1 as hers are
+var top: int[10]                           -- her S(stack): the height of its top crate
+var src = 0                                -- her Src and Dst, which both subroutines share,
+var dst = 0
+var b: byte = 0                            -- and B$, the crate the crane is holding
+
+func pop_stack()                           -- her @popStack: take the crate just above the top, and leave yellow
+  var x = top[src]
+  if x < 0 then
+    print "Stack "; src; " is empty!"
+    stop
+  end
+  x += 1
+  b = crates[src, x]
+  top[src] = x
+  crates[src, x] = ' '
+  if ZX then
+    var y = (src - 1) * 2
+    x += 1
+    if x >= 32 then x -= 30; y += 1 end
+    paper(6)
+    print at y, x; " ";
+    paper(7)
+  end
+end
+
+func push_stack()                          -- her @pushStack: put the crate on top, in its letter's colours
+  var x = top[dst] + 1
+  crates[dst, x] = b
+  top[dst] = x
+  if ZX then
+    var y = (dst - 1) * 2
+    x += 1
+    if x >= 32 then x -= 30; y += 1 end
+    var p = int(b - 'A') / 5               -- the paper: A to E on black, F to J on blue ... Z on cyan
+    var i = int(b - 'A') - p * 5 + 2       -- the ink, 2 to 7, stepping over the paper's colour
+    if i >= p then i += 1 end
+    ink(i); paper(p); bright(true)
+    print at y, x; chr(b);
+    ink(0); paper(7); bright(false)
+  end
+end
+
+func main()
+  var input = lines()                      -- the stacks as the puzzle draws them, what her code-todata.pl read
+  var drawing = list[str](MOST + 2)
+  var line = input.next()
+  while line != "" do
+    drawing.push(line)
+    line = input.next()
+  end
+  var labels = drawing.pop()               -- " 1   2   3 ": each crate sits above its stack's number
+  var place: int[10]                      -- where each stack's crates are, along a line of the picture
+  var n = 0
+  for c in 0..int(labels.len) do
+    if labels[c] != ' ' then
+      n += 1
+      place[n] = c
+    end
+  end
+
+  if ZX then cls() end
+  for i in 1..n + 1 do                     -- her READ I$: each stack, from the bottom up
+    if ZX then print at (i - 1) * 2, 0; i; ": "; end
+    dst = i
+    for r in rev(0..int(drawing.len)) do
+      var row = drawing[r]
+      if place[i] < int(row.len) and row[place[i]] != ' ' then
+        b = row[place[i]]
+        push_stack()
+      end
+    end
+  end
+  if ZX then
+    paper(1); ink(7)
+    print at 18, 15; "\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83";
+    print at 19, 15; " CrateMover 9001 ";
+    print at 20, 15; "\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C";
+    paper(7); ink(0)
+    print #1; "Press any key to start...";
+    while key() == 0 do end                -- her PAUSE 0
+    print #1; at 1, 0; "                                ";   -- and her INPUT "", which clears it again
+  end
+
+  var turn = 0
+  for move in input do                     -- move 3 from 1 to 2
+    turn += 1
+    var count: int = move.int(0)
+    src = move.int(1)
+    dst = move.int(2)
+    if ZX then
+      print at 21, 0; "Turn "; turn;
+      print #1; at 1, 0; "move "; count; " from "; src; " to "; dst; "  ";
+    end
+    if src != dst then
+      top[src] -= count                    -- the run's lowest crate is just above the new top,
+      for k in 0..count do                 -- so taking them from there up keeps their order
+        pop_stack()
+        push_stack()
+        if ZX then pause(1) end
+      end
+      top[src] -= count                    -- pop_stack climbed back up through the run
+    end
+    if ZX then pause(3) end
+  end
+
+  if ZX then print at 21, 0; end           -- the answer where her "Tops code" goes
+  print "Tops code: ";
+  for i in 1..n + 1 do
+    var x = top[i]
+    if x == 0 then
+      print
+      print "Stack "; i; " is empty!"
+      stop
+    end
+    print chr(crates[i, x]);
+  end
+  print
+end
+
+-- keys:
+-- <
