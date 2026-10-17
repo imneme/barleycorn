@@ -333,14 +333,14 @@ the interpreter and C) only. Each paragraph says which.
   to 9 hanging inside him, and the two answers](../docs/rope-d09.png)
 
 - `crt_d10.bly`: Advent of Code 2022, day 10 (Cathode-Ray Tube). Ported
-  by S3. A little CPU runs `addx` and `noop` while a CRT draws one pixel
-  a cycle, lit if the three-pixel sprite centred on the X register
-  covers it. Her screen shows the instruction, the cycle and X, and the
-  CRT as a black panel of dotted half-cells, with the sprite riding
-  along each row as a dithered bar, so you watch the letters come up out
-  of the dots. Part 1's answer is the sum of the signal strengths at six
-  cycles; part 2's is the word. The program, `crt_d10.txt`, comes from
-  `make_crt.py`, which searches out instructions whose CRT spells
+  by Puzzle Fern (S3). A little CPU runs `addx` and `noop` while a CRT
+  draws one pixel a cycle, lit if the three-pixel sprite centred on the
+  X register covers it. Her screen shows the instruction, the cycle and
+  X, and the CRT as a black panel of dotted half-cells, with the sprite
+  riding along each row as a dithered bar, so you watch the letters come
+  up out of the dots. Part 1's answer is the sum of the signal strengths
+  at six cycles; part 2's is the word. The program, `crt_d10.txt`, comes
+  from `make_crt.py`, which searches out instructions whose CRT spells
   SPECTRUM (or a word of your own, up to eight letters from its font)
   and works the sum out too: 13040. Her `PAUSE 5` a cycle is kept, so it
   takes 28 seconds on a 48K, 24 of them pausing; on her own program, her
@@ -354,12 +354,12 @@ the interpreter and C) only. Each paragraph says which.
   sum](../docs/crt-d10.png)
 
 - `sand_d14.bly`: Advent of Code 2022, day 14 (Regolith Reservoir), part 1.
-  Ported by S3. Sand pours in at 500,0 over paths of rock, and her
-  program keeps no map in memory: the screen is the map. Rock is drawn
-  two pixels wide, a recursive fill asks `point()` whether a square is
-  taken (straight down, then down-left, then down-right), and a square
-  whose three are all taken holds a grain, drawn as one pixel on
-  alternate halves row by row, so the sand shows dithered against the
+  Ported by Puzzle Fern (S3). Sand pours in at 500,0 over paths of rock,
+  and her program keeps no map in memory: the screen is the map. Rock is
+  drawn two pixels wide, a recursive fill asks `point()` whether a
+  square is taken (straight down, then down-left, then down-right), and
+  a square whose three are all taken holds a grain, drawn as one pixel
+  on alternate halves row by row, so the sand shows dithered against the
   solid rock; a grain that would fall past the lowest rock is rubbed out
   again. Her BASIC read DATA her Perl had made from the input; this
   reads the input as the puzzle gives it and works the bounds out
@@ -485,6 +485,37 @@ the interpreter and C) only. Each paragraph says which.
 
   ![A claw machine's buttons, prize and presses, its cost, and a total
   of 96466071253189 tokens in a blue banner](../docs/claw-d13.png)
+
+- `robots_d14.bly`: Advent of Code 2024, day 14 (Restroom Redoubt), part 2.
+  Ported by Puzzle Fern (S3). Five hundred robots on a floor 101 tiles
+  wide and 103 tall move in straight lines, wrapping at the edges, and
+  at one moment most of them line up into a picture. Hers isn't a solver
+  but an instrument: the robots as bright green dots, one pixel a tile,
+  the time in a cyan panel, and keys to step it, by a second (X and Z)
+  or by 101 or 103 (Q and A, P and O). A step of 101 leaves every column
+  where it was and moves only the rows, and 103 the other way round, so
+  once the columns bunch you can hunt along them for the moment the rows
+  bunch too. 0 stops, and it prints the time. Her robots moved in her
+  own Z80, which swept a grid onto the screen with the stack pointer
+  walking a table of row addresses; here it's Barley in the same two
+  steps, and on her own floor, stepped 71 times, every robot lands on
+  the very pixel hers does. A key steps once when it's pressed (hers
+  repeated while held, which no test could type the same way twice). The
+  robots, `robots_d14.txt`, come from `make_robots.py`, which runs them
+  backwards from a fern in a pot, drawn by Barnsley's maps, to a secret
+  moment; then it finds the moment again the way a person would, from
+  the bunching alone, to be sure it can be found. The keys in the
+  program's last lines go there in 45 steps: 5782 seconds. A step takes
+  about half a second on a 48K, where her Z80 took about a seventh. On
+  CP/M, with no screen, it reads its keys a line at a time and prints
+  the time.
+
+      printf 'aaaaaaaoooooooooooooooooooooooooooooooooooooo0\n' | ./bly zx examples/robots_d14.bly examples/robots_d14.txt
+      printf 'aaaaaaaoooooooooooooooooooooooooooooooooooooo0\n' | ./bly run --screen robots.png examples/robots_d14.bly examples/robots_d14.txt
+
+  ![A fern in a flowerpot drawn in bright green dots on a black floor,
+  stray robots scattered round it, and "Time:
+  5782"](../docs/robots-d14.png)
 
 - `towels_d19.bly`: Advent of Code 2024, day 19 (Linen Layout), part 2.
   Ported by the Fern who wrote Barleycorn. In how many ways can a heap

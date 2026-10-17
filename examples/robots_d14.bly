@@ -1,0 +1,193 @@
+-- Advent of Code 2024, day 14 (Restroom Redoubt): Melissa O'Neill's ZX Spectrum BASIC, ported to Barley by Puzzle Fern.
+-- Her BASIC sets the scene and her own Z80 moves the robots. Robots on a floor 101 tiles wide and 103 tall move in
+-- straight lines, wrapping at the edges, and at one moment most of them line up into a picture. Hers isn't a solver but
+-- an instrument: the robots as green dots, one pixel a tile, the time, and keys to step it, by a second (X, Z) or by
+-- 101 or 103 (Q and A, P and O): a step of 101 leaves every column where it was and moves only the rows, and 103 the
+-- other way round, so once the columns bunch (every 101 seconds) you can hunt along them for the moment the rows bunch
+-- too. 0 stops. Her robots moved in hand-written Z80, which kept them in a grid 128 wide, so a shift indexes it, and
+-- swept the grid onto the screen a byte at a time with the stack pointer walking a table of row addresses. Here that's
+-- Barley, in the same two steps: the robots set bits in a frame, and the frame goes onto the screen, cleared as it
+-- goes. robots_d14.txt comes from make_robots.py, with robots of our own (a puzzle's input isn't ours to share): 500 of
+-- them, most making a fern in a pot. What's different from hers: a key steps once when it's pressed, where hers
+-- repeated while it was held, faster the longer (held keys can't be typed the same way twice, for a test or the
+-- gallery); it reads the puzzle's own text, and works out the 101 and 103 steps as it reads, where her Perl packed them
+-- onto the tape; and when you stop, it prints the time, where hers offered to load another floor. On CP/M, with no
+-- screen and no key(), it reads its keys a line at a time and prints the time it stops at.
+
+const W = 101
+const H = 103
+const MOST = 600                           -- robots
+const BIT = byte[128, 64, 32, 16, 8, 4, 2, 1]           -- a tile's bit in its byte of the frame
+
+var px: byte[MOST]                         -- where each robot is
+var py: byte[MOST]
+var vx: byte[MOST]                         -- its velocity, as a step forward round the floor
+var vy: byte[MOST]
+var ax: byte[MOST]                         -- and what 103 seconds do to its column, and 101 to its row
+var ay: byte[MOST]
+var n = 0
+var time = 0                               -- 0 to 10402: after 101 x 103 seconds every robot is back
+var frame: byte[13 * H]                    -- her grid, packed eight tiles to a byte, a row 13 bytes wide
+var row_at: word[H]                        -- her table: where each of the floor's rows starts on the screen
+var typed = ""                             -- on CP/M, the keys typed, a line at a time
+var next_typed = 0
+
+func show_banner()                         -- her header: a band of PAPER 1, the title in yellow, between two bars
+  paper(1); ink(7)
+  for c in 0..32 do
+    print at 0, c; "\x83";                -- the top half of a cell (print at: display, not output)
+  end
+  ink(6)
+  print at 1, 0; " AoC 2024 D14: Restroom Redoubt ";
+  ink(7)
+  for c in 0..32 do
+    print at 2, c; "\x8C";                -- and the bottom half
+  end
+end
+
+func setup()
+  if ZX then
+    paper(7); ink(0); border(7); cls()
+    show_banner()
+    paper(0); ink(4); bright(true)         -- the floor: 13 cells square, black, for bright green robots
+    for r in 5..18 do
+      print at r, 1; "             ";
+    end
+    bright(false); paper(7); ink(0)
+    line(7, 32, 7, 136); line(7, 136, 111, 136)          -- her frame: two pixels thick at the left and top,
+    line(6, 32, 6, 137); line(6, 137, 111, 137)
+    line(6, 31, 111, 31)                                  -- one at the bottom
+    paper(5); ink(7)
+    print at 5, 17; "\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83";
+    ink(1)
+    print at 6, 17; " Time: 0",
+    ink(7)
+    print at 7, 17; "\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C";
+    paper(7); ink(1)
+    print at 9, 17; "Keys:";
+    print at 10, 19; "X  + 1 sec";
+    print at 11, 19; "Z  - 1 sec";
+    print at 12, 19; "Q  + 101 sec";
+    print at 13, 19; "A  - 101 sec";
+    print at 14, 19; "P  + 103 sec";
+    print at 15, 19; "O  - 103 sec";
+    print at 16, 19; "0  Exit Sim";
+    print at 20, 0; "Instructions:";
+    print #0; at 0, 0; "Find an anomaly with X or Z";
+    print #0; at 1, 0; "then use Q,A,O, or P to refine";
+    for r in 22..24 do                     -- her INK 3 inside the PRINT #0: the lower screen keeps its own
+      for c in 0..32 do attr(r, c, 7 * 8 + 3) end         -- colours, so they're set afterwards
+    end
+    for y in 0..H do                       -- pixel rows 40 to 142, from byte 1 (her indent)
+      var r = 40 + y
+      row_at[y] = word(0x4001 + ((r & 0xC0) << 5) + ((r & 7) << 8) + ((r & 0x38) << 2))
+    end
+  end
+end
+
+func show()                                -- her pos2grid and grid2screen, and the time
+  if ZX then
+    for i in 0..n do
+      var k = word(py[i]) * 13 + (px[i] >> 3)
+      frame[k] = frame[k] | BIT[px[i] & 7]
+    end
+    var k = 0
+    for y in 0..H do
+      var at = row_at[y]
+      for c in 0..13 do
+        poke(at + word(c), frame[k])
+        frame[k] = 0
+        k += 1
+      end
+    end
+    paper(5); ink(1)
+    print at 6, 24; time,
+    paper(7); ink(0)
+  end
+end
+
+func advance(alt: bool, cols: bool, rows: bool)          -- her advance, with her patched ADD as two flags
+  for i in 0..n do
+    if cols then
+      var x = px[i] + vx[i]
+      if alt then x = px[i] + ax[i] end
+      if x >= W then x -= W end
+      px[i] = x
+    end
+    if rows then
+      var y = py[i] + vy[i]
+      if alt then y = py[i] + ay[i] end
+      if y >= H then y -= H end
+      py[i] = y
+    end
+  end
+end
+
+func retreat(alt: bool, cols: bool, rows: bool)          -- and back
+  for i in 0..n do
+    if cols then
+      var d = vx[i]
+      if alt then d = ax[i] end
+      if px[i] < d then px[i] = px[i] + W - d else px[i] = px[i] - d end
+    end
+    if rows then
+      var d = vy[i]
+      if alt then d = ay[i] end
+      if py[i] < d then py[i] = py[i] + H - d else py[i] = py[i] - d end
+    end
+  end
+end
+
+func adjust(by: int)                       -- the time, round 101 x 103
+  time = mod(time + by, W * H)
+end
+
+func next_key(): byte                      -- a key pressed (on CP/M, the next one typed)
+  var k: byte = 0
+  if CPM then
+    while next_typed >= int(typed.len) do
+      typed = ask("")
+      next_typed = 0
+    end
+    k = typed[next_typed]
+    next_typed += 1
+  else
+    while k == 0 do k = key() end
+  end
+  return k
+end
+
+func main()
+  for line in lines() do                   -- p=x,y v=dx,dy, and the steps her Perl worked out
+    px[n] = line.int(0); py[n] = line.int(1)
+    var dx: int = line.int(2)
+    var dy: int = line.int(3)
+    vx[n] = byte(mod(dx, W)); vy[n] = byte(mod(dy, H))
+    ax[n] = byte(mod(dx * H, W)); ay[n] = byte(mod(dy * W, H))
+    n += 1
+  end
+  setup()
+  show()
+  while true do
+    case next_key()
+      when 'x' then adjust(1); advance(false, true, true)
+      when 'z' then adjust(-1); retreat(false, true, true)
+      when 'q' then adjust(W); advance(true, false, true)
+      when 'a' then adjust(-W); retreat(true, false, true)
+      when 'p' then adjust(H); advance(true, true, false)
+      when 'o' then adjust(-H); retreat(true, true, false)
+      when '0' then break
+      else continue
+    end
+    show()
+  end
+  if ZX then
+    paper(7); ink(0)
+    print at 20, 0; "                                ";
+    print at 20, 0;
+  end
+  print "Time: "; time
+end
+
+-- keys:
+-- < aaaaaaaoooooooooooooooooooooooooooooooooooooo0
