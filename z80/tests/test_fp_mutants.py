@@ -32,7 +32,7 @@ MUTANTS = [
      'X_PTR left where the ROM\'s error put it'),
     ('        ld (hl),0FFh                ; no error', '        nop\n        nop                ; no error',
      'ERR_NR left holding the report'),
-    ('        ld hl,(.stk)\n        ld (fp_STKEND),hl', '        nop\n        nop\n        nop\n        nop\n        nop\n        nop',
+    ('.again: ld hl,(.stk)\n        ld (fp_STKEND),hl', '.again: nop\n        nop\n        nop\n        nop\n        nop\n        nop',
      'PRINT-FP\'s stray 0 left on the calculator stack'),
     ('        ld a,3\n        call fp_CHAN_OPEN', '        ld a,2\n        call fp_CHAN_OPEN', 'print on the screen\'s stream'),
     ('        neg                         ; both negative', '        nop\n        nop                         ; both negative',
