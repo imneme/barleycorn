@@ -1,0 +1,120 @@
+-- Sokoban: Melissa O'Neill's ZX Spectrum BASIC (her own, from the BASIC challenges in her course), ported to Barley
+-- by Speccy-Zone Fern. Push every box onto a target: Q, A, O and P move, a box moves if there's floor or a target
+-- beyond it. Each square of the map is two by two characters drawn from her UDGs, and the game's state is the
+-- screen's colours, read back with attr() as her ATTR: floor 48, target 52, box 49, a box on a target 97 (bright,
+-- on green), wall 58, the player 51. Her level, kept. One change: a move a key press (key()), where her INKEY$ moves
+-- again while a key is held, so the keys typed here (a 34-move solution, found by breadth-first search) play out
+-- the same on every machine; and it ends at "You win!".
+
+const UA = byte[0, 127, 127, 112, 109, 107, 102, 109]
+const UB = byte[0, 254, 254, 14, 182, 102, 214, 182]
+const UC = byte[107, 102, 109, 107, 112, 127, 127, 0]
+const UD = byte[102, 214, 182, 102, 14, 254, 254, 0]
+const UE = byte[0, 3, 4, 4, 4, 3, 17, 15]
+const UF = byte[0, 192, 32, 32, 32, 192, 136, 240]
+const UG = byte[1, 3, 7, 15, 15, 2, 2, 0]
+const UH = byte[128, 192, 224, 240, 240, 64, 64, 0]
+const UI = byte[0, 0, 3, 15, 31, 27, 57, 60]
+const UJ = byte[0, 0, 192, 240, 248, 152, 60, 124]
+const UK = byte[62, 60, 25, 31, 15, 3, 0, 0]
+const UL = byte[60, 156, 216, 248, 240, 192, 0, 0]
+const UM = byte[251, 251, 251, 0, 223, 223, 223, 0]
+const LEVEL = str["..WWWWW", "WWW   W", "WTPB  W", "WWW BTW", "WTWWB W", "W WTT WW", "WB BBBTW", "W   T  W",
+                  "WWWWWWWW"]
+
+func target(x: int, y: int): bool           -- her FN T: is the map square under screen x, y a target?
+  var row = LEVEL[y / 2]
+  return x / 2 < int(row.len) and row[x / 2] == 'T'
+end
+
+func show(x: int, y: int, what: byte)       -- her @showBox, @showPlayer, ...: a square, two by two
+  bright(false)
+  if what == 'B' then
+    var u = target(x, y)
+    bright(u)
+    if u then paper(4) else paper(6) end
+    ink(1)
+    print at y, x; "\x90\x91"; at y + 1, x; "\x92\x93";
+  elif what == 'P' then
+    paper(6); ink(3)
+    print at y, x; "\x94\x95"; at y + 1, x; "\x96\x97";
+  elif what == 'T' then
+    paper(6); ink(4)
+    print at y, x; "\x98\x99"; at y + 1, x; "\x9A\x9B";
+  elif what == 'W' then
+    paper(7); ink(2)
+    print at y, x; "\x9C\x9C"; at y + 1, x; "\x9C\x9C";
+  else
+    paper(6); ink(0)
+    print at y, x; "  "; at y + 1, x; "  ";
+  end
+  bright(false)
+end
+
+func main()
+  udg(0, UA); udg(1, UB); udg(2, UC); udg(3, UD); udg(4, UE); udg(5, UF); udg(6, UG)
+  udg(7, UH); udg(8, UI); udg(9, UJ); udg(10, UK); udg(11, UL); udg(12, UM)
+  var b = 0
+  var px = 0
+  var py = 0
+  for i in 0..LEVEL.len do
+    var row = LEVEL[i]
+    for j in 0..row.len do
+      var c = row[j]
+      var x = int(j) * 2
+      var y = int(i) * 2
+      if c == 'B' then b += 1 end
+      if c == 'P' then
+        px = x; py = y
+      end
+      if c != '.' then show(x, y, c) end
+    end
+  end
+  while true do
+    print #0; at 1, 0; "Boxes left: "; b; " ";
+    if b == 0 then break end
+    var k = key()
+    var dx = 0
+    var dy = 0
+    if k == 'q' then
+      dy = -1
+    elif k == 'a' then
+      dy = 1
+    elif k == 'o' then
+      dx = -1
+    elif k == 'p' then
+      dx = 1
+    end
+    if dx != 0 or dy != 0 then
+      var tx = px + 2 * dx
+      var ty = py + 2 * dy
+      var a = attr(ty, tx)
+      var push = false
+      if a == 49 or a == 97 then
+        var a2 = attr(ty + 2 * dy, tx + 2 * dx)
+        push = a2 == 48 or a2 == 52
+      end
+      if a == 48 or a == 52 or push then
+        var was = target(px, py)
+        if push then
+          if target(tx, ty) then b += 1 end
+        end
+        for s in 0..2 do                    -- two half-steps, as hers
+          show(px, py, ' ')
+          px += dx; py += dy
+          show(px, py, 'P')
+          if push then show(px + 2 * dx, py + 2 * dy, 'B') end
+          if not push then pause(1) end
+        end
+        if push then
+          if target(px + 2 * dx, py + 2 * dy) then b -= 1 end
+        end
+        if was then show(px - 2 * dx, py - 2 * dy, 'T') end
+      end
+    end
+  end
+  print #0; at 0, 0; "You win!";
+end
+
+-- keys:
+-- < pqppaaaaoaoaooqqapapqppqqqqooopapa

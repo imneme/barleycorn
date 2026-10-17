@@ -558,6 +558,23 @@ in her course, ported to Barley.
   ![The snake's last square, marked @, against a yellow X on a blue
   board, with food and walls about, and "Game over!"](../docs/snake.png)
 
+- `sokoban.bly`: Sokoban. Ported by Speccy-Zone Fern. Q, A, O and P move
+  a small figure in magenta, who pushes every box onto a target, on her
+  own level of seven boxes, drawn in her own UDGs. Like her snake, it
+  keeps the game's state on the screen, here in the colours, read back
+  with `attr()` as her ATTR. One change: a key press is one move
+  (`key()`, where her INKEY$ moved again while a key was held), so the
+  34 moves in its keys, a solution found by breadth-first search, play
+  out the same on every machine. On the 48K they found a bug: a key
+  pressed while a program printed on the lower screen, or cleared the
+  screen, was lost before `key()` could see it. It isn't now.
+
+      ./bly tap examples/sokoban.bly
+
+  ![Seven crates, each on its target and bright on green, in a yellow
+  room walled in red brick, the figure in the middle, and "You win!
+  Boxes left: 0"](../docs/sokoban.png)
+
 The benchmark programs in `../z80/bench/` (fib, tak, Ackermann, queens,
 a sieve, two sorts, a tree, an expression evaluator, Life, a CRC, Hanoi
 and some argument shuffles) are small and readable too, and the Advent
