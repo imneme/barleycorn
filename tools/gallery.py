@@ -22,7 +22,8 @@ sys.path.insert(0, os.path.join(ROOT, 'tools'))
 import check_small                                         # noqa: E402  (shape: an example's keys and input)
 
 BLY = os.path.join(ROOT, 'bly')
-INPUTS = {'sing_d12.bly': 'hill.txt'}             # inputs not named after their program (examples/README.md)
+INPUTS = {'sing_d12.bly': 'hill.txt', 'robots_d14plus.bly': 'robots_d14.txt'}    # inputs not named after their
+#                                                   program (examples/README.md)
 
 
 def programs(only):

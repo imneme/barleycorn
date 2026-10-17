@@ -517,6 +517,23 @@ the interpreter and C) only. Each paragraph says which.
   stray robots scattered round it, and "Time:
   5782"](../docs/robots-d14.png)
 
+- `robots_d14plus.bly`: robots_d14+, the same instrument made quick on a
+  48K, by Speccy-Zone Fern, at Melissa's asking: she'd played with
+  robots_d14 on a Spectrum Next at 28 MHz, and wondered whether better
+  code could make a classic 48K snappy too. The plain port's half second
+  a step goes in three loops: moving the robots (0.17 s), setting their
+  bits in the frame (0.16 s) and sweeping the frame onto the screen
+  (0.24 s). Better Barley saves only about a tenth, since every array
+  access checks its index, so those loops are asm clauses (DESIGN.md,
+  section 5): Z80 on the 48K (`robots_d14plus.asm`), and on every other
+  machine their Barley twins, which `bly all` holds the Z80 to. The
+  sweep keeps her table of row addresses, walked with IX rather than her
+  stack pointer, so interrupts never matter. A step now takes a tenth of
+  a second (0.097 s), quicker than her Z80's seventh. Its input is
+  `robots_d14.txt`.
+
+      printf 'aaaaaaaoooooooooooooooooooooooooooooooooooooo0\n' | ./bly zx examples/robots_d14plus.bly examples/robots_d14.txt
+
 - `towels_d19.bly`: Advent of Code 2024, day 19 (Linen Layout), part 2.
   Ported by the Fern who wrote Barleycorn. In how many ways can a heap
   of striped towels, laid end to end, make each design? It counts them
