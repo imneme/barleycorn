@@ -1,0 +1,146 @@
+-- Advent of Code 2023, day 11 (Cosmic Expansion): Melissa O'Neill's ZX Spectrum BASIC, ported to Barley by Fronds.
+-- A sky of galaxies, and every row and column with none in it is wider than it looks, by a gap typed in. The answer
+-- is the sum, over every pair of galaxies, of the steps between them. Her program does it in one subtraction a
+-- pair: running counts of the empty columns and rows say how many of a pair's steps cross empty space (Exp), and
+-- the rest are ordinary (Nml), so the answer is Nml + Exp times the gap. Her screen is the sky as a black field, a
+-- pixel a galaxy, each galaxy lit up in turn while its pairs are summed, the latest pair and the running totals
+-- beside it, and the sum at the end. Her BASIC read the sky as bytes her loader put in memory; this reads the
+-- puzzle's own text, a line at a time, and reads it twice: once to measure the sky, then for the galaxies.
+-- galaxies_d11.txt comes from make_galaxies.py, a sky of our own (a puzzle's input isn't ours to share) whose
+-- galaxies draw Barnsley's fern, with lanes of empty space through it to expand. One change, gently: her BASIC had
+-- two small slips that only show if you check the sum some other way. LET N = PEEK Z+1 is the sky's width plus one
+-- (PEEK binds tighter than +), so she read a row more than the sky; and her empty-row counts were kept by input
+-- row, from the top, and looked up by y, from the bottom, which mirrors them. On her own sky, with a gap of 2, her
+-- compiled tape shows 9,629,665 where the answer is 9,627,977, and those two slips, modelled together, give her
+-- 9,629,665 exactly. Here the sky's rows are its own, and the counts are kept by y.
+
+const ROOM = 600                           -- galaxies (her G() and H() held 450)
+
+var gx: int[ROOM]                          -- her G() and H(): each galaxy's x and y, as BASIC plots them
+var gy: int[ROOM]
+var colsum: int[160]                       -- her B(): empty columns up to each column
+var rowsum: int[160]                       -- her C(): empty rows up to each row
+
+func blink(i: int)                         -- her three PLOT OVER 1s: a galaxy becomes a 2 x 2 blob, and back
+  if ZX then
+    over(true)
+    plot(gx[i] + 1, gy[i])
+    plot(gx[i] + 1, gy[i] + 1)
+    plot(gx[i], gy[i] + 1)
+    over(false)
+  end
+end
+
+func main()
+  var n = 0                                -- the sky's size: her M and N (which her loader put first)
+  var m = 0
+  for line in lines() do
+    n += 1
+    m = int(line.len)
+  end
+  if ZX then
+    cls()
+    ink(1)
+    print at 0, 0; "\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C"
+    paper(5)
+    inverse(true)
+    print at 1, 0; " AoC 2023, Day 11 "
+    print at 2, 0; " Cosmic Expansion "
+    inverse(false)
+    paper(7)
+    print at 3, 0; "\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83"
+  end
+  var gap: quad = ask("Space gap: ").int()
+  if ZX then                               -- the field: every 8 x 8 square of it black, by plotting nothing there
+    paper(0)
+    ink(7)
+    inverse(true)
+    var j = 1
+    while j <= n do
+      var i = 1
+      while i <= m do
+        plot(i, j)
+        i += 8
+      end
+      j += 8
+    end
+    inverse(false)
+  end
+  for i in 1..m + 1 do colsum[i] = 1 end
+  var t = 0
+  var row = 0                              -- her J
+  for line in lines() do                   -- the galaxies, a row at a time: plotted, rows and columns marked
+    row += 1
+    var empty = 1
+    for i in 1..m + 1 do
+      if line[i - 1] == '#' then
+        colsum[i] = 0
+        empty = 0
+        gx[t] = i
+        gy[t] = n + 1 - row
+        if ZX then plot(i, n + 1 - row) end
+        t += 1
+      end
+    end
+    rowsum[n + 1 - row] = empty              -- by y, as the galaxies are (hers was by input row: see below)
+  end
+  for i in 2..m + 1 do colsum[i] += colsum[i - 1] end      -- running counts
+  for j in 2..n + 1 do rowsum[j] += rowsum[j - 1] end
+  if ZX then
+    paper(7)
+    ink(0)
+    print at 1, 19; "Pair:"; at 2, 20; "G1:"; at 3, 20; "G2:"; at 4, 20; "Nml:"; at 5, 20; "Exp:"
+    print at 7, 19; "Totals:"; at 8, 20; "Nml:"; at 9, 20; "Exp:"
+  end
+  var d: long = 0                          -- Nml and Exp, summed
+  var e: long = 0
+  var p: long = 0
+  for i in 0..t do
+    if ZX then
+      paper(0); ink(7); bright(true)
+      blink(i)
+      paper(7); ink(1); bright(false)
+    end
+    var q = 0
+    for j in i + 1..t do
+      var x1 = gx[i]
+      var x2 = gx[j]
+      var y1 = gy[i]
+      var y2 = gy[j]
+      if x1 > x2 then x1 = x2; x2 = gx[i] end
+      if y1 > y2 then y1 = y2; y2 = gy[i] end
+      var k = colsum[x2] - colsum[x1] + rowsum[y2] - rowsum[y1]   -- empty columns and rows crossed
+      var l = x2 - x1 + y2 - y1 - k
+      e += k
+      d += l
+      q += 1
+      if q == 13 then                      -- her status, every 13 pairs
+        q = 0
+        if ZX then print at 2, 25; i + 1; "  "; at 3, 25; j + 1; "  "; at 4, 25; l; "   "; at 5, 25; k; "   " end
+      end
+      p += 1
+    end
+    if ZX then
+      ink(3)
+      print at 8, 25; d; at 9, 25; e
+      paper(0); ink(7)
+      blink(i)
+      paper(7); ink(1)
+    end
+  end
+  if ZX then
+    ink(0)
+    for r in 1..7 do print at r, 19; "             " end
+    print at 2, 19; "Calc:"; at 3, 20; "Total = Nml"; at 4, 20; " + Exp*Gap"
+    bright(true)
+    print at 12, 19;
+  end
+  print d + e * gap
+  if ZX then
+    bright(false)
+    print #1; t; " galaxies, "; p; " pairs";
+  end
+end
+
+-- keys:
+-- < 1000000

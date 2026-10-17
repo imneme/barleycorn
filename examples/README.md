@@ -401,6 +401,33 @@ the interpreter and C) only. Each paragraph says which.
   a cat's face drawn in walls on top of the left one, and the walker's
   trail on the right one](../docs/monkey-d22.png)
 
+- `galaxies_d11.bly`: Advent of Code 2023, day 11 (Cosmic Expansion).
+  Ported by Fronds. A sky of galaxies, and every row and column with
+  none in it is wider than it looks, by a gap typed in. The answer is
+  the sum of the steps between every pair. Her program does each pair in
+  one subtraction: running counts of the empty columns and rows say how
+  many of a pair's steps cross empty space and how many don't, so the
+  answer is Nml + Exp times the gap. Her screen is the sky as a black
+  field, a pixel a galaxy; each galaxy lights up in turn while its pairs
+  are summed, the latest pair and the running totals beside it, and the
+  sum comes at the end. The sky, `galaxies_d11.txt`, comes from
+  `make_galaxies.py`: 377 galaxies whose stars draw Barnsley's fern,
+  with lanes of empty space through it to expand. With the gap the
+  example types, 1,000,000 (the puzzle's part 2), it's 669,671,349,140,
+  and Python works it out too. Two small slips in her BASIC are put
+  right, as the header says: they only show if you check the sum another
+  way, and modelled together they give exactly the answer her tape shows
+  on her own sky. About two and a half minutes on a 48K; on her own sky,
+  her HiSoft-compiled BASIC took 349 seconds. It reads the sky a line at
+  a time, and runs on CP/M too, where it prints the sum.
+
+      printf '1000000\n' | ./bly zx examples/galaxies_d11.bly examples/galaxies_d11.txt
+      ./bly run --screen galaxies.png examples/galaxies_d11.bly examples/galaxies_d11.txt
+
+  ![Barnsley's fern drawn in white stars on a black field, Melissa's
+  title in cyan, the totals Nml and Exp in magenta, the sum in bright,
+  and "377 galaxies, 70876 pairs"](../docs/galaxies-d11.png)
+
 - `towels_d19.bly`: Advent of Code 2024, day 19 (Linen Layout), part 2.
   Ported by the Fern who wrote Barleycorn. In how many ways can a heap
   of striped towels, laid end to end, make each design? It counts them
