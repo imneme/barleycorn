@@ -8,7 +8,8 @@
 -- they run Z80 (robots_d14plus.asm), and everywhere else their Barley twins, which bly all holds the Z80 to. The
 -- sweep takes her idea of a table of row addresses, walked with IX rather than her stack pointer, so interrupts
 -- never matter. The Z80 trusts every robot to be on the floor, so main checks each one as it reads it.
--- Its input is robots_d14.txt: our own robots (make_robots.py), most of them a fern in a pot.
+-- Its input is robots_d14.txt: our own robots (make_robots.py), most of them a fern in a pot. Or Melissa's own floors,
+-- robots_d14_floors/*.txt, all on one tape (bly tap with them all): solve one, press 0, and the next one loads.
 const W = 101
 const H = 103
 const MOST = 600                           -- robots

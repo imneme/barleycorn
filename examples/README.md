@@ -530,9 +530,18 @@ the interpreter and C) only. Each paragraph says which.
   sweep keeps her table of row addresses, walked with IX rather than her
   stack pointer, so interrupts never matter. A step now takes a tenth of
   a second (0.097 s), quicker than her Z80's seventh. Its input is
-  `robots_d14.txt`.
+  `robots_d14.txt`, our fern.
+
+  `robots_d14_floors/` holds Melissa's own floors, from her robots tape,
+  which loaded each in turn once the last was solved: twelve pictures (a
+  car, a cat, a hash, a heart, a house, Liberty, a puzzle piece, a
+  pumpkin, a rocket, a ship, the Sinclair logo and ZX), and three
+  Christmas trees, made because, in her words, "I thought their Xmas
+  tree was crap so I drew my own". A tape of them all plays the same
+  way: solve a floor, press 0, and the next one loads.
 
       printf 'aaaaaaaoooooooooooooooooooooooooooooooooooooo0\n' | ./bly zx examples/robots_d14plus.bly examples/robots_d14.txt
+      ./bly tap examples/robots_d14plus.bly examples/robots_d14_floors/*.txt -o floors.tap
 
 - `towels_d19.bly`: Advent of Code 2024, day 19 (Linen Layout), part 2.
   Ported by the Fern who wrote Barleycorn. In how many ways can a heap
