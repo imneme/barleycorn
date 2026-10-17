@@ -244,36 +244,56 @@ picture or the sound.
 
 ## Melissa's Advent of Code
 
-Five programs Melissa wrote in ZX Spectrum BASIC for Advent of Code,
-ported to Barley as literally as Barley allows: the rope by Fronds and
-the CRT and the sand by S3, two Ferns working through Melissa's archive
-of them, and the cube and the towels by the Fern who wrote Barleycorn. A
-puzzle's own input isn't ours to share, so each comes with one of our
-own, made by a small Python script that also works out the answer, for
-checking. The rope and the CRT keep their screens inside `if ZX`, so
-they print their answers on CP/M too; the sand, the cube and the towels
-use the screen outside it, so like the hill they're for the Spectrum
-(and the interpreter and C) only.
+Programs Melissa wrote in ZX Spectrum BASIC for Advent of Code, ported
+to Barley as literally as Barley allows by Ferns working through her
+archive, each paragraph saying whose port it is. A puzzle's own input
+isn't ours to share, so each comes with one of our own, made by a small
+Python script that also works out the answer, for checking. Those that
+keep their screens inside `if ZX` print their answers on CP/M too; the
+others draw outside it, so like the hill they're for the Spectrum (and
+the interpreter and C) only. Each paragraph says which.
 
-- `rope_d09.bly`: Advent of Code 2022, day 9 (Rope Bridge). A rope of
-  ten knots is dragged about by its head, and each knot steps after the
-  one before whenever they're two apart. The answers are how many
-  squares the knot behind the head visits (a rope of two) and how many
-  the last knot does. Her screen is a window that follows the head: the
-  rope drawn as H and 1 to 9, the squares its tail has visited in
-  yellow, and the window scrolled a square at a time by moving the
-  colours with `peek` and `poke`, with each square that scrolls in
-  coloured from her set of visited squares. Her own inputs drew pictures
-  with the tail, as these do: the moves, `rope_d09.txt`, come from
-  `make_rope.py`, and make the last knot draw Barley the cat, sitting
-  with his tail curled up behind him, in one unbroken yellow line. To
-  turn a corner, the head walks back along its own path, which folds the
-  rope up behind it and leaves the tail where it is, then sets off the
-  new way, so the rope pays out straight from the corner and the tail
-  turns it sharply. At the end the head walks to where the window shows
-  all of him. Python works out the answers too: 213 and 77. 80 seconds
-  on a 48K, ten of them her `PAUSE 1` a step, kept so you can watch the
-  rope. On CP/M it prints the answers.
+- `lisp_d01.bly`: Advent of Code 2015, day 1 (Not Quite Lisp). Ported by
+  the Fern who wrote Barleycorn. A string of brackets sends Santa up a
+  floor at each `(` and down one at each `)`. Her screen: the brackets
+  going by in a window along the top, the one he's on under an arrow,
+  `(` black on cyan and `)` blue on yellow; his floor and the position
+  beside it; his floor as a line across a cyan sky and the yellow
+  ground, which is the basement; and, when he first goes below the
+  ground floor, where. The brackets, `lisp_d01.txt`, come from
+  `make_lisp.py`: a street of three houses with pitched roofs, a little
+  above the ground, then the stairs down into the basement, which he
+  first enters at position 5,393, to end on floor -240. About five and a
+  half minutes on a 48K, most of it redrawing the window; her
+  HiSoft-compiled BASIC took nine and a half on her own brackets, a few
+  more of them. On CP/M it prints the two answers.
+
+      ./bly zx examples/lisp_d01.bly examples/lisp_d01.txt
+      ./bly run --screen lisp.png examples/lisp_d01.bly examples/lisp_d01.txt
+
+  ![Three houses with pitched roofs drawn as a line across a cyan sky,
+  then steps down into the yellow ground, the brackets along the top,
+  and where Santa first entered the basement](../docs/lisp-d01.png)
+
+- `rope_d09.bly`: Advent of Code 2022, day 9 (Rope Bridge). Ported by
+  Fronds. A rope of ten knots is dragged about by its head, and each
+  knot steps after the one before whenever they're two apart. The
+  answers are how many squares the knot behind the head visits (a rope
+  of two) and how many the last knot does. Her screen is a window that
+  follows the head: the rope drawn as H and 1 to 9, the squares its tail
+  has visited in yellow, and the window scrolled a square at a time by
+  moving the colours with `peek` and `poke`, with each square that
+  scrolls in coloured from her set of visited squares. Her own inputs
+  drew pictures with the tail, as these do: the moves, `rope_d09.txt`,
+  come from `make_rope.py`, and make the last knot draw Barley the cat,
+  sitting with his tail curled up behind him, in one unbroken yellow
+  line. To turn a corner, the head walks back along its own path, which
+  folds the rope up behind it and leaves the tail where it is, then sets
+  off the new way, so the rope pays out straight from the corner and the
+  tail turns it sharply. At the end the head walks to where the window
+  shows all of him. Python works out the answers too: 213 and 77. 80
+  seconds on a 48K, ten of them her `PAUSE 1` a step, kept so you can
+  watch the rope. On CP/M it prints the answers.
 
       ./bly zx examples/rope_d09.bly examples/rope_d09.txt
       ./bly run --screen rope.png examples/rope_d09.bly examples/rope_d09.txt
@@ -282,19 +302,19 @@ use the screen outside it, so like the hill they're for the Spectrum
   behind him, three tabby stripes on his brow, the rope's knots H and 1
   to 9 hanging inside him, and the two answers](../docs/rope-d09.png)
 
-- `crt_d10.bly`: Advent of Code 2022, day 10 (Cathode-Ray Tube). A
-  little CPU runs `addx` and `noop` while a CRT draws one pixel a cycle,
-  lit if the three-pixel sprite centred on the X register covers it. Her
-  screen shows the instruction, the cycle and X, and the CRT as a black
-  panel of dotted half-cells, with the sprite riding along each row as a
-  dithered bar, so you watch the letters come up out of the dots. Part
-  1's answer is the sum of the signal strengths at six cycles; part 2's
-  is the word. The program, `crt_d10.txt`, comes from `make_crt.py`,
-  which searches out instructions whose CRT spells SPECTRUM (or a word
-  of your own, up to eight letters from its font) and works the sum out
-  too: 13040. Her `PAUSE 5` a cycle is kept, so it takes 28 seconds on a
-  48K, 24 of them pausing; on her own program, her interpreted BASIC
-  took 86. On CP/M it prints the sum.
+- `crt_d10.bly`: Advent of Code 2022, day 10 (Cathode-Ray Tube). Ported
+  by S3. A little CPU runs `addx` and `noop` while a CRT draws one pixel
+  a cycle, lit if the three-pixel sprite centred on the X register
+  covers it. Her screen shows the instruction, the cycle and X, and the
+  CRT as a black panel of dotted half-cells, with the sprite riding
+  along each row as a dithered bar, so you watch the letters come up out
+  of the dots. Part 1's answer is the sum of the signal strengths at six
+  cycles; part 2's is the word. The program, `crt_d10.txt`, comes from
+  `make_crt.py`, which searches out instructions whose CRT spells
+  SPECTRUM (or a word of your own, up to eight letters from its font)
+  and works the sum out too: 13040. Her `PAUSE 5` a cycle is kept, so it
+  takes 28 seconds on a 48K, 24 of them pausing; on her own program, her
+  interpreted BASIC took 86. On CP/M it prints the sum.
 
       ./bly zx examples/crt_d10.bly examples/crt_d10.txt
       ./bly run --screen crt.png examples/crt_d10.bly examples/crt_d10.txt
@@ -304,24 +324,24 @@ use the screen outside it, so like the hill they're for the Spectrum
   sum](../docs/crt-d10.png)
 
 - `sand_d14.bly`: Advent of Code 2022, day 14 (Regolith Reservoir), part 1.
-  Sand pours in at 500,0 over paths of rock, and her program keeps no
-  map in memory: the screen is the map. Rock is drawn two pixels wide, a
-  recursive fill asks `point()` whether a square is taken (straight
-  down, then down-left, then down-right), and a square whose three are
-  all taken holds a grain, drawn as one pixel on alternate halves row by
-  row, so the sand shows dithered against the solid rock; a grain that
-  would fall past the lowest rock is rubbed out again. Her BASIC read
-  DATA her Perl had made from the input; this reads the input as the
-  puzzle gives it and works the bounds out itself. The rocks,
-  `sand_d14.txt`, come from `make_sand.py`: a Christmas tree of widening
-  cups, with presents round the trunk. A grain tries down-left first, so
-  the snow heaps up on the left of each branch and spills down the
-  tree's left side, and the last of it caps a present: 635 grains,
-  counted in Python grain by grain and with her fill. 17 seconds on a
-  48K, most of them her `PAUSE 1` a step, kept so you can watch; on her
-  own rocks it took 31, where her HiSoft-compiled BASIC took 34 and her
-  interpreted BASIC 326. The screen is its memory, so it doesn't run on
-  CP/M.
+  Ported by S3. Sand pours in at 500,0 over paths of rock, and her
+  program keeps no map in memory: the screen is the map. Rock is drawn
+  two pixels wide, a recursive fill asks `point()` whether a square is
+  taken (straight down, then down-left, then down-right), and a square
+  whose three are all taken holds a grain, drawn as one pixel on
+  alternate halves row by row, so the sand shows dithered against the
+  solid rock; a grain that would fall past the lowest rock is rubbed out
+  again. Her BASIC read DATA her Perl had made from the input; this
+  reads the input as the puzzle gives it and works the bounds out
+  itself. The rocks, `sand_d14.txt`, come from `make_sand.py`: a
+  Christmas tree of widening cups, with presents round the trunk. A
+  grain tries down-left first, so the snow heaps up on the left of each
+  branch and spills down the tree's left side, and the last of it caps a
+  present: 635 grains, counted in Python grain by grain and with her
+  fill. 17 seconds on a 48K, most of them her `PAUSE 1` a step, kept so
+  you can watch; on her own rocks it took 31, where her HiSoft-compiled
+  BASIC took 34 and her interpreted BASIC 326. The screen is its memory,
+  so it doesn't run on CP/M.
 
       ./bly zx examples/sand_d14.bly examples/sand_d14.txt
       ./bly run --screen sand.png examples/sand_d14.bly examples/sand_d14.txt
@@ -330,17 +350,19 @@ use the screen outside it, so like the hill they're for the Spectrum
   in dithered drifts on the left of each, a trunk and presents below,
   and "635 grains"](../docs/sand-d14.png)
 
-- `monkey_d22.bly`: Advent of Code 2022, day 22 (Monkey Map), part 2. A
-  board folded into a 50 x 50 x 50 cube, drawn twice in isometric with
-  every wall a dot on its face, then walked: a 200-point worm follows
-  the walker over the edges from face to face, and at the end it says
-  where it stopped and which way it faced. The cube's geometry (which
-  face lies beyond each edge, and how it's turned) is as her Perl,
-  `cubeinfo.pl`, worked it out from the puzzle's net. The board,
-  `monkey_d22.txt`, comes from `make_monkey.py`, with walls and 2,001
-  moves of our own, and on top of the left-hand cube the walls draw a
-  cat. About a minute on a 48K. On her own board it took 87 seconds,
-  where her HiSoft-compiled BASIC took 210.
+- `monkey_d22.bly`: Advent of Code 2022, day 22 (Monkey Map), part 2.
+  Ported by the Fern who wrote Barleycorn. A board folded into a 50 x 50
+  x 50 cube, drawn twice in isometric with every wall a dot on its face,
+  then walked: a 200-point worm follows the walker over the edges from
+  face to face, and at the end it says where it stopped and which way it
+  faced. The cube's geometry (which face lies beyond each edge, and how
+  it's turned) is as her Perl, `cubeinfo.pl`, worked it out from the
+  puzzle's net. The board, `monkey_d22.txt`, comes from
+  `make_monkey.py`, with walls and 2,001 moves of our own, and on top of
+  the left-hand cube the walls draw a cat. About a minute on a 48K. On
+  her own board it took 87 seconds, where her HiSoft-compiled BASIC took 210.
+  It draws outside `if ZX`, so it's for the Spectrum (and the
+  interpreter and C).
 
       ./bly zx examples/monkey_d22.bly examples/monkey_d22.txt
       ./bly run --screen monkey.png examples/monkey_d22.bly examples/monkey_d22.txt
@@ -350,19 +372,20 @@ use the screen outside it, so like the hill they're for the Spectrum
   trail on the right one](../docs/monkey-d22.png)
 
 - `towels_d19.bly`: Advent of Code 2024, day 19 (Linen Layout), part 2.
-  In how many ways can a heap of striped towels, laid end to end, make
-  each design? It counts them as her Perl did, and her BASIC after it:
-  working in from the design's end, the ways to make its last 1, 2, 3
-  and more stripes, each from the counts before it. Each design shows as
-  its stripes, two to a character cell (one in ink, one in paper), with
-  a magenta rule above and below that thickens from the right as the
-  count eats in. Her BASIC kept the big counts as two numbers in base
-  10^8, because a Spectrum float is exact only up to 2^32; Barley has
-  `quad`, so they're one number each. The heap, `towels_d19.txt`, comes
-  from `make_towels.py`: 120 towels and 30 designs, the most ways for
-  one design 31,099,988,700, and 46,145,737,803 in all. Under two
-  minutes on a 48K. On her own heap it took 66 minutes, where her
-  compiled BASIC took 147.
+  Ported by the Fern who wrote Barleycorn. In how many ways can a heap
+  of striped towels, laid end to end, make each design? It counts them
+  as her Perl did, and her BASIC after it: working in from the design's
+  end, the ways to make its last 1, 2, 3 and more stripes, each from the
+  counts before it. Each design shows as its stripes, two to a character
+  cell (one in ink, one in paper), with a magenta rule above and below
+  that thickens from the right as the count eats in. Her BASIC kept the
+  big counts as two numbers in base 10^8, because a Spectrum float is
+  exact only up to 2^32; Barley has `quad`, so they're one number each.
+  The heap, `towels_d19.txt`, comes from `make_towels.py`: 120 towels
+  and 30 designs, the most ways for one design 31,099,988,700, and
+  46,145,737,803 in all. Under two minutes on a 48K. On her own heap it
+  took 66 minutes, where her compiled BASIC took 147. It draws outside
+  `if ZX`, so it's for the Spectrum (and the interpreter and C).
 
       ./bly zx examples/towels_d19.bly examples/towels_d19.txt
       ./bly run --screen towels.png examples/towels_d19.bly examples/towels_d19.txt

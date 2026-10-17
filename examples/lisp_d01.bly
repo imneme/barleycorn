@@ -1,0 +1,75 @@
+-- Advent of Code 2015, day 1 (Not Quite Lisp): Melissa O'Neill's ZX Spectrum BASIC, ported to Barley by Speccy-Zone
+-- Fern. A string of brackets sends Santa up a floor at each ( and down one at each ). Her screen: the brackets going
+-- by in a window along the top, the one he's on under a ^ (the Spectrum's up arrow), ( black on cyan and ) blue on
+-- yellow; his floor and the position beside it; his floor as a line across a cyan sky and the yellow ground, which
+-- is the basement; and, when he first goes below the ground floor, "Entered at" and where. lisp_d01.txt comes from
+-- make_lisp.py, with brackets of our own (a puzzle's input isn't ours to share): three houses with pointed roofs,
+-- then the stairs down into the basement. Her compiled build's INT made its arithmetic whole numbers, as Barley's is.
+-- Ported as literally as I could, with two changes. Barley keeps the lower screen to two lines, so the top row of
+-- her three-line banner is printed at row 21; and since INVERSE doesn't reach the lower screen, the banner takes the
+-- border's colours, set blue for it: white on blue, the same pixels as her inverse blue. At the end, where she waited
+-- at INPUT "", which clears the lower screen, this clears row 21 and stops.
+
+func main()
+  var text = lines().next()                 -- one line of brackets
+  var s = int(text.len)
+  var d = 0                                 -- her D, the floor
+  var first = 0                             -- where he first went below the ground floor (her B, and I)
+  if ZX then
+    cls()
+    border(1)                               -- the lower screen's colours are the border's: white on blue
+    ink(7); paper(1)
+    print at 21, 0; "\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83";
+    print #0; at 0, 0; " AoC 2015 Day 1: Not Quite Lisp \x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C";
+    border(7); ink(0); paper(7)
+    print at 1, 16; "^";
+    print at 2, 0; "Floor:"
+    for r in 3..21 do                       -- her PRINT PAPER 5,,, ... PAPER 6,,, ...: the sky, then the ground
+      if r < 10 then paper(5) else paper(6) end
+      print at r, 0; "                                ";
+    end
+    paper(7)
+  end
+  var x0 = (8192 - s) / 2                   -- her X: the line centred in 8192 places, 32 to a pixel
+  for i in 1..s + 1 do
+    var c = text[i - 1]
+    if c == '(' then
+      d += 1
+    elif c == ')' then
+      d -= 1
+    end
+    if ZX then
+      print at 2, 16; i;
+      for j in -16..16 do                   -- the window: 16 brackets before his and 15 after
+        var o = i + j
+        if o > 0 and o <= s then
+          var b = text[o - 1]
+          ink(int(b) - 40); paper(int(b) - 35)        -- ( is 40: black on cyan; ) is 41: blue on yellow
+          print at 0, j + 16; chr(b);
+        else
+          ink(0); paper(7)
+          print at 0, j + 16; " ";
+        end
+      end
+      ink(8); paper(8)                      -- the floor plotted without touching the squares' colours
+      plot((x0 + i) / 32, d / 8 + 96)
+      ink(0); paper(7)
+      print at 2, 6; d; " ";
+    end
+    if first == 0 and d < 0 then
+      first = i
+      if ZX then
+        paper(8)
+        print at 19, 0; "Entered at"; at 20, 0; "Pos = "; i;
+        paper(7)
+      end
+    end
+  end
+  if ZX then
+    print at 21, 0; "                                ";   -- her INPUT "" cleared the lower screen
+  end
+  if CPM then
+    print "Floor: "; d
+    print "Entered at pos = "; first
+  end
+end
