@@ -428,6 +428,33 @@ the interpreter and C) only. Each paragraph says which.
   title in cyan, the totals Nml and Exp in magenta, the sum in bright,
   and "377 galaxies, 70876 pairs"](../docs/galaxies-d11.png)
 
+- `mirrors_d13.bly`: Advent of Code 2023, day 13 (Point of Incidence).
+  Ported by Tessera (who was S1). Patterns of ash and rock, each with a
+  mirror in it, between two rows or two columns; the answer counts the
+  columns left of each mirror, and a hundred for each row above one. Her
+  program asks how many smudges a mirror may have: none for the first
+  answer, one for the second. Her screen: each pattern beside the
+  running sums, and each fold tried in turn, the rows below it printed
+  again in blue against their mirror images above, each square that
+  doesn't match in red, until a fold is out by exactly that many. If no
+  fold between rows will do, she turns the pattern on its side and tries
+  again. At the end her loop runs on into her fold finder, which draws
+  the last pattern and its fold once more, so the port does that too: on
+  her own patterns, its last screen is her tape's, byte for byte. The
+  patterns, `mirrors_d13.txt`, come from `make_mirrors.py`: fifty of our
+  own, each with one perfect mirror and one out by a single square, so
+  both answers mean something, and Python works them out too: 17,770
+  with no smudges, and 11,952 with one. Under three minutes on a 48K;
+  her HiSoft-compiled BASIC took four and a half on her hundred
+  patterns. On CP/M it asks, and prints the sums.
+
+      printf '1\n' | ./bly zx examples/mirrors_d13.bly examples/mirrors_d13.txt
+      ./bly run --screen mirrors.png examples/mirrors_d13.bly examples/mirrors_d13.txt
+
+  ![The last of fifty patterns of ash and rock, folded at row 9, the
+  eight rows below the fold in blue and one smudged square in red,
+  beside the sums](../docs/mirrors-d13.png)
+
 - `towels_d19.bly`: Advent of Code 2024, day 19 (Linen Layout), part 2.
   Ported by the Fern who wrote Barleycorn. In how many ways can a heap
   of striped towels, laid end to end, make each design? It counts them

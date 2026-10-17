@@ -1,0 +1,180 @@
+-- Advent of Code 2023, day 13 (Point of Incidence): Melissa O'Neill's ZX Spectrum BASIC, ported to Barley by Fern.
+-- Patterns of ash (.) and rock (#), each with a mirror in it, between two rows or two columns. Her program asks how
+-- many smudges a mirror may have, then tries each fold of each pattern in turn: the rows below the fold are printed
+-- again in blue, each square against its mirror image above, and a square that doesn't match shows in red. A fold
+-- with exactly that many mismatches is the mirror. If no fold between rows works, she turns the pattern on its side
+-- and tries again. The sum counts the columns left of each mirror, and a hundred for each row above one: with no
+-- smudges that's the first answer, and with one, the second. mirrors_d13.txt comes from make_mirrors.py, with
+-- patterns of our own (a puzzle's input isn't ours to share), each with a perfect mirror and a smudged one.
+-- Ported as literally as I could, with two changes. Her Perl packed her input into bytes that loaded from tape; this
+-- reads the puzzle's text. And her PRINT AT r,c, and AT r,c,, rub out with the spaces a comma prints, which
+-- Barleycorn's print at doesn't, so here they're spaces. Her loop's end runs on, past a stray NEXT K, into her fold
+-- finder, which draws the last pattern and its fold once more and stops: this does that too, on purpose, as it's
+-- what leaves her last screen.
+
+const SPACES = "                                "                            -- 32, for rubbing out
+const LOWER = "\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C\x8C"   -- her \.. and \''
+const UPPER = "\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83\x83"
+
+var p = grid[byte](19, 19)                 -- her P$(18, 18), counted from 1 as hers is: p[i, j] is row i, column j
+var rows = list[str](18)                   -- the pattern as it's read, a line of the input to a row
+var sx = 0                                 -- its width and height as loaded: turned on its side, they swap
+var sy = 0
+var s = 0                                  -- her S: how many smudges a mirror must have
+var b = 0                                  -- her B: how many the fold tried last has
+var f = 0                                  -- her F: the fold tried last, as rows above it
+var h: long = 0                            -- her sums: columns left of each mirror, and rows above
+var v: long = 0
+
+func rub(r: int, c: int, n: int)           -- n spaces, where her commas printed them
+  if ZX then print at r, c; SPACES[0..n]; end
+end
+
+func put(i: int, j: int)                   -- one square of the pattern, where her PRINT AT 3+I,14 puts it
+  if ZX then print at 3 + i, 13 + j; chr(p[i, j]); end
+end
+
+func show(i: int)                          -- a whole row
+  for j in 1..sx + 1 do put(i, j) end
+end
+
+func show_from(r: int)                     -- her @displayFromRow, and @displayPattern from row 1
+  for i in r..sy + 1 do show(i) end
+end
+
+func clear()                               -- her @clearPattern
+  for i in 1..sy + 1 do rub(3 + i, 14, 18) end
+end
+
+func try_fold()                            -- her @tryFold: the rows below fold f against their mirror images above
+  var j = f
+  b = 0
+  if ZX then ink(1) end
+  for i in f + 1..sy + 1 do
+    for l in 1..sx + 1 do
+      if p[i, l] != p[j, l] then
+        b += 1
+        if ZX then
+          ink(2)
+          bright(true)
+        end
+        put(i, l)
+        if ZX then
+          ink(1)
+          bright(false)
+        end
+      else
+        put(i, l)
+      end
+    end
+    if b > s then break end                -- too many: no need to look further
+    j -= 1
+    if j < 1 then                          -- the top reached: the rest is beyond the mirror, blue as well
+      show_from(i + 1)
+      break
+    end
+  end
+  if ZX then ink(0) end
+end
+
+func find_fold()                           -- her @findFold: each fold in turn, until one has exactly s smudges
+  show_from(1)
+  for fold in 1..sy do
+    f = fold
+    if ZX then print at 8, 0; "Fold at "; f; end
+    show(f)
+    try_fold()
+    if b == s then return end
+    if ZX then pause(1) end
+    show_from(f + 1)
+  end
+  if ZX then print at 8, 0; "No fold     "; end
+end
+
+func load(k: int, turned: bool)           -- her @loadPatNormal, and @loadPatTransp: rows become columns
+  if ZX then
+    if turned then print at 5, 0; "Pattern "; k; "-T"; else print at 5, 0; "Pattern "; k, end
+  end
+  var w = int(rows[0].len)
+  var n = int(rows.len)
+  if turned then
+    sx = n
+    sy = w
+  else
+    sx = w
+    sy = n
+  end
+  for i in 1..sy + 1 do
+    for j in 1..sx + 1 do
+      if turned then p[i, j] = rows[j - 1][i - 1] else p[i, j] = rows[i - 1][j - 1] end
+    end
+  end
+end
+
+func pattern(k: int)                       -- the body of her FOR K loop
+  load(k, false)
+  find_fold()
+  if b == s then
+    v += f
+  else
+    if ZX then print at 10, 0; "Transposing"; end
+    clear()
+    rub(10, 0, 16)
+    load(k, true)
+    find_fold()
+    if b == s then
+      h += f
+    elif ZX then
+      print at 10, 0; "No fold found";
+    end
+  end
+  if ZX then
+    pause(30)
+    print at 14, 0; "H Sum: "; h;
+    print at 15, 0; "V Sum: "; v;
+    print at 17, 0; "Total: "; h + 100 * v;
+  end
+  clear()
+  rub(8, 0, 16)
+end
+
+func main()
+  if ZX then
+    cls()
+    ink(1)
+    print at 0, 0; LOWER;
+    paper(5)
+    inverse(true)
+    print at 1, 0; "  AoC 2023, Day 13  ";
+    print at 2, 0; " Point of Incidence ";
+    inverse(false)
+    paper(7)
+    print at 3, 0; UPPER;
+    ink(0)
+  end
+  s = ask("How many smudges? ").int()
+  var k = 0
+  for line in lines() do                   -- the patterns, a blank line after each but the last
+    if line == "" then
+      k += 1
+      pattern(k)
+      rows.clear()
+    else
+      rows.push(line)
+    end
+  end
+  k += 1
+  pattern(k)
+  clear()                                  -- where her loop runs on into @findFold
+  find_fold()
+  if ZX then print at 14, 0; end           -- and the answers, where her sums are
+  print "H Sum: "; h
+  if ZX then print at 15, 0; end
+  print "V Sum: "; v
+  if ZX then print at 17, 0; end
+  print "Total: "; h + 100 * v
+end
+
+-- Type 0 smudges for the first answer, or 1 for the second, as the gallery does.
+-- keys:
+-- < 1
