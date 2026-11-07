@@ -2,7 +2,9 @@
 spelled as a literal or as a variable of a random type, compiled for the 48K and run there, and the same calls made
 on zxgfx.Screen. What inp read and the border showing at the end must agree. (The suite's cases hold the
 interpreter and C to the same words; this holds the model to the machine, including what the suite can't see:
-the border, which only a picture shows.) And one more, with SPACE held down: the top byte of the port must reach
+the border, which only a picture shows.) A port nothing answers reads FFh in the model; a real 48K reads
+whatever the ULA is fetching there, the floating bus, which no model of a program can know, so the 48K runs with
+omse-ai's floating bus off. And one more, with SPACE held down: the top byte of the port must reach
 the bus, choosing the keyboard's half-rows, which no key held (the model's keyboard) can't show. Run it with
 omse-ai's Python."""
 import argparse
@@ -79,6 +81,8 @@ def machine(src, k):
     if b.returncode:
         return f'BUILD: {(b.stdout + b.stderr).strip()}', None
     zx = Speccy()
+    if hasattr(zx, 'floating_bus'):             # an omse-ai from before the floating bus reads FFh anyway
+        zx.floating_bus(False)
     zx.wait_ready()
     zx.load_tap(tap)
     for _ in range(40):
