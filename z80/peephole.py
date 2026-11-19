@@ -217,10 +217,82 @@ def dead_stores(code, cold, temps):
     return out
 
 
+def spill_pass(code):
+    """A binary operation whose right side is loaded after its left is in HL comes out as
+        ld (T),hl / ld hl,X / ex de,hl / ld hl,(T)
+    (the left kept in T while HL loads the right, then swapped into DE). That's ld (T),hl / ld de,X: the same HL, DE
+    and memory, and no flags change either way. The store to T stays, for dead_stores to drop if nothing else reads
+    it. X is a constant or a direct address (ld de,nn and ld de,(nn) both exist). (Speccy-Zone, 18 Nov 2026, after
+    Fronds' profile of the elves against SDCC.)"""
+    sig = [i for i, line in enumerate(code) if split(line)[0] is not None or is_label(line)]
+    drop = set()
+    for k in range(len(sig) - 3):
+        i0, i1, i2, i3 = sig[k:k + 4]
+        if any(is_label(code[i]) for i in (i0, i1, i2, i3)) or drop & {i0, i1, i2, i3}:
+            continue
+        (o0, a0), (o1, a1), (o2, a2), (o3, a3) = (split(code[i]) for i in (i0, i1, i2, i3))
+        if not (o0 == 'ld' and len(a0) == 2 and a0[1].lower() == 'hl' and mem(a0[0]) is not None):
+            continue
+        if not (o1 == 'ld' and len(a1) == 2 and a1[0].lower() == 'hl'):
+            continue
+        x = a1[1]
+        if not simple(x):
+            continue
+        if not (o2 == 'ex' and [a.lower() for a in a2] == ['de', 'hl']):
+            continue
+        if not (o3 == 'ld' and len(a3) == 2 and a3[0].lower() == 'hl' and mem(a3[1]) == mem(a0[0])):
+            continue
+        code = code[:i1] + ['        ld de,' + x] + code[i1 + 1:]
+        drop |= {i2, i3}
+    code = [line for i, line in enumerate(code) if i not in drop]
+    # and ld hl,X / ex de,hl / ld hl,Y, where HL is loaded again at once: ld de,X / ld hl,Y (the HL that ex de,hl
+    # brought over from DE is never read)
+    sig = [i for i, line in enumerate(code) if split(line)[0] is not None or is_label(line)]
+    drop = set()
+    for k in range(len(sig) - 2):
+        i0, i1, i2 = sig[k:k + 3]
+        if any(is_label(code[i]) for i in (i0, i1, i2)) or drop & {i0, i1, i2}:
+            continue
+        (o0, a0), (o1, a1), (o2, a2) = (split(code[i]) for i in (i0, i1, i2))
+        if not (o0 == 'ld' and len(a0) == 2 and a0[0].lower() == 'hl' and simple(a0[1])):
+            continue
+        if not (o1 == 'ex' and [a.lower() for a in a1] == ['de', 'hl']):
+            continue
+        if not (o2 == 'ld' and len(a2) == 2 and a2[0].lower() == 'hl' and simple(a2[1])):
+            continue
+        code = code[:i0] + ['        ld de,' + a0[1]] + code[i0 + 1:]
+        drop.add(i1)
+    code = [line for i, line in enumerate(code) if i not in drop]
+    # and ld (T),de / ld de,X / ld hl,(T): HL gets what DE had, so ld (T),de / ex de,hl / ld de,X (the store stays
+    # for dead_stores; if X is (T) itself, it still reads what was stored)
+    sig = [i for i, line in enumerate(code) if split(line)[0] is not None or is_label(line)]
+    for k in range(len(sig) - 2):
+        i0, i1, i2 = sig[k:k + 3]
+        if any(is_label(code[i]) for i in (i0, i1, i2)):
+            continue
+        (o0, a0), (o1, a1), (o2, a2) = (split(code[i]) for i in (i0, i1, i2))
+        if not (o0 == 'ld' and len(a0) == 2 and a0[1].lower() == 'de' and mem(a0[0]) is not None):
+            continue
+        if not (o1 == 'ld' and len(a1) == 2 and a1[0].lower() == 'de' and simple(a1[1])):
+            continue
+        if not (o2 == 'ld' and len(a2) == 2 and a2[0].lower() == 'hl' and mem(a2[1]) == mem(a0[0])):
+            continue
+        code[i1], code[i2] = '        ex de,hl', '        ld de,' + a1[1]
+    return code
+
+
+def simple(x):
+    """a constant, or a direct address: what ld hl,x and ld de,x both take"""
+    if x.startswith('('):
+        return mem(x) is not None
+    return re.fullmatch(r'[\w.+\-$#]+', x) is not None and x.lower() not in REGS
+
+
 def optimise(code, cold, temps):
     """temps: name -> (base, offset, size)"""
     for _ in range(3):
-        new = dead_stores(cache_pass(code), cold, temps)
+        new = dead_stores(spill_pass(cache_pass(code)), cold, temps)    # the cache first: a reload it can drop
+                                                                         # is cheaper gone than rewritten
         if new == code:
             break
         code = new

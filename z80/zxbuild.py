@@ -118,10 +118,25 @@ def loader(start, input_at=INPUT, when=None, more=0, left=0):
     return line(10, run) + line(AUTOSTART, load) + (line(30, nxt) if more else b'') + line(year, date)
 
 
-def build(src, text=b'', markers=True, unchecked=False, more=()):
-    """the tape, and what's where. more: further inputs, each run in turn after the first"""
-    asm1 = z80gen.compile_program(src, 'zx48', org=0x8000, bss_at=0, markers=markers, unchecked=unchecked) + \
-        '\nbly_input_at equ 8000h\n'
+class TooBig(SystemExit):
+    """a program, its slots and its input don't fit under the UDGs (a SystemExit, as it always was, for bly)"""
+
+
+def build(src, text=b'', markers=True, unchecked=False, more=(), inline=True):
+    """the tape, and what's where. more: further inputs, each run in turn after the first. A program that doesn't
+    fit with its one-return functions worked out in place is built again with them called (info['inline'] says
+    which); only if it doesn't fit either way is it too big"""
+    if inline:
+        try:
+            return build_one(src, text, markers, unchecked, more, True)
+        except TooBig:
+            pass
+    return build_one(src, text, markers, unchecked, more, False)
+
+
+def build_one(src, text, markers, unchecked, more, inline):
+    asm1 = z80gen.compile_program(src, 'zx48', org=0x8000, bss_at=0, markers=markers, unchecked=unchecked,
+                                  inline=inline) + '\nbly_input_at equ 8000h\n'
     code1, sym1 = assemble(asm1)
     size = sym1['bly_code_end'] - 0x8000
     bss = sym1['bly_bss_end'] - sym1['bly_bss']
@@ -136,9 +151,9 @@ def build(src, text=b'', markers=True, unchecked=False, more=()):
     if input_at + 2 + len(big) > bss_at - STACKROOM - need:
         input_at = bss_at - STACKROOM - need - 2 - len(big)
     if input_at < LOWEST:
-        raise SystemExit(f'too big for a 48K: code {size}, slots {bss}, input {len(text)}, stack {STACKROOM}')
+        raise TooBig(f'too big for a 48K: code {size}, slots {bss}, input {len(text)}, stack {STACKROOM}')
     code, sym = assemble(z80gen.compile_program(src, 'zx48', org=org, bss_at=bss_at, markers=markers,
-                                                unchecked=unchecked) +
+                                                unchecked=unchecked, inline=inline) +
                          f'\nbly_input_at equ {input_at}\n')
     size2 = sym['bly_code_end'] - org
     if size2 != size:                                  # a fragment whose size depends on where it lands (an align, say)
@@ -153,7 +168,7 @@ def build(src, text=b'', markers=True, unchecked=False, more=()):
         inp = len(t).to_bytes(2, 'little') + t
         tap += header(3, f'input {k}', len(inp), input_at, 32768) + block(0xFF, inp)
     return tap, {'org': org, 'code': size, 'slots': bss, 'arena': bss_at - STACKROOM - (input_at + 2 + len(big)),
-                 'input_at': input_at, 'sym': sym}
+                 'input_at': input_at, 'sym': sym, 'inline': inline}
 
 
 def main(argv):
@@ -186,7 +201,8 @@ def main(argv):
         sys.exit(2)
     open(a.out or os.path.splitext(a.program)[0] + '.tap', 'wb').write(tap)
     print(f"code {info['code']} bytes at {info['org']:04X}h, slots {info['slots']} bytes, input at {info['input_at']:04X}h, "
-          f"arena {info['arena']} bytes free")
+          f"arena {info['arena']} bytes free" + ("" if info['inline'] else
+                                                 " (one-return functions called rather than worked out in place, to fit)"))
 
 if __name__ == '__main__':
     main(sys.argv[1:])

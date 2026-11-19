@@ -2847,3 +2847,51 @@ end
 --- expect
 65535
 40000 doesn't fit in an int at line 4
+
+=== a function that is one return gives what a call would: arguments first, globals as they are then, a later call's changes after
+var g = 10
+var t: int[4]
+func f(a: int, b: byte): int
+  return a * 2 + int(b) + g
+end
+func bump(): int
+  g += 100
+  return g
+end
+func tv(i: int): int
+  return t[i]
+end
+func yes(a: int): bool
+  return a > 3
+end
+func w(x: word, y: word): word
+  return x - y
+end
+func main()
+  t[0] = 7; t[1] = 8; t[2] = 9; t[3] = 10
+  print f(1, 2); " "; f(g, byte(g)); " "; g + f(0, 0) + bump(); " "; f(bump(), 1); " "; g
+  print tv(3); " "; tv(0) + tv(1); " "; yes(4); " "; yes(tv(0) - 5); " "; w(3, 5); " "; w(word(g), 1)
+  var s = 0
+  for i in 0..4 do s = s * 16 + tv(i) end
+  print s
+  print f(16384, 0)
+end
+--- expect
+14 40 130 631 210
+10 15 true false 65534 209
+30874
+int overflow at line 4
+
+=== a failure inside a function that is one return is at that function's line
+var t: int[4]
+func tv(i: int): int
+  return t[i]
+end
+func main()
+  t[3] = 5
+  print tv(3) + tv(byte(2))
+  print tv(3 + 1)
+end
+--- expect
+5
+index 4 is outside 0..4 at line 3

@@ -30,7 +30,8 @@ except OSError as err:
     sys.exit(f'zxprof.py: {err.filename}: {err.strerror}')
 tap, info = zxbuild.build(src, text)
 org, bss_at, input_at = info['org'], info['org'] - info['slots'], info['input_at']
-asm = z80gen.compile_program(src, 'zx48', org=org, bss_at=bss_at) + f'\nbly_input_at equ {input_at}\n'
+asm = z80gen.compile_program(src, 'zx48', org=org, bss_at=bss_at, inline=info['inline']) + \
+    f'\nbly_input_at equ {input_at}\n'
 
 # a listing, to know which Barley line each generated instruction belongs to
 with tempfile.TemporaryDirectory() as d:

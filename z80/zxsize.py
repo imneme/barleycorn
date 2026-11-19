@@ -21,7 +21,7 @@ except z80gen.B.BarleyError as err:
 except (z80gen.GenError, ValueError) as err:
     sys.exit(f'Z80: {err}')
 org = info['org']
-asm = z80gen.compile_program(src, 'zx48', org=org, bss_at=org - info['slots']) + \
+asm = z80gen.compile_program(src, 'zx48', org=org, bss_at=org - info['slots'], inline=info['inline']) + \
     f'\nbly_input_at equ {info["input_at"]}\n'
 with tempfile.TemporaryDirectory() as d:
     p, l, b = (os.path.join(d, n) for n in ('p.asm', 'p.lst', 'p.bin'))

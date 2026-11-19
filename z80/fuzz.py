@@ -9,6 +9,8 @@ the generator's next steps change:
 - self-calls that permute their own arguments (the parallel-move hazard)
 - loops whose bounds the body changes, break and continue
 - constant tables of every width, read at random indices
+- one-line functions (a single return, no calls), which the Z80 generator
+  works out where they're called
 """
 import argparse
 import os, random, re, subprocess, sys, multiprocessing as mp
@@ -31,6 +33,7 @@ class Gen:
         self.r = random.Random(seed)
         self.lines = []
         self.funcs = []             # (name, [(param, type)], return type)
+        self.ones = []              # the one-line functions, the same way
 
     def pick(self, xs):
         return self.r.choice(xs)
@@ -100,6 +103,10 @@ class Gen:
         """a call of an earlier function (or this one, one level down) whose result widens to t"""
         if fname == 'leaf':                                        # a base case calls nothing
             return None
+        if self.ones and self.r.random() < 0.35:                   # a one-line function, worked out in place
+            name, params, rt = self.pick(self.ones)
+            c = f'{name}({", ".join(self.expr(pt, scope, d - 1, fname) for _, pt in params)})'
+            return c if rt == t else f'{t}({c})'
         cands = list(self.funcs)
         if fname is not None:
             cands = [f for f in cands if f[0] <= fname]
@@ -204,6 +211,14 @@ class Gen:
                       'quad': (-2 ** 63, 2 ** 63 - 1), 'dword': (0, 2 ** 32 - 1)}[t]
             vals = [self.pick(EDGE[t]) if self.r.random() < 0.4 else self.r.randint(lo, hi) for _ in range(8)]
             src.append(f'const T_{t} = {t}[{", ".join(map(str, vals))}]')
+        for k in range(self.r.randint(0, 2)):            # one-line functions, of the widths the Z80 inlines and others
+            name = f'u{k}'
+            params = [(f'q{j}', self.pick(INTS[:3] * 3 + INTS[3:])) for j in range(self.r.randint(1, 3))]
+            rt = self.pick(INTS[:3] * 3 + INTS[3:])
+            body = [f'func {name}({", ".join(f"{p}: {t}" for p, t in params)}): {rt}',
+                    f'  return {self.expr(rt, list(gl) + params, 3, "leaf")}', 'end', '']
+            self.ones.append((name, params, rt))
+            src += [''] + body
         for k in range(self.r.randint(1, 3)):
             name = f'f{k}'
             params = [('d', 'int')] + [(f'p{j}', self.pick(INTS)) for j in range(self.r.randint(1, 4))]

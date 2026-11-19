@@ -151,6 +151,7 @@ class Gen:
         self.ck, self.target = ck, target
         self.markers = True                 # the transcript's markers around text printed at a place
         self.unchecked = False              # bly --unchecked: 8- and 16-bit indexes go unchecked
+        self.inlining = True                # one-return functions worked out where they're called (inline_body)
         self.code = []
         self.nlabel = 0
         self.strings = {}
@@ -1756,7 +1757,7 @@ class Gen:
         just loaded, so a program already proven with its indexes checked runs a quarter faster where indexing is the
         work; a wrong one then reads or writes wherever it points)"""
         it = i.ty
-        if self.unchecked and (it in (B.BYTE, B.WORD, B.INT) or i.kind == 'imm' and 0 <= i.val <= 65535):
+        if self.index_unchecked(i):
             self.load_de(i)
             return
         if it in (B.BYTE, B.WORD) or i.kind == 'imm' and 0 <= i.val <= 65535:
@@ -1782,6 +1783,10 @@ class Gen:
             self.emit('ld e,c')
             self.emit(f'ld hl,{q.val}')
             self.call('bly_chk_index64')
+
+    def index_unchecked(self, i):
+        """bly --unchecked and an 8- or 16-bit index: check_index only loads it (so the length needn't be in BC)"""
+        return self.unchecked and (i.ty in (B.BYTE, B.WORD, B.INT) or i.kind == 'imm' and 0 <= i.val <= 65535)
 
     def elem_addr(self, base_in_hl, esize):
         """HL = base (already in HL) + DE * esize"""
@@ -1828,15 +1833,30 @@ class Gen:
     def array_elem_ptr(self, e, i, line):
         """HL = the address of array element i, checked"""
         base, n = self.array_base(e.obj)
-        self.load_bc(n)
-        self.check_index(i, True, line)
+        es = size(e.obj.ty.args[0])
+        if es > 1 and es & (es - 1) == 0:                   # i * es in HL, then the base added from DE (Speccy-Zone,
+            if self.index_unchecked(i):                     # 18 Nov 2026: no push and pop; DE = the base after, as
+                self.load_hl(i)                             # elem_addr leaves it)
+            else:
+                self.load_bc(n)
+                self.check_index(i, True, line)             # DE = i
+                self.emit('ex de,hl')
+            self.mul_hl_const(es)
+            kind, a = base
+            self.emit(f'ld de,{a}' if kind == 'imm_addr' else f'ld de,({a})')
+            self.emit('add hl,de')
+            return
+        if not self.index_unchecked(i):
+            self.load_bc(n)
+        self.check_index(i, True, line)                     # DE = i
         self.load_base(base)
-        self.elem_addr(None, size(e.obj.ty.args[0]))
+        self.elem_addr(None, es)
 
     def bit_ptr(self, arr, i, line):
         """HL = the byte holding bit i of a bit array, A = its mask; i checked against the length"""
         base, n = self.array_base(arr)
-        self.load_bc(n)
+        if not self.index_unchecked(i):
+            self.load_bc(n)
         self.check_index(i, True, line)                     # DE = i
         self.bit_addr(base)
 
@@ -2269,13 +2289,51 @@ class Gen:
         self.emit(f'ld ({r.val}),hl')
         return r
 
+    def inline_body(self, f):
+        """a function that is one return of an expression with no call in it, of scalars only, written in Barley:
+        that expression, to be worked out where it's called (else None). (Speccy-Zone, 18 Nov 2026: Fronds' profile
+        of the elves against SDCC had taken(cy, cx), one line of this shape, at a fifth of the time, most of it the
+        call: the arguments into its slots, the call and return, the result out of rv_.)"""
+        if not self.inlining or getattr(f, 'asm', None) or len(f.body) != 1 or f.body[0].k != 'return' or f.body[0].e is None:
+            return None
+        scalar = (B.BOOL, B.BYTE, B.WORD, B.INT)
+        if f.rty not in scalar or any(pt not in scalar for pt in f.ptys) or self.has_call(f.body[0].e):
+            return None
+        return f.body[0].e
+
+    def inline(self, f, body, args):
+        """body (inline_body's) where it's called: its parameters read the arguments' values where they are, as the
+        call would have read them from its slots; the result kept as the call's would be"""
+        names = {}
+        for (pn, _), a, pt in zip(f.params, args, f.ptys):
+            if a.kind == 'imm':
+                a = self.materialize(a, pt)
+            names[pn] = a.val
+        saved, calls, self.locals = self.locals, self.stmt_calls, names
+        self.stmt_calls = False                         # nothing in it calls, and its value is kept (snap) before
+        try:                                            # anything else in the statement runs: globals read in place
+            v = self.conv(self.ex(body), f.rty)
+        finally:
+            self.locals, self.stmt_calls = saved, calls
+        return self.snap(v)
+
     def x_call(self, e):
         line = e.line
         if hasattr(e, 'func'):
             f = e.func
             arg_start = len(self.temps)
-            args = [self.conv(self.ex(a), pt) for a, pt in zip(e.args, f.ptys)]
+            # a global read in an argument is copied first only if a call can run before the arguments are passed:
+            # one in this argument or a later one (Speccy-Zone, 18 Nov 2026: the statement-wide rule copied every
+            # global in every call's arguments, as taken(y - 1, x) in Fronds' elves)
+            outer, args = self.stmt_calls, []
+            for i, (a, pt) in enumerate(zip(e.args, f.ptys)):
+                self.stmt_calls = outer and self.has_call(*e.args[i:])
+                args.append(self.conv(self.ex(a), pt))
+            self.stmt_calls = outer
             caller = self.func.name if self.func else None
+            body = self.inline_body(f)
+            if body is not None and caller != f.name:
+                return self.inline(f, body, args)
             if caller == f.name:
                 args = [self.snap(a) for a in args]
             mine = (arg_start, len(self.temps))               # consumed by this call: dead once it's made
@@ -3204,11 +3262,12 @@ COUNT64 = ['bly_count64:                        ; HL = &count (quad) -> DE = it,
            '        cp 65', '        ret c', '        ld e,64', '        ret']
 
 
-def compile_program(src, target='cpm', org=None, bss_at=None, markers=True, unchecked=False):
+def compile_program(src, target='cpm', org=None, bss_at=None, markers=True, unchecked=False, inline=True):
     """org and bss_at place the code and the slots (the Spectrum's builder puts code high, slots beneath it).
     markers=False leaves out the two invisible control codes around each piece of text printed at a place, which
     only the tests' transcript needs (HACKING.md): a tape for a real Spectrum is faster without them. unchecked:
-    8- and 16-bit indexes go unchecked (bly --unchecked)"""
+    8- and 16-bit indexes go unchecked (bly --unchecked). inline=False calls one-return functions rather than working
+    them out in place: the Spectrum's builder asks for that when inlining would leave a program no room"""
     FLOATS['on'] = target in ('zx48', 'cpm')     # the ROM's on the 48K; fp_cpm.asm's on CP/M
     decls = B.Parser(src).program()
     ck = B.Checker(decls, 'cpm' if target == 'cpm' else 'zx48')
@@ -3216,6 +3275,7 @@ def compile_program(src, target='cpm', org=None, bss_at=None, markers=True, unch
     g = Gen(ck, target)
     g.markers = markers
     g.unchecked = unchecked
+    g.inlining = inline
     if org is not None:
         g.org = org
     if bss_at is not None:

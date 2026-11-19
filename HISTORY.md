@@ -198,3 +198,49 @@ an old unit of length, a third of an inch: a little measure for a little
 language. And in the folk song, John Barleycorn is cut down and ground,
 and comes back as something stronger, which is roughly what a compiler
 does to a program.
+
+## Against SDCC (18 November 2026)
+
+Melissa asked whether Barleycorn beats the obvious C you'd write, and
+then C with `static` everywhere. Fronds ported the elves (Advent of Code
+2022, day 23) to C and compiled it with SDCC 4.6. It didn't: on the
+elves' rounds, less the pauses, the obvious C took 429.9 Spectrum
+seconds against Barleycorn's 524.2 unchecked and 615.7 checked. Her
+profile put a fifth of the time in one line, `taken(cy, cx)`, which
+returns `full[rowbase[cy] + cx]`. Most of that was the call itself: the
+arguments copied into slots, every global in them copied first (a call
+was somewhere in the statement), then the call, the return, and the
+result fetched back from its slot. SDCC kept it all in registers.
+
+So four changes:
+
+1. **A function that is one `return`, of scalars and with no call in it,
+   is worked out where it's called.** Its parameters read the arguments
+   where they are, and its value is kept as a call's would be. That
+   costs code, so a tape that wouldn't fit on a 48K that way is built
+   again with those functions called (the checked elves on a wider grove
+   than the fiddlehead is one).
+2. **A global in an argument is copied first only when a call can run
+   before the arguments are passed**, in that argument or a later one,
+   rather than whenever the statement has a call anywhere.
+3. **Three spill rewrites in the peephole pass.** The commonest is the
+   left side of `a - 1` kept in a slot while the 1 loads, then fetched
+   back into HL: now `ld de,1` with the left side still in HL. The cache
+   pass runs first, because a reload it can delete is cheaper deleted
+   than rewritten.
+4. **Indexing, unchecked:** an 8- or 16-bit index goes straight into HL,
+   with no length loaded for a check that isn't made. Checked or not, an
+   element of 2, 4 or 8 bytes is addressed without a push and pop.
+
+On the elves (the fiddlehead input, 270 rounds, every picture the same
+as before), less the pauses, Barleycorn unchecked is now a little faster
+than either C:
+
+| build | before | after | SDCC, obvious C | SDCC, `static` |
+|---|---|---|---|---|
+| unchecked | 524.2 s | 401.3 s | 429.9 s | 406.2 s |
+| checked | 615.7 s | 516.9 s | | |
+
+On the thirteen programs and the examples nothing got slower. `expr`
+takes 19% fewer T-states, `bubble` 12%, `tree` 9%, `qsort` 8%,
+`ex-mandel` 7%, and the recursive ones are unchanged.
