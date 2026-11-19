@@ -122,21 +122,21 @@ class TooBig(SystemExit):
     """a program, its slots and its input don't fit under the UDGs (a SystemExit, as it always was, for bly)"""
 
 
-def build(src, text=b'', markers=True, unchecked=False, more=(), inline=True):
+def build(src, text=b'', markers=True, unchecked=False, more=(), inline=True, terse=False):
     """the tape, and what's where. more: further inputs, each run in turn after the first. A program that doesn't
     fit with its one-return functions worked out in place is built again with them called (info['inline'] says
     which); only if it doesn't fit either way is it too big"""
     if inline:
         try:
-            return build_one(src, text, markers, unchecked, more, True)
+            return build_one(src, text, markers, unchecked, more, True, terse)
         except TooBig:
             pass
-    return build_one(src, text, markers, unchecked, more, False)
+    return build_one(src, text, markers, unchecked, more, False, terse)
 
 
-def build_one(src, text, markers, unchecked, more, inline):
+def build_one(src, text, markers, unchecked, more, inline, terse=False):
     asm1 = z80gen.compile_program(src, 'zx48', org=0x8000, bss_at=0, markers=markers, unchecked=unchecked,
-                                  inline=inline) + '\nbly_input_at equ 8000h\n'
+                                  inline=inline, terse=terse) + '\nbly_input_at equ 8000h\n'
     code1, sym1 = assemble(asm1)
     size = sym1['bly_code_end'] - 0x8000
     bss = sym1['bly_bss_end'] - sym1['bly_bss']
@@ -153,7 +153,7 @@ def build_one(src, text, markers, unchecked, more, inline):
     if input_at < LOWEST:
         raise TooBig(f'too big for a 48K: code {size}, slots {bss}, input {len(text)}, stack {STACKROOM}')
     code, sym = assemble(z80gen.compile_program(src, 'zx48', org=org, bss_at=bss_at, markers=markers,
-                                                unchecked=unchecked, inline=inline) +
+                                                unchecked=unchecked, inline=inline, terse=terse) +
                          f'\nbly_input_at equ {input_at}\n')
     size2 = sym['bly_code_end'] - org
     if size2 != size:                                  # a fragment whose size depends on where it lands (an align, say)
@@ -168,7 +168,7 @@ def build_one(src, text, markers, unchecked, more, inline):
         inp = len(t).to_bytes(2, 'little') + t
         tap += header(3, f'input {k}', len(inp), input_at, 32768) + block(0xFF, inp)
     return tap, {'org': org, 'code': size, 'slots': bss, 'arena': bss_at - STACKROOM - (input_at + 2 + len(big)),
-                 'input_at': input_at, 'sym': sym, 'inline': inline}
+                 'input_at': input_at, 'sym': sym, 'inline': inline, 'terse': terse}
 
 
 def main(argv):
@@ -183,6 +183,7 @@ def main(argv):
                          'which needs no transcript (faster: about 1,900 T-states a piece)')
     ap.add_argument('--unchecked', action='store_true',
                     help='8- and 16-bit indexes go unchecked: only for a program already proven with them checked')
+    ap.add_argument('--terse', action='store_true', help='every failure stops the program at once with no words (48K: C Nonsense in BASIC; CP/M: ?)')
     a = ap.parse_args(argv)
     try:
         src = open(a.program).read()
@@ -192,7 +193,7 @@ def main(argv):
         sys.exit(f'zxbuild.py: {err.filename}: {err.strerror}')
     try:
         tap, info = build(src, texts[0] if texts else b'', markers=not a.plain, unchecked=a.unchecked,
-                          more=texts[1:])
+                          more=texts[1:], terse=a.terse)
     except z80gen.B.BarleyError as err:
         print(err)                                     # the checker's words, as the interpreter prints them
         sys.exit(1)

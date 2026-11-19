@@ -2,6 +2,7 @@
 each breakage must really have gone in (a mutant that didn't apply proves nothing). Then link.resolve on a small
 program: what it keeps, what it drops, and that it follows chains and NEEDS. Speccy-Zone Fern, 19 Nov 2026."""
 import os
+import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -44,6 +45,13 @@ MUTANTS = [
      ';; end bly_pr_u32\n.go:                                ; fall into bly_n_dig\n', 'outside its block'),
     ('bringing a routine that isn\'t marked', 'gen.asm', ';; routine bly_cmp_i16\n',
      ';; routine bly_cmp_i16 (brings bly_nothing)\n', 'isn\'t a marked routine'),
+    ('a routine marked (fails) that can return', 'gen.asm', ';; routine bly_cmp_i16\n',
+     ';; routine bly_cmp_i16 (fails)\n', 'can return'),
+    ('a routine that doesn\'t fail bringing one that does', 'core.asm', ';; routine bly_fail (brings bly_fail_end) (fails)\n',
+     ';; routine bly_fail (brings bly_fail_end)\n', 'only fails'),
+    ('a routine that doesn\'t fail naming a .local of one that does', 'core.asm',
+     ';; routine bly_fail_index_i16 (brings bly_fail_index_u16) (fails)\n',
+     ';; routine bly_fail_index_i16 (brings bly_fail_index_u16)\n', 'only fails'),
 ]
 
 PROGRAM = """        call r_a
@@ -71,6 +79,12 @@ r_f:    ld hl,0                 ; ld hl,(v_kept) and call r_d here are a comment
         db "r_d"
         ret
 ;; end r_f
+;; routine bly_terse
+bly_terse: ret
+;; end bly_terse
+;; routine r_fail (fails)
+r_fail: jp r_e                  ; a terse build drops it: what it names isn't kept for it
+;; end r_fail
 """
 
 
@@ -95,7 +109,7 @@ def main():
             bad += 1
             print(f'WRONG: "{what}" wasn\'t caught' + (f'; it said: {errs[0]}' if errs else ''))
     out = link.resolve(PROGRAM)
-    labels = {line.split(':')[0] for line in out.splitlines() if line[:1].isalpha() and ':' in line}
+    labels = set(re.findall(r'^([A-Za-z_]\w*):', out, re.M))
     want = {'r_a', 'r_b', 'r_c', 'v_kept'}
     if labels != want:
         bad += 1
@@ -103,6 +117,15 @@ def main():
     if any(f' r_{x}' in line for line in out.splitlines() if line.startswith(';;') for x in 'def'):
         bad += 1
         print('WRONG: resolve left the markers of a dropped routine')
+    terse = link.resolve(PROGRAM.replace('        call r_a\n', '        call r_a\n        jp z,r_fail\n', 1),
+                         terse=True)
+    tl = set(re.findall(r'^([A-Za-z_]\w*):', terse, re.M))
+    if tl != want | {'bly_terse'} or 'r_fail equ bly_terse' not in terse:
+        bad += 1
+        print(f'WRONG: terse resolve kept {sorted(tl)}, and r_fail as bly_terse: {"r_fail equ bly_terse" in terse}')
+    if 'r_fail equ' in link.resolve(PROGRAM.replace('        call r_a\n', '        call r_a\n        jp z,r_fail\n', 1)):
+        bad += 1
+        print('WRONG: an ordinary resolve made r_fail bly_terse')
     print('libblocks_check:', 'all right' if not bad else f'{bad} wrong', f'({len(MUTANTS)} mutants, and resolve)')
     return 1 if bad else 0
 

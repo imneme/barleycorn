@@ -153,11 +153,11 @@ bly_pr_u16:                         ; subtract powers of ten: no division
         ret
 ;; end bly_pr_u16
 
-;; routine bly_fail (brings bly_fail_end)
+;; routine bly_fail (brings bly_fail_end) (fails)
 bly_fail:
         call bly_pr_cstr
 ;; end bly_fail
-;; routine bly_fail_end
+;; routine bly_fail_end (fails)
 bly_fail_end:
         ld hl,(bly_line)
         ld a,h
@@ -195,7 +195,7 @@ bly_fail_end:
 .of:    db " of ",0
 ;; end bly_fail_end
 
-;; routine bly_fail_index_u16
+;; routine bly_fail_index_u16 (fails)
 bly_fail_index_u16:
         push bc
         push de
@@ -212,7 +212,7 @@ bly_fail_index_u16:
 .outside: db " is outside 0..",0
 ;; end bly_fail_index_u16
 
-;; routine bly_fail_index_i16 (brings bly_fail_index_u16)
+;; routine bly_fail_index_i16 (brings bly_fail_index_u16) (fails)
 bly_fail_index_i16:
         push bc
         push de

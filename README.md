@@ -103,7 +103,9 @@ everywhere. (For speed, in a program already tested without them:
 `./bly c --wrap` lets signed overflow wrap round instead, and
 `./bly tap --unchecked`, or `zx` or `cpm`, leaves the Z80's 8- and
 16-bit indexes unchecked, a quarter less time where indexing is the
-work.)
+work. And for size, or showing off: `--terse` keeps every check but
+drops the words, so a failure just stops, the Spectrum saying
+`C Nonsense in BASIC`, about a tenth less code.)
 
 ## What you need
 

@@ -51,10 +51,12 @@ def load(lib=LIB):
 #     ...
 #     ;; end bly_cmp_u8
 # and stays in a program only if something kept names it. "brings" lists routines that come with it whatever names
-# them, because it runs on into them or uses one of their .local labels. To the assembler the markers are comments,
-# so a fragment assembled on its own (as the tests and the size tables do) has every routine, as before; resolve()
-# decides, once the whole program is there. libblocks.py holds the rules and checks them.
-MARK = re.compile(r'^;; routine ([A-Za-z_]\w*)(?: \(brings ([A-Za-z_][\w, ]*)\))?\s*$')
+# them, because it runs on into them or uses one of their .local labels. "(fails)" marks a routine that only fails
+# (prints its message and ends the program): a --terse build drops it and sends whatever names it to bly_terse, the
+# platform's one wordless failure. To the assembler the markers are comments, so a fragment assembled on its own (as
+# the tests and the size tables do) has every routine, as before; resolve() decides, once the whole program is
+# there. libblocks.py holds the rules and checks them.
+MARK = re.compile(r'^;; routine ([A-Za-z_]\w*)((?: \((?:brings [A-Za-z_][\w, ]*|fails)\))*)\s*$')
 END = re.compile(r'^;; end ([A-Za-z_]\w*)\s*$')
 INCLUDE = re.compile(r'^\s+include\s+"([^"]+)"', re.I)
 
@@ -66,41 +68,48 @@ def names(line):
 
 
 def blocks(text):
-    """{routine: (first line, last line, [what it brings])} of a text's marked routines"""
+    """{routine: (first line, last line, [what it brings], whether it only fails)} of a text's marked routines"""
     out, inside = {}, None
     for i, line in enumerate(text.splitlines()):
         m, e = MARK.match(line), END.match(line)
         if m:
             if inside:
                 raise ValueError(f'routine {m.group(1)} starts inside {inside[0]}')
-            inside = (m.group(1), i, [w for w in re.split(r'[ ,]+', m.group(2) or '') if w])
+            groups = re.findall(r'\(([^)]*)\)', m.group(2))
+            brings = [w for g in groups if g.startswith('brings ') for w in re.split(r'[ ,]+', g[7:]) if w]
+            inside = (m.group(1), i, brings, 'fails' in groups)
         elif e:
             if not inside or e.group(1) != inside[0]:
                 raise ValueError(f'end {e.group(1)} doesn\'t close ' + (inside[0] if inside else 'anything'))
             if inside[0] in out:
                 raise ValueError(f'two blocks for {inside[0]}')
-            out[inside[0]] = (inside[1], i, inside[2])
+            out[inside[0]] = (inside[1], i, inside[2], inside[3])
             inside = None
     if inside:
         raise ValueError(f'routine {inside[0]} has no end')
     return out
 
 
-def resolve(text):
+def resolve(text, terse=False):
     """text with its marked routines decided: one stays if anything kept names it, or a kept routine brings it
-    (everything outside the markers is kept, and so is a file it includes); the rest go"""
+    (everything outside the markers is kept, and so is a file it includes); the rest go. terse: a routine marked
+    (fails) goes whatever names it, and each one named becomes another name for bly_terse"""
     lines = text.splitlines()
     bl = blocks(text)
     if not bl:
         return text
     owner = [None] * len(lines)
-    for lab, (a, b, _) in bl.items():
+    for lab, (a, b, _, _) in bl.items():
         for k in range(a, b + 1):
             owner[k] = lab
-    keep, todo = set(), []
+    keep, todo, failing = set(), [], set()
 
     def want(n):
-        if n in bl and n not in keep:
+        if terse and n in bl and bl[n][3]:
+            if n not in failing:
+                failing.add(n)
+                want('bly_terse')
+        elif n in bl and n not in keep:
             keep.add(n)
             todo.append(n)
 
@@ -113,12 +122,13 @@ def resolve(text):
                 want(n)
     scan(line for k, line in enumerate(lines) if owner[k] is None)
     while todo:
-        a, b, brings = bl[todo.pop()]
+        a, b, brings, _ = bl[todo.pop()]
         for n in brings:
             want(n)
         scan(lines[a + 1:b])
     out = [line for k, line in enumerate(lines) if owner[k] is None or owner[k] in keep]
-    return '\n'.join(out) + ('\n' if text.endswith('\n') else '')
+    out += [f'{n} equ bly_terse                      ; --terse: every failure is the one wordless one' for n in sorted(failing)]
+    return '\n'.join(out) + ('\n' if text.endswith('\n') or failing else '')
 
 
 def gather(symbols, target, lib=LIB):

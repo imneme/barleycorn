@@ -1,8 +1,9 @@
-;; provides: bly_putc bly_exit bly_failed bly_test_init bly_test_out bly_test_outp bly_test_failed bly_text bly_tlen
+;; provides: bly_putc bly_exit bly_failed bly_terse bly_test_init bly_test_out bly_test_outp bly_test_failed bly_text bly_tlen
 ;; needs: bly_atop bly_alimit bly_line bly_col
 ;; targets: test
 ;; bly_putc       in: A=byte       appends to bly_test_out          clobbers: AF BC DE HL
 ;; bly_exit       in: -            marks the run failed and stops at the harness's bly_test_halt
+;; bly_terse      in: -            a --terse build's every failure: as bly_exit
 ;; bly_text, bly_tlen               the input's address and length (the platform's, per ABI.md section 8)
 ;; bly_test_init  in: -            resets the output, the arena (A000h-DFFFh), bly_line, bly_col   clobbers: AF HL
 
@@ -26,6 +27,9 @@ bly_failed:                         ; a failure's words are out: nothing more to
         ret
 ;; end bly_failed
 
+;; routine bly_terse (brings bly_exit)
+bly_terse:
+;; end bly_terse
 ;; routine bly_exit
 bly_exit:
         ld a,1

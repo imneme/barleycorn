@@ -29,6 +29,8 @@ The form (ABI.md, section 3), comments to the assembler, so a fragment assembled
 6. A block holds code. Data under a global label (a shared variable, a table) stays outside every block, because
    code can reach it by an offset from its neighbour (P_FLAG's +1 and +2 are P_COL and P_LIN, say), and nothing in a
    name shows that. Data a routine owns sits in its block under a .local label.
+7. A routine marked (fails) only fails: it never returns. A --terse build drops it, and whatever named it goes to
+   bly_terse, so only another (fails) routine may bring it or name its .local labels.
 Code outside every block is always kept, as all of it was before. A routine dropped by mistake shows up as an
 undefined symbol in the assembly, which is loud; rules 2, 5 and 6 cover the quiet ways.
 """
@@ -131,7 +133,7 @@ def check_text(name, text):
             errs.append(f'{name}: "{line}" looks like a marker but isn\'t one: ";; routine X (brings Y, Z)" '
                         f'or ";; end X"')
     inblock = {}
-    for x, (a, b, _) in bl.items():
+    for x, (a, b, _, _) in bl.items():
         for i in range(a, b + 1):
             inblock[i] = x
         labs = [(i, stmt(lines[i])[0]) for i in range(a + 1, b) if stmt(lines[i])[0]]
@@ -146,6 +148,13 @@ def check_text(name, text):
         for y in bl[x][2]:
             if y not in bl:
                 errs.append(f'{name}:{a + 1}: {x} brings {y}, which isn\'t a marked routine here')
+            elif bl[y][3] and not bl[x][3]:
+                errs.append(f'{name}:{a + 1}: {x} brings {y}, which only fails: a --terse build drops {y}, so only '
+                            f'a routine that fails too may bring it')
+        if bl[x][3]:
+            ops, _ = facts(lines, a, b)
+            if any(o[0] in ENDS for o in ops):
+                errs.append(f'{name}:{a + 1}: {x} is marked (fails) but can return')
     owner = None                                    # rule 5
     for i, l in enumerate(lines):
         if stmt(l)[0]:
@@ -168,6 +177,10 @@ def check_text(name, text):
             errs.append(f'{name}:{first + 1}: {lab or "the code before " + nxt[0]} can run on into {nxt[0]}, '
                         f'which is in a block: ' + (f'mark it "(brings {nxt[0]})"' if lab in bl else
                                                     f'{lab or "it"} isn\'t in a block, so {nxt[0]} can\'t be'))
+        for y in sorted(locs - {lab}):
+            if y in bl and bl[y][3] and not (lab in bl and bl[lab][3]):
+                errs.append(f'{name}:{first + 1}: {lab or "code"} names a .local label of {y}, which only fails: a '
+                            f'--terse build drops {y}')
         for y in sorted(locs - {lab} - brings):
             if y in bl:
                 errs.append(f'{name}:{first + 1}: {lab or "code"} names a .local label of {y}, which is in a block: '

@@ -7,7 +7,7 @@
 ; The integer library's failures that gen.asm doesn't already have. The rest (bly_ovf_int, bly_ovf_long,
 ; bly_ovf_quad, bly_div0, bly_neg_shift) are gen.asm's, so each message is in a program once.
 
-;; routine bly_ovf_n
+;; routine bly_ovf_n (fails)
 bly_ovf_n:
         cp 4
         jp c,bly_ovf_int
@@ -15,7 +15,7 @@ bly_ovf_n:
         jp bly_ovf_quad
 ;; end bly_ovf_n
 
-;; routine bly_mod0
+;; routine bly_mod0 (fails)
 bly_mod0:
         ld hl,.m
         jp bly_fail

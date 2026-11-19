@@ -257,3 +257,15 @@ benchmark got smaller: `fib` by 43%, `perm` by 39%, the thirteen and the
 examples by 18% in all, the elves by 0.9K. The checked elves on the
 wider grove fit with `taken` inlined now.
 
+**`--terse`.** Then she asked for a build that keeps code trim "when you
+need that or are showing off": every check kept, but a failure just
+stops, as BASIC's `C Nonsense in BASIC`. Error reporting was about a
+tenth of the elves' code. Now a routine that only fails is marked
+`(fails)`, a terse build drops each one and makes whatever named it jump
+to the platform's wordless `bly_terse`, and the generator stops keeping
+a line for a failure to name. The elves come out 10% smaller (7,234
+bytes unchecked) and, with no line kept, a little faster: 393.2 seconds
+less the pauses. `z80/tests/terse_check.py` builds every semantics
+program both ways: one that doesn't fail prints the same, and one that
+does prints what came before its failure, then stops.
+

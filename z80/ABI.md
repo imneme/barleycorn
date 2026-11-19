@@ -161,6 +161,12 @@ chain, with whatever each one brings. It drops the rest.
   line), and no name shows that.
 - **A label the tools read from the symbol table stays outside every
   block** (`bly_inputs_left`, which zxbuild.py fills in).
+- **`(fails)`** marks a routine that only fails: it prints its message
+  and ends the program, and never returns (`bly_fail`, `bly_ovf_int`,
+  `bly_fail_index_u16`...). Only another such routine may bring it or
+  name its `.local` labels. A routine that must tidy up before failing
+  (FZX's `zxf_below` puts BASIC's HL' back) isn't marked: it does its
+  tidying, then jumps to `bly_fail` as usual.
 
 `z80/libblocks.py` checks every rule (./check runs it, with a dozen
 deliberately broken fragments it must catch) and can mark a new
@@ -202,6 +208,16 @@ are what the check is for.
 
 `{kind}` is one of `list`, `queue`, `heap`, `map`, `set`. `{type}` is
 `byte`, `word`, `int`, `long` or `quad`.
+
+**`--terse`** (`bly tap`, `zx`, `cpm`) keeps every check and drops the
+words. The generator jumps straight to the failure routine, with no stub
+and no `bly_line` kept, and `link.resolve(terse=True)` drops every
+`(fails)` routine and makes each one named another name for `bly_terse`,
+the platform's wordless ending. On the 48K that's back to BASIC from
+anywhere (as `bly_exit`), with RST 8's `C Nonsense in BASIC`; on CP/M,
+`?`, a newline and the warm boot. A library routine that prints part of
+its message before jumping to `bly_fail` (a few in text, input and the
+containers) still prints that part first.
 
 ## 5. Output (core, and the platform's `bly_putc`)
 

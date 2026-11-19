@@ -1,4 +1,4 @@
-;; provides: bly_putc bly_exit bly_failed bly_start bly_text bly_tlen
+;; provides: bly_putc bly_exit bly_failed bly_terse bly_start bly_text bly_tlen
 ;; needs: bly_atop bly_alimit bly_fail
 ;; uses: bly_program bly_bss bly_bss_end
 ;; targets: cpm
@@ -6,6 +6,7 @@
 ;;            FCB at 005Ch) to just above them, stopping at ^Z, puts the arena above that, then jumps to bly_program
 ;; bly_putc   in: A=byte; a newline (0Ah) goes out as CR LF                       clobbers: AF BC DE HL
 ;; bly_exit   the end of the program, normal or failed: JP 0, the warm boot
+;; bly_terse  a --terse build's every failure: ?, a newline, and the warm boot
 ;; bly_text, bly_tlen   the input's address and length
 
 BDOS    equ 5
@@ -125,6 +126,13 @@ bly_failed:                         ; a failure's words are out: nothing more to
         ret
 ;; end bly_failed
 
+;; routine bly_terse (brings bly_exit)
+bly_terse:
+        ld a,'?'
+        call bly_putc
+        ld a,0Ah
+        call bly_putc
+;; end bly_terse
 ;; routine bly_exit
 bly_exit:
         jp 0

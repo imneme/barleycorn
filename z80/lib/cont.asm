@@ -30,7 +30,7 @@ bly_cn_kind:                        ; skip A names, then print one
 .names: db "list",0,"queue",0,"heap",0,"map",0,"set",0
 ;; end bly_cn_kind
 
-;; routine bly_changed
+;; routine bly_changed (fails)
 bly_changed:
         push af
         ld hl,.the
@@ -79,7 +79,7 @@ bly_cn_cap:                         ; HL=&cap (a quad), A=kind
 .kind:  db 0
 ;; end bly_cn_cap
 
-;; routine bly_cn_full
+;; routine bly_cn_full (fails)
 bly_cn_full:                        ; A=kind, HL=cap
         push hl
         call bly_cn_kind
@@ -93,7 +93,7 @@ bly_cn_full:                        ; A=kind, HL=cap
 .close: db ")",0
 ;; end bly_cn_full
 
-;; routine bly_cn_afull
+;; routine bly_cn_afull (fails)
 bly_cn_afull:
         ld hl,.msg
         jp bly_fail

@@ -259,6 +259,12 @@ spectrum-minilib (`zxask.asm`).
   indexes unchecked. A program whose indexes are good prints the same in
   less code; a read past an array's end, which stops checked, runs on
   unchecked; a `long` index is still checked.
+- **Terse** (`z80/tests/terse_check.py`, in the cpm stage, and `--zx` in
+  the zx stage): every semantics program built ordinary and `--terse`,
+  and run. One that doesn't fail prints the same both ways; one that
+  does prints, terse, only what came before its failure, then `?` on
+  CP/M or BASIC's `C Nonsense in BASIC` on the 48K; and a terse build
+  keeps no line for a failure.
 - **The docs** (`tools/check_docs.py`): a code block that starts like a
   program in `interp/tests` or `examples` quotes it, and must be all of
   it, exactly; DESIGN.md quotes five. Every command's `-h` must work and

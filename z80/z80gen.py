@@ -152,6 +152,7 @@ class Gen:
         self.markers = True                 # the transcript's markers around text printed at a place
         self.unchecked = False              # bly --unchecked: 8- and 16-bit indexes go unchecked
         self.inlining = True                # one-return functions worked out where they're called (inline_body)
+        self.terse = False                  # bly --terse: every failure is bly_terse, wordless, and no line is kept
         self.code = []
         self.nlabel = 0
         self.strings = {}
@@ -253,15 +254,19 @@ class Gen:
         return lab
 
     def fail_jp(self, cond, routine, line):
-        """jp cond to a failure routine that takes no arguments in HL, setting the line only on the way there"""
+        """jp cond to a failure routine that takes no arguments in HL, setting the line only on the way there
+        (--terse: straight there, as link.resolve makes it bly_terse)"""
         self.calls.add(routine)
+        if self.terse:
+            self.emit(f'jp {cond},{routine}')
+            return
         key = (routine, line)                               # one stub for each failure and line, in a function
         if key not in self.fail_stubs:
             self.fail_stubs[key] = self.cold(lambda: (self.line(line), self.jp(routine)))
         self.emit(f'jp {cond},{self.fail_stubs[key]}')
 
     def line(self, n):
-        if n and n != self.cur_line:
+        if n and n != self.cur_line and not self.terse:     # --terse: no failure says where it was
             self.emit(f'ld hl,{n}')
             self.emit('ld (bly_line),hl')
             self.cur_line = n
@@ -571,9 +576,10 @@ class Gen:
                 self.block(f.body)
             if f.rty is not B.VOID and frag is None and not (f.body and f.body[-1].k in ('return', 'stop')):
                 self.line(f.end_line)                   # run off its end, it has nothing to give
-                msg = self.string(f'{f.name} ended without returning {B.article(f.rty)}'.encode())
-                self.emit(f'ld hl,{msg.val}')
-                self.call('bly_pr_str')
+                if not self.terse:
+                    msg = self.string(f'{f.name} ended without returning {B.article(f.rty)}'.encode())
+                    self.emit(f'ld hl,{msg.val}')
+                    self.call('bly_pr_str')
                 self.jp('bly_fail_end')
             else:
                 self.emit('ret')
@@ -639,7 +645,7 @@ class Gen:
             off += size(f.rty) if f.rty is not B.VOID else 0
         out += self.equs
         out.append(f'bly_bss_end equ bly_bss+{off}')
-        return resolve('\n'.join(out) + '\n')      # the library's routines: only those the program names (link.py)
+        return resolve('\n'.join(out) + '\n', terse=self.terse)   # the library's routines: only those named
 
     # -- asm clauses -------------------------------------------------------------------------------------------
     # (ASM_WORDS: what sjasmplus 1.24 won't take as a called label, in lower case or upper: found by asking it)
@@ -685,8 +691,9 @@ class Gen:
         the library's routines take them (ABI.md section 2: 16 bits or less by value, a byte in the low half and,
         for the first, in A too; anything wider by its slot's address), a wide result's address after them, the
         call, and the result into rv_ (HL, or A for a byte or bool). A failure inside is at the clause's line"""
-        self.emit(f'ld hl,{f.asm_line}')
-        self.emit('ld (bly_line),hl')                   # first, while HL is free
+        if not self.terse:
+            self.emit(f'ld hl,{f.asm_line}')
+            self.emit('ld (bly_line),hl')               # first, while HL is free
         regs = ['hl', 'de', 'bc', 'ix']
         loads = []
         for i, ((pn, _), pt) in enumerate(zip(f.params, f.ptys)):
@@ -3262,12 +3269,14 @@ COUNT64 = ['bly_count64:                        ; HL = &count (quad) -> DE = it,
            '        cp 65', '        ret c', '        ld e,64', '        ret']
 
 
-def compile_program(src, target='cpm', org=None, bss_at=None, markers=True, unchecked=False, inline=True):
+def compile_program(src, target='cpm', org=None, bss_at=None, markers=True, unchecked=False, inline=True,
+                    terse=False):
     """org and bss_at place the code and the slots (the Spectrum's builder puts code high, slots beneath it).
     markers=False leaves out the two invisible control codes around each piece of text printed at a place, which
     only the tests' transcript needs (HACKING.md): a tape for a real Spectrum is faster without them. unchecked:
     8- and 16-bit indexes go unchecked (bly --unchecked). inline=False calls one-return functions rather than working
-    them out in place: the Spectrum's builder asks for that when inlining would leave a program no room"""
+    them out in place: the Spectrum's builder asks for that when inlining would leave a program no room. terse: every
+    failure ends the program at once with no words (bly_terse, the platform's), and no line is kept for one"""
     FLOATS['on'] = target in ('zx48', 'cpm')     # the ROM's on the 48K; fp_cpm.asm's on CP/M
     decls = B.Parser(src).program()
     ck = B.Checker(decls, 'cpm' if target == 'cpm' else 'zx48')
@@ -3276,6 +3285,9 @@ def compile_program(src, target='cpm', org=None, bss_at=None, markers=True, unch
     g.markers = markers
     g.unchecked = unchecked
     g.inlining = inline
+    g.terse = terse
+    if terse:
+        g.calls.add('bly_terse')
     if org is not None:
         g.org = org
     if bss_at is not None:
@@ -3292,6 +3304,7 @@ def main(argv):
     ap.add_argument('--target', choices=['cpm', 'zx48'], default='cpm', help='the machine (default cpm)')
     ap.add_argument('--unchecked', action='store_true',
                     help='8- and 16-bit indexes go unchecked: only for a program already proven with them checked')
+    ap.add_argument('--terse', action='store_true', help='every failure stops the program at once with no words (48K: C Nonsense in BASIC; CP/M: ?)')
     a = ap.parse_args(argv)
     try:
         B.EMBED_DIR = os.path.dirname(os.path.abspath(a.program))
@@ -3299,7 +3312,7 @@ def main(argv):
     except OSError as err:
         sys.exit(f'z80gen.py: {a.program}: {err.strerror}')
     try:
-        sys.stdout.write(compile_program(src, a.target, unchecked=a.unchecked))
+        sys.stdout.write(compile_program(src, a.target, unchecked=a.unchecked, terse=a.terse))
     except B.BarleyError as err:
         print(err)
         sys.exit(1)

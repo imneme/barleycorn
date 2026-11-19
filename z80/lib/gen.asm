@@ -141,37 +141,37 @@ bly_shr_i16:
         ret
 ;; end bly_shr_i16
 
-;; routine bly_ovf_int
+;; routine bly_ovf_int (fails)
 bly_ovf_int:
         ld hl,.m
         jp bly_fail
 .m:     db "int overflow",0
 ;; end bly_ovf_int
-;; routine bly_ovf_long
+;; routine bly_ovf_long (fails)
 bly_ovf_long:
         ld hl,.m
         jp bly_fail
 .m:     db "long overflow",0
 ;; end bly_ovf_long
-;; routine bly_ovf_quad
+;; routine bly_ovf_quad (fails)
 bly_ovf_quad:
         ld hl,.m
         jp bly_fail
 .m:     db "quad overflow",0
 ;; end bly_ovf_quad
-;; routine bly_div0
+;; routine bly_div0 (fails)
 bly_div0:
         ld hl,.m
         jp bly_fail
 .m:     db "division by zero",0
 ;; end bly_div0
-;; routine bly_neg_shift
+;; routine bly_neg_shift (fails)
 bly_neg_shift:
         ld hl,.m
         jp bly_fail
 .m:     db "negative shift count",0
 ;; end bly_neg_shift
-;; routine bly_assert
+;; routine bly_assert (fails)
 bly_assert:
         ld hl,.m
         jp bly_fail

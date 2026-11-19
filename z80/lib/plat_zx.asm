@@ -1,4 +1,4 @@
-;; provides: bly_putc bly_exit bly_failed bly_start bly_text bly_tlen bly_basic_sp bly_zx_cls bly_zx_at bly_zx_key bly_zx_ticks bly_zx_pause
+;; provides: bly_putc bly_exit bly_failed bly_terse bly_start bly_text bly_tlen bly_basic_sp bly_zx_cls bly_zx_at bly_zx_key bly_zx_ticks bly_zx_pause
 ;; provides: bly_inputs_left
 ;; needs: bly_atop bly_alimit bly_fail bly_pr_cstr bly_pr_i16 bly_out bly_col
 ;; uses: bly_program bly_bss bly_bss_end bly_input_at
@@ -14,6 +14,7 @@
 ;;            0 on paper 0 can't hide them, and have bly_exit report 9 STOP statement   clobbers: AF BC DE HL
 ;; bly_exit   back to BASIC, from anywhere: BASIC's SP, then RET (0 OK), or after a failure RST 8 (9 STOP statement),
 ;;            so a person at the Spectrum sees that it stopped
+;; bly_terse  a --terse build's every failure: no words, back to BASIC from anywhere, and RST 8's C Nonsense in BASIC
 ;; The screen and sound's platform half (ABI.md section 10; zxgfx.py is their meaning). The colours (ink, paper,
 ;; border, bright, flash, inverse, over) are zxcolour.asm, a fragment of their own, as beep is zxbeep.asm.
 ;; bly_zx_cls                          the ROM's CLS, then print starts at the top left    clobbers: all but IY
@@ -288,3 +289,13 @@ bly_zx_pause:
 .m1:    db "pause ",0
 .m2:    db " is negative",0
 ;; end bly_zx_pause
+
+; -- a --terse build's every failure (link.resolve sends each (fails) routine here) -----------------------------
+;; routine bly_terse
+bly_terse:
+        im 1                        ; as bly_exit: IM 1, interrupts on, BASIC's SP
+        ei
+        ld sp,(bly_basic_sp)
+        rst 08h
+        db 0Bh                      ; C Nonsense in BASIC
+;; end bly_terse
