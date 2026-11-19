@@ -12,6 +12,7 @@
 ;; STOP; any other control key isn't taken. The line goes straight into the arena's free room, then is allocated
 ;; there (bly_alloc_raw hands out bly_atop), so it can be as long as the arena has room for, as on the Spectrum.
 
+;; routine bly_ask
 bly_ask:
         ld (.dest),de
         call bly_pr_str             ; the prompt
@@ -92,3 +93,4 @@ bly_ask:
 .p:     dw 0
 .n:     dw 0
 .ch:    db 0
+;; end bly_ask

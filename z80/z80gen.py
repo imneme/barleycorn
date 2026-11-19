@@ -32,7 +32,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', 'interp'))
 sys.path.insert(0, HERE)
 import barley as B                                                     # noqa: E402
-from link import gather, Frag                                          # noqa: E402
+from link import gather, resolve, Frag                                 # noqa: E402
 GENERATED = re.compile(r'(bly_|f_|fr_|rv_|fsz_|ppr_|pcmp_|k_)|gs$|[LS]\d+d?$')   # the names z80gen makes
 ASM_WORDS = set('and or xor not mod shl shr low high pair abs norel exist sizeof c nz z nc po pe p m'.split())
 import peephole                                                        # noqa: E402
@@ -639,7 +639,7 @@ class Gen:
             off += size(f.rty) if f.rty is not B.VOID else 0
         out += self.equs
         out.append(f'bly_bss_end equ bly_bss+{off}')
-        return '\n'.join(out) + '\n'
+        return resolve('\n'.join(out) + '\n')      # the library's routines: only those the program names (link.py)
 
     # -- asm clauses -------------------------------------------------------------------------------------------
     # (ASM_WORDS: what sjasmplus 1.24 won't take as a called label, in lower case or upper: found by asking it)

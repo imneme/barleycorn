@@ -39,7 +39,9 @@ c/
 z80/
   z80gen.py    checked program -> Z80 assembly
   peephole.py  the register cache and dead stores
-  link.py      gathers library fragments by their headers
+  link.py      gathers library fragments by their headers, and keeps
+               only the routines the program names
+  libblocks.py the rules for the routines' blocks, checked
   lib/         the library: one .asm fragment per area, each with a
                header; NOTES.md, its design and costs
   ABI.md       the contract between the generated code and the library:
@@ -84,9 +86,10 @@ decide where arithmetic wraps (unsigned) or traps (signed).
   lives at a fixed address in its function's frame; 8- and 16-bit
   arithmetic is inline, anything wider is a call into the library.
   `peephole.py` then cleans up each function. `link.py` gathers the
-  library fragments the program uses, and sjasmplus assembles the lot
-  once. `zxbuild.py` makes a tape, and for CP/M the assembly is a
-  `.COM`.
+  library fragments the program uses, keeps only the routines in them
+  that the program can reach (ABI.md, section 3), and sjasmplus
+  assembles the lot once. `zxbuild.py` makes a tape, and for CP/M the
+  assembly is a `.COM`.
 
 ### What the checker writes onto the tree
 

@@ -17,6 +17,7 @@
 ; malformed text; 4, Out of memory, can't happen while Barley keeps the calculator its room).
 ; Scratch: .s .dst .st .p .neg .after .saved .hlx .xptr .chadd, and .span (a str, for the message).
 
+;; routine bly_str_float
 bly_str_float:
         ld (.s),hl
         ld (.dst),de
@@ -208,3 +209,4 @@ bly_str_float:
 .xptr:  dw 0
 .chadd: dw 0
 .span:  dw 0,0
+;; end bly_str_float

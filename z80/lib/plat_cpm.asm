@@ -15,6 +15,7 @@ STACKROOM equ 1024                  ; bytes kept for the stack below the BDOS
 bly_text: dw 0
 bly_tlen: dw 0
 
+;; routine bly_start
 bly_start:
         ld hl,(6)                   ; the BDOS's address: the top of the TPA
         ld sp,hl
@@ -104,7 +105,9 @@ bly_start:
         jp bly_fail
 .nofile: db "can't read the input",0
 .big:    db "the input doesn't fit in memory",0
+;; end bly_start
 
+;; routine bly_putc
 bly_putc:
         cp 10
         jr nz,.one
@@ -115,9 +118,14 @@ bly_putc:
 .one:   ld e,a
         ld c,2
         jp BDOS
+;; end bly_putc
 
+;; routine bly_failed
 bly_failed:                         ; a failure's words are out: nothing more to do here
         ret
+;; end bly_failed
 
+;; routine bly_exit
 bly_exit:
         jp 0
+;; end bly_exit

@@ -6,6 +6,7 @@
 ;; Out of plat_zx.asm since 9 October, so a program that never beeps doesn't carry the tables (520 bytes) or
 ;; the 32-bit multiply and divide (about 1.3K) that turn a semitone and a length into the ROM's period and cycles.
 
+;; routine bly_zx_beep
 bly_zx_beep:                        ; HL = ms, DE = semitone
         push hl
         ld hl,60                    ; semitone + 60 must be 0..129
@@ -112,3 +113,4 @@ bly_zx_beep:                        ; HL = ms, DE = semitone
         dw 10548, 11175, 11840, 12544, 13290, 14080, 14917, 15804, 16744, 17740
         dw 18795, 19912, 21096, 22351, 23680, 25088, 26580, 28160, 29834, 31609
         dw 33488, 35479, 37589, 39824, 42192, 44701, 47359, 50175, 53159, 56320
+;; end bly_zx_beep

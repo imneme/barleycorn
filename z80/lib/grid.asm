@@ -13,6 +13,7 @@
 ;; find on a one-byte grid uses CPIR a row at a time (every one-byte type is equal exactly when its bytes are);
 ;; other grids call cmp on each cell. Self-modifying: the CALLs to cmp and pr.
 
+;; routine bly_grid_new
 bly_grid_new:                       ; HL=&block
         ld (.blk),hl
         ld de,7
@@ -140,7 +141,9 @@ bly_grid_new:                       ; HL=&block
 .cmp:   dw 0
 .pr:    dw 0
 .fill:  dw 0
+;; end bly_grid_new
 
+;; routine bly_grid_ref
 bly_grid_ref:                       ; HL=grid DE=r BC=c -> HL = a + (r*cols + c)*esize
         push bc
         inc hl
@@ -181,7 +184,9 @@ bly_grid_ref:                       ; HL=grid DE=r BC=c -> HL = a + (r*cols + c)
         pop de
         add hl,de
         ret
+;; end bly_grid_ref
 
+;; routine bly_grid_has
 bly_grid_has:                       ; HL=grid DE=&pos -> A
         ex de,hl
         ld c,(hl)
@@ -216,7 +221,9 @@ bly_grid_has:                       ; HL=grid DE=&pos -> A
         ret
 .no:    xor a
         ret
+;; end bly_grid_has
 
+;; routine bly_grid_chk16
 bly_grid_chk16:                     ; HL=grid DE=r BC=c; keeps HL DE BC
         bit 7,d
         jr nz,.off
@@ -276,7 +283,9 @@ bly_grid_chk16:                     ; HL=grid DE=r BC=c; keeps HL DE BC
 .offg:  db ") is off the grid (",0
 .x:     db " x ",0
 .close: db ")",0
+;; end bly_grid_chk16
 
+;; routine bly_grid_find
 bly_grid_find:                      ; HL=grid DE=&value BC=&dest
         ld (.g),hl
         ld (.val),de
@@ -389,3 +398,4 @@ bly_grid_find:                      ; HL=grid DE=&value BC=&dest
 .p:     dw 0
 .r:     dw 0
 .c:     dw 0
+;; end bly_grid_find

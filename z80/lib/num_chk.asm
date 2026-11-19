@@ -12,6 +12,7 @@
 ; the true value. The quick test is that the top six bytes are zero; then one 16-bit compare.
 ; Scratch: bly_chk_slice64's .pa .pb .n, bly_grid_chk64's .g .pr .pc.
 
+;; routine bly_n_q2w
 bly_n_q2w:
         ld e,(hl)
         inc hl
@@ -29,7 +30,9 @@ bly_n_q2w:
         inc hl
         or (hl)
         ret
+;; end bly_n_q2w
 
+;; routine bly_chk_index64
 bly_chk_index64:                    ; 0 <= i < n
         push hl
         inc hl
@@ -71,7 +74,9 @@ bly_chk_index64:                    ; 0 <= i < n
         jp bly_fail_end
 .index:   db "index ",0
 .outside: db " is outside 0..",0
+;; end bly_chk_index64
 
+;; routine bly_chk_slice64 (brings bly_chk_index64)
 bly_chk_slice64:                    ; 0 <= a <= b <= n
         ld (.pa),hl
         ld (.pb),de
@@ -112,7 +117,9 @@ bly_chk_slice64:                    ; 0 <= a <= b <= n
 .pa:    dw 0
 .pb:    dw 0
 .n:     dw 0
+;; end bly_chk_slice64
 
+;; routine bly_grid_chk64
 bly_grid_chk64:                     ; 0 <= r < rows and 0 <= c < cols
         ld (.g),hl
         ld (.pr),de
@@ -183,3 +190,4 @@ bly_grid_chk64:                     ; 0 <= r < rows and 0 <= c < cols
 .g:     dw 0
 .pr:    dw 0
 .pc:    dw 0
+;; end bly_grid_chk64

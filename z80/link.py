@@ -46,7 +46,84 @@ def load(lib=LIB):
     return out
 
 
+# Inside a fragment, each routine sits between two comment lines:
+#     ;; routine bly_cmp_u8 (brings bly_cmp_u16)
+#     ...
+#     ;; end bly_cmp_u8
+# and stays in a program only if something kept names it. "brings" lists routines that come with it whatever names
+# them, because it runs on into them or uses one of their .local labels. To the assembler the markers are comments,
+# so a fragment assembled on its own (as the tests and the size tables do) has every routine, as before; resolve()
+# decides, once the whole program is there. libblocks.py holds the rules and checks them.
+MARK = re.compile(r'^;; routine ([A-Za-z_]\w*)(?: \(brings ([A-Za-z_][\w, ]*)\))?\s*$')
+END = re.compile(r'^;; end ([A-Za-z_]\w*)\s*$')
+INCLUDE = re.compile(r'^\s+include\s+"([^"]+)"', re.I)
+
+
+def names(line):
+    """the names a line of assembly mentions (not in its comment, nor in its strings)"""
+    body = re.sub(r'"[^"]*"|\'[^\']*\'', ' ', line.split(';', 1)[0])
+    return re.findall(r'[A-Za-z_]\w*', body)
+
+
+def blocks(text):
+    """{routine: (first line, last line, [what it brings])} of a text's marked routines"""
+    out, inside = {}, None
+    for i, line in enumerate(text.splitlines()):
+        m, e = MARK.match(line), END.match(line)
+        if m:
+            if inside:
+                raise ValueError(f'routine {m.group(1)} starts inside {inside[0]}')
+            inside = (m.group(1), i, [w for w in re.split(r'[ ,]+', m.group(2) or '') if w])
+        elif e:
+            if not inside or e.group(1) != inside[0]:
+                raise ValueError(f'end {e.group(1)} doesn\'t close ' + (inside[0] if inside else 'anything'))
+            if inside[0] in out:
+                raise ValueError(f'two blocks for {inside[0]}')
+            out[inside[0]] = (inside[1], i, inside[2])
+            inside = None
+    if inside:
+        raise ValueError(f'routine {inside[0]} has no end')
+    return out
+
+
+def resolve(text):
+    """text with its marked routines decided: one stays if anything kept names it, or a kept routine brings it
+    (everything outside the markers is kept, and so is a file it includes); the rest go"""
+    lines = text.splitlines()
+    bl = blocks(text)
+    if not bl:
+        return text
+    owner = [None] * len(lines)
+    for lab, (a, b, _) in bl.items():
+        for k in range(a, b + 1):
+            owner[k] = lab
+    keep, todo = set(), []
+
+    def want(n):
+        if n in bl and n not in keep:
+            keep.add(n)
+            todo.append(n)
+
+    def scan(rows):
+        for row in rows:
+            inc = INCLUDE.match(row)
+            if inc and os.path.exists(inc.group(1)):
+                scan(open(inc.group(1)).read().splitlines())
+            for n in names(row):
+                want(n)
+    scan(line for k, line in enumerate(lines) if owner[k] is None)
+    while todo:
+        a, b, brings = bl[todo.pop()]
+        for n in brings:
+            want(n)
+        scan(lines[a + 1:b])
+    out = [line for k, line in enumerate(lines) if owner[k] is None or owner[k] in keep]
+    return '\n'.join(out) + ('\n' if text.endswith('\n') else '')
+
+
 def gather(symbols, target, lib=LIB):
+    """(the fragments, their text pasted together): every routine in them, for resolve() to decide once the whole
+    program is there"""
     frags = [f for f in load(lib) if target in f.targets]
     by_sym = {}
     for f in frags:

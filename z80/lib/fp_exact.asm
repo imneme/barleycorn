@@ -15,12 +15,17 @@
 ;; packing 64 bits back (rounded half away from zero), and their scratch; fp.asm's ** and CP/M's arithmetic use it.
 
 ; -- whole numbers: trunc, floor, round, exactly ---------------------------------------------------------------------
+;; routine bly_ftrunc (brings bly_fround)
 bly_ftrunc:
         xor a
         jr bly_fround.go
+;; end bly_ftrunc
+;; routine bly_ffloor (brings bly_fround)
 bly_ffloor:
         ld a,1
         jr bly_fround.go
+;; end bly_ffloor
+;; routine bly_fround (brings bly_fx)
 bly_fround:
         ld a,2
 .go:    ld (.mode),a
@@ -69,8 +74,10 @@ bly_fround:
         inc (hl)
 .done:  jp bly_fx.frommag
 .mode:  db 0
+;; end bly_fround
 
 ; -- sign and comparing ---------------------------------------------------------------------------------------------
+;; routine bly_fneg
 bly_fneg:
         push bc
         ld d,b
@@ -117,7 +124,9 @@ bly_fneg:
         cpl
         ld (hl),a
         ret
+;; end bly_fneg
 
+;; routine bly_fabs (brings bly_fneg)
 bly_fabs:
         push bc
         ld d,b
@@ -130,7 +139,9 @@ bly_fabs:
         dec hl
         ret z
         jr bly_fneg.inplace
+;; end bly_fabs
 
+;; routine bly_fcmp (brings bly_fx)
 bly_fcmp:
         push de
         ld de,bly_fx.ua
@@ -167,11 +178,15 @@ bly_fcmp:
         jr z,.ret
         neg                         ; both negative: the bigger magnitude is the smaller number
         jr .ret
+;; end bly_fcmp
 
 ; -- conversions ------------------------------------------------------------------------------------------------------
+;; routine bly_f_from_u16 (brings bly_f_from_i16)
 bly_f_from_u16:
         xor a
         jr bly_f_from_i16.put
+;; end bly_f_from_u16
+;; routine bly_f_from_i16
 bly_f_from_i16:
         ld a,h
         rla
@@ -189,7 +204,9 @@ bly_f_from_i16:
         inc hl
         ld (hl),0
         ret
+;; end bly_f_from_i16
 
+;; routine bly_f_from_i64 (brings bly_fx)
 bly_f_from_i64:
         ld (bly_fx.res),bc
         ld de,bly_fx.mag
@@ -200,7 +217,9 @@ bly_f_from_i64:
         ld (bly_fx.neg),a
         call nz,bly_fx.negmag       ; |q| (the most negative quad's is 2^63, read unsigned)
         jp bly_fx.frommag
+;; end bly_f_from_i64
 
+;; routine bly_f_to_int (brings bly_fx)
 bly_f_to_int:
         ld (.type),a
         ld (.dest),de
@@ -290,9 +309,11 @@ bly_f_to_int:
 .n4:    db "a quad",0
 .n5:    db "a dword",0
 .m1:    db " doesn't fit in ",0
+;; end bly_f_to_int
 
 
 ; -- the shared part: unpacking, whole parts, packing, and their scratch ----------------------------------------
+;; routine bly_fx
 bly_fx:
 .zero:  push hl                     ; Z if (HL) is zero: 00 00 00 00 (00 FF 00 00 would be -65536)
         ld a,(hl)                   ; clobbers AF
@@ -639,3 +660,4 @@ bly_fx:
 .ub:    ds 6
 .pad:   ds 5                        ; zeros, always: .frommag may read just below .mag
 .mag:   ds 8
+;; end bly_fx

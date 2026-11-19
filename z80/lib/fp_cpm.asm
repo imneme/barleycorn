@@ -38,9 +38,12 @@
 ; first, exactly when it shrinks far (d is 0 or 1 then, and nothing was lost), by a bit at most otherwise. From d = 34
 ; on, b moves a by under a quarter of its last place, and a, even at 2^31 less a little, rounds back to a: it's a.
 ; (A Python model held this to fp5 on 200,000 sums and differences before it was written.)
+;; routine bly_fsub (brings bly_fadd)
 bly_fsub:
         ld a,80h                    ; b's sign flipped
         jr bly_fadd.go
+;; end bly_fsub
+;; routine bly_fadd
 bly_fadd:
         xor a
 .go:    ld (bly_fc.flip),a
@@ -229,6 +232,7 @@ bly_fadd:
         ld (bly_fc.w+3),de
         jp bly_fc.pack
 .stk:   db 0
+;; end bly_fadd
 
 ; -- * ----------------------------------------------------------------------------------------------------------------
 ; Horner over B's bytes, the top first: T = 256 T + A b_j, the 64-bit product in .w. R (HL:IX) holds the window's
@@ -236,6 +240,7 @@ bly_fadd:
 ; partial sum fits its 32 + k bits. Then C = b_j above R, and 8 times C:HL:IX <<= 1, adding A (its words patched into
 ; .row8's code, as / does) whenever a bit comes out of C, HL's carry into C. After the row, C belongs to byte j+4:
 ; added in, carrying up. (A model of these steps held them to A x B on 200,000 products.)
+;; routine bly_fmul
 bly_fmul:
         call bly_fc.both
         ld a,(bly_fc.ua+1)
@@ -340,6 +345,7 @@ bly_fmul:
         inc c
 .n:     djnz .st
         ret
+;; end bly_fmul
 
 ; -- / ----------------------------------------------------------------------------------------------------------------
 ; Restoring division, in registers: the remainder R in HL (high word) and DE (low), D's high word in BC throughout,
@@ -348,6 +354,7 @@ bly_fmul:
 ; above means R > D, and only then are the low words subtracted. Equal high words, rarely, compare the low ones.
 ; Each quotient byte grows in A behind a marker bit that rla pushes out into carry after the eighth; its bits go in
 ; as their complements (the undoing's carry is set exactly when the bit is 0), and cpl puts them right.
+;; routine bly_fdiv
 bly_fdiv:
         call bly_fc.both
         ld a,(bly_fc.ub+1)
@@ -486,6 +493,7 @@ bly_fdiv:
         jr .one0
 .dl:    dw 0
 .dh:    dw 0
+;; end bly_fdiv
 
 ; -- reading: s.float() without a ROM, exactly ------------------------------------------------------------------------
 ; The number is \s*[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)? (barley.py's FLOAT_RE). Its first 40 significant digits make
@@ -493,6 +501,7 @@ bly_fdiv:
 ; 10^a = 5^a x 2^a, only fives need big arithmetic: X >= 0 is D x 5^X, its bit length giving the exponent (plus X);
 ; X < 0 is q = floor(D x 2^s / 5^-X), s guessed so q has 33 bits and corrected by q's size, the exponent 33 - s + X.
 ; Either way the 33-bit floor's last bit rounds it, ties away, as a literal is rounded: so "x".float() is the literal x.
+;; routine bly_str_float
 bly_str_float:
         ld (.s),hl
         ld (bly_fc.res),de
@@ -1046,12 +1055,14 @@ bly_str_float:
 .span:  dw 0,0
 .n:     ds 32
 .w2:    ds 32
+;; end bly_str_float
 
 ; -- the functions: scripts for a small calculator over our own + - * /, as the ROM's are ---------------------------
 ; A script is bytes: 1 add, 2 sub, 3 mul, 4 div (the top two: a op b), 5 dup, 6 swap, 7 drop, 8 + an address (push
 ; the 5 bytes there), 9 i (push memory i), 10 i (store the top in memory i, keeping it), 11 n + an address (Horner:
 ; the top x becomes c0 x^n + ... + cn, the n + 1 constants there highest first), 12 neg, 0 end. Each function does
 ; its range reduction around a script or two. 13 is sqrt. The constants are exact rationals rounded once (coeffs.py).
+;; routine bly_fk
 bly_fk:
 .reset: ld hl,.stk-5                ; an empty stack
         ld (.top),hl
@@ -1303,10 +1314,12 @@ bly_fk:
 .a2:     db 7Eh,4Ch,0CCh,0CCh,0CDh      ; 0.2
 .a1:     db 7Fh,0AAh,0AAh,0AAh,0ABh     ; -0.333333333333
 .a0:     db 81h,00h,00h,00h,00h         ; 1
+;; end bly_fk
 
 ; exp: x past ln(the biggest float) has no answer; under ln 2^-129 it's 0. k = round(x / ln 2), r = x - k ln 2 (ln 2 in
 ; two parts, the first so short that k times it is exact), e^r by its Taylor terms (|r| <= ln2/2: to r^11), and 2^k
 ; straight into the exponent byte.
+;; routine bly_fexp (brings bly_fk)
 bly_fexp:
         ld (.x),hl
         ld (bly_fk.r),bc
@@ -1396,9 +1409,11 @@ bly_fexp:
 .x:     dw 0
 .k:     dw 0
 .name:  db "exp",0
+;; end bly_fexp
 
 ; ln: x <= 0 has no answer. x = 2^k m with m in [sqrt(1/2), sqrt 2); t = (m - 1) / (m + 1); ln m = 2t(1 + t^2/3 +
 ; ... + t^12/13); ln x = (ln m + k ln2lo) + k ln2hi, the big part last.
+;; routine bly_fln (brings bly_fk)
 bly_fln:
         ld (.x),hl
         ld (bly_fk.r),bc
@@ -1466,15 +1481,21 @@ bly_fln:
 .x:     dw 0
 .u:     ds 6
 .name:  db "ln",0
+;; end bly_fln
 
 ; sin, cos, tan: n = round(x / (pi/2)), r = x - n pi2hi - n pi2lo (pi/2 in two parts); n mod 4 (from bly_fx.toint:
 ; exact under 2^64, and past it n is a multiple of 4) picks sin r or cos r and the sign. cos is sin a quarter on.
+;; routine bly_fsin (brings bly_ftan)
 bly_fsin:
         xor a
         jp bly_ftan.go
+;; end bly_fsin
+;; routine bly_fcos (brings bly_ftan)
 bly_fcos:
         ld a,1
         jp bly_ftan.go
+;; end bly_fcos
+;; routine bly_ftan (brings bly_fk)
 bly_ftan:
         ld a,4                      ; 4: tan
 .go:    ld (.q0),a
@@ -1558,10 +1579,12 @@ bly_ftan:
 .x:     dw 0
 .q0:    db 0
 .q:     db 0
+;; end bly_ftan
 
 ; atan: |x| > 1 through 1/x (then pi/2 less), past tan(pi/12) through (y sqrt3 - 1)/(y + sqrt3) (then pi/6 more), and
 ; the series y(1 - y^2/3 + ...) to y^19; the sign last. asin x = atan(x / sqrt(1 - x^2)), +-1 exactly +-pi/2;
 ; acos = pi/2 - asin. Past 1, asin and acos have no answer.
+;; routine bly_fatan (brings bly_fk)
 bly_fatan:
         ld (bly_fk.r),bc
         ld (.x),hl
@@ -1632,7 +1655,9 @@ bly_fatan:
 .x:     dw 0
 .inv:   db 0
 .far:   db 0
+;; end bly_fatan
 
+;; routine bly_fasin (brings bly_fk)
 bly_fasin:
         ld (.x),hl
         ld (.r),bc
@@ -1692,7 +1717,9 @@ bly_fasin:
 .r:     dw 0
 .y:     ds 5
 .name:  db "asin",0
+;; end bly_fasin
 
+;; routine bly_facos (brings bly_fasin, bly_fk)
 bly_facos:
         ld (bly_fasin.x),hl
         ld (.r),bc
@@ -1727,10 +1754,12 @@ bly_facos:
 .r:     dw 0
 .a:     ds 5
 .name:  db "acos",0
+;; end bly_facos
 
 ; **: 0 ** b is 1 for b = 0, 0 for b > 0, and has no answer for b < 0; a negative a needs a whole b (an odd one
 ; negates); else exp(b ln a), too big being float overflow, as the 48K's ** says. (fp.asm's ** has the same rules
 ; around the ROM's to-power; one day a shared wrapper in fp_exact.asm.)
+;; routine bly_fpow (brings bly_fexp, bly_fk)
 bly_fpow:
         ld (.a),hl
         ld (.b),de
@@ -1809,6 +1838,7 @@ bly_fpow:
 .odd:   db 0
 .abs:   ds 5
 .t:     ds 5
+;; end bly_fpow
 
 ; -- printing: PRINT-FP's layout, the 8 digits exactly rounded -------------------------------------------------------
 ; x = M x 2^E (M the 32-bit mantissa, E = e - 160). Guess k with 10^k <= x < 10^(k+1) as ((e - 129) * 77) >> 8,
@@ -1816,6 +1846,7 @@ bly_fpow:
 ; (nested floors of positive divisions are exact). q in [10^8, 10^9) says the guess was right (else k moves by one,
 ; and again); its last digit rounds it to 8, ties away (what's below that digit is under one of its units). 10^8
 ; after rounding is 10^7 with k one up. Then the digits, their trailing zeros off, laid out as fp5.show lays them.
+;; routine bly_pr_f
 bly_pr_f:
         ld de,.u
         call bly_fx.unpack
@@ -2196,3 +2227,4 @@ bly_pr_f:
 .big:   ds 24
 .dig:   ds 8
 .txt:   ds 20
+;; end bly_pr_f

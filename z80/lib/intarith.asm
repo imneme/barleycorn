@@ -13,6 +13,7 @@
 ; r may be a or b: each byte is read before it's written. The overflow test is V after the top byte's ADC or SBC.
 ; The 64-bit forms run a four-byte block twice (CALL and RET keep the carry); the 32-bit forms have it inline.
 
+;; routine bly_add_i64
 bly_add_i64:
         or a
         call .four
@@ -29,7 +30,9 @@ bly_add_i64:
         inc bc
         ENDR
         ret
+;; end bly_add_i64
 
+;; routine bly_add_i32
 bly_add_i32:
         or a
         REPT 4
@@ -42,7 +45,9 @@ bly_add_i32:
         ENDR
         ret po
         jp bly_ovf_long
+;; end bly_add_i32
 
+;; routine bly_sub_i64
 bly_sub_i64:
         ex de,hl                    ; DE = &a, HL = &b
         or a
@@ -60,7 +65,9 @@ bly_sub_i64:
         inc bc
         ENDR
         ret
+;; end bly_sub_i64
 
+;; routine bly_sub_i32
 bly_sub_i32:
         ex de,hl
         or a
@@ -74,7 +81,9 @@ bly_sub_i32:
         ENDR
         ret po
         jp bly_ovf_long
+;; end bly_sub_i32
 
+;; routine bly_neg_i64
 bly_neg_i64:
         ld d,0
         or a
@@ -91,17 +100,23 @@ bly_neg_i64:
         inc bc
         ENDR
         ret
+;; end bly_neg_i64
 
+;; routine bly_neg_i32 (brings bly_neg_i64)
 bly_neg_i32:
         ld d,0
         or a
         call bly_neg_i64.four
         ret po
         jp bly_ovf_long
+;; end bly_neg_i32
 
+;; routine bly_cmp_i64 (brings bly_cmp_i32)
 bly_cmp_i64:
         ld bc,7
         jr bly_cmp_i32.go
+;; end bly_cmp_i64
+;; routine bly_cmp_i32
 bly_cmp_i32:
         ld bc,3
 .go:    add hl,bc                   ; to the top bytes
@@ -128,3 +143,4 @@ bly_cmp_i32:
         cpl
         or 1                        ; a > b: 1; a < b: FFh
         ret
+;; end bly_cmp_i32

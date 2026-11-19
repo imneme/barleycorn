@@ -9,11 +9,14 @@
 ;;
 ;; The header (ABI.md 6): +0 n, +2 cap, +4 ver, +6 esize, +8 a. bly_list_sort is in sort.asm.
 
+;; routine bly_list_new
 bly_list_new:
         xor a                       ; kind 0, list
         ld bc,10*256+8              ; a 10-byte header, a at +8
         jp bly_cn_new
+;; end bly_list_new
 
+;; routine bly_list_push
 bly_list_push:                      ; HL=list DE=&v
         push hl
         pop ix
@@ -50,7 +53,9 @@ bly_list_push:                      ; HL=list DE=&v
         ld h,b
         ld l,c
         jp bly_cn_full
+;; end bly_list_push
 
+;; routine bly_list_pop
 bly_list_pop:                       ; HL=list DE=&dest
         push hl
         pop ix
@@ -82,7 +87,9 @@ bly_list_pop:                       ; HL=list DE=&dest
 .empty: ld hl,.msg
         jp bly_fail
 .msg:   db "list empty",0
+;; end bly_list_pop
 
+;; routine bly_list_ref
 bly_list_ref:                       ; HL=list DE=i -> HL = a + i*esize
         ld bc,6
         add hl,bc
@@ -104,7 +111,9 @@ bly_list_ref:                       ; HL=list DE=i -> HL = a + i*esize
         pop de
         add hl,de
         ret
+;; end bly_list_ref
 
+;; routine bly_list_clear
 bly_list_clear:
         xor a
         ld (hl),a
@@ -118,3 +127,4 @@ bly_list_clear:
         inc hl
         inc (hl)
         ret
+;; end bly_list_clear

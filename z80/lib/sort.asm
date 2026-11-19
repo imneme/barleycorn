@@ -13,6 +13,7 @@
 ;; cmp may clobber every register, so the state lives in scratch words. Self-modifying: the CALLs to cmp, and the
 ;; immediates marked "patched" (esize, a, &tmp once a sort, -limit once a sift), which keep the sift's bookkeeping lean.
 
+;; routine bly_list_sort (brings bly_sort)
 bly_list_sort:                      ; HL=list DE=cmp
         push de
         pop ix
@@ -37,8 +38,10 @@ bly_list_sort:                      ; HL=list DE=cmp
         inc hl
         ld h,(hl)
         ld l,a                      ; a
+;; end bly_list_sort
         ; fall into bly_sort
 
+;; routine bly_sort
 bly_sort:                           ; HL=&first DE=n BC=esize IX=cmp
         ld (.cmp1+1),ix
         ld (.cmp2+1),ix
@@ -217,3 +220,4 @@ bly_sort:                           ; HL=&first DE=n BC=esize IX=cmp
 .coff:  dw 0
 .hp:    dw 0
 .pp:    dw 0
+;; end bly_sort

@@ -7,6 +7,7 @@
 ;; few of the 34 keys typed. Done here in full rather than saving the bit around 1601h, as a key arriving between
 ;; the save and CHAN-K's RES would be lost all the same.
 ;; bly_zx_chan_k                                                                      clobbers: AF BC DE HL
+;; routine bly_zx_chan_k
 bly_zx_chan_k:
         ld a,3                      ; CHAN-OPEN of stream 3 first, as fp.asm's bly_pr_f does: omse-ai's text log
         call 1601h                  ; follows CHAN-OPEN, not CURCHL, and leaves out all but streams 2 and FEh (on a
@@ -23,3 +24,4 @@ bly_zx_chan_k:
         ld hl,5C6Ah                 ; FLAGS2 bit 4: channel K in use (CHAN-FLAG clears it and CHAN-K sets it again)
         set 4,(hl)
         jp 0D4Dh                    ; TEMPS, as CHAN-K ends
+;; end bly_zx_chan_k

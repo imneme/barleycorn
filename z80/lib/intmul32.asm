@@ -10,6 +10,7 @@
 ; bits (it moves up 16), the sum mustn't carry out of the high word, and bit 31 settles the rest, allowing exactly
 ; 2^31 when the product is negative. r may be a or b.
 
+;; routine bly_mul_i32
 bly_mul_i32:
         ld (.dst),bc
         push de
@@ -121,7 +122,9 @@ bly_mul_i32:
 .dst:   dw 0
 .x:     ds 4
 .s:     db 0
+;; end bly_mul_i32
 
+;; routine bly_i_mul16
 bly_i_mul16:
         ld a,d
         or a
@@ -155,3 +158,4 @@ bly_i_mul16:
         adc a,0
         ld d,a
         ret
+;; end bly_i_mul16

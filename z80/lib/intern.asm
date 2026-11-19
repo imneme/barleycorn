@@ -15,6 +15,7 @@
 ; "too many names: intern holds 65536" can't happen here: 16384 names would need the whole 64K for .names
 ; alone, so the arena fills first and says so.
 
+;; routine bly_intern
 bly_intern:
         ld e,(hl)
         inc hl
@@ -280,7 +281,9 @@ bly_intern:
 .mask:  dw 0
 .cap:   dw 0
 .count: dw 0
+;; end bly_intern
 
+;; routine bly_name (brings bly_intern)
 bly_name:
         ld bc,(bly_intern.count)
         or a
@@ -301,3 +304,4 @@ bly_name:
         call bly_pr_u16
         jp bly_fail_end
 .msg:   db "no name has the number ",0
+;; end bly_name

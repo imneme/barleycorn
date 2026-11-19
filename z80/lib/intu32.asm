@@ -15,6 +15,7 @@
 ;; The dword's arithmetic: unsigned 32 bits, which wraps and never traps, as byte and word do. Its own fragment, so
 ;; a program without a dword doesn't carry it; & | ^ ~ and << are the long's (the same bits). r may be a or b.
 
+;; routine bly_add_u32
 bly_add_u32:
         or a
         REPT 4
@@ -26,7 +27,9 @@ bly_add_u32:
         inc bc
         ENDR
         ret
+;; end bly_add_u32
 
+;; routine bly_sub_u32
 bly_sub_u32:
         ex de,hl                    ; DE = &a, HL = &b
         or a
@@ -39,7 +42,9 @@ bly_sub_u32:
         inc bc
         ENDR
         ret
+;; end bly_sub_u32
 
+;; routine bly_neg_u32
 bly_neg_u32:
         ld d,4
         or a
@@ -51,7 +56,9 @@ bly_neg_u32:
         dec d
         jr nz,.l
         ret
+;; end bly_neg_u32
 
+;; routine bly_cmp_u32
 bly_cmp_u32:                        ; from the top byte down
         ld bc,3
         add hl,bc
@@ -69,7 +76,9 @@ bly_cmp_u32:                        ; from the top byte down
 .ne:    sbc a,a                     ; FFh if a < b (carry), else 0
         or 1                        ; FFh or 1, flags as after OR A
         ret
+;; end bly_cmp_u32
 
+;; routine bly_mul_u32
 bly_mul_u32:                        ; a * b mod 2^32 = alo*blo + ((alo*bhi + ahi*blo) << 16)
         ld (.dst),bc
         ld (.pa),hl
@@ -127,7 +136,9 @@ bly_mul_u32:                        ; a * b mod 2^32 = alo*blo + ((alo*bhi + ahi
 .pb:    dw 0
 .lo:    dw 0
 .hi:    dw 0
+;; end bly_mul_u32
 
+;; routine bly_divmod_u32
 bly_divmod_u32:
         ld (.q),bc
         ld (.r),ix
@@ -161,7 +172,9 @@ bly_divmod_u32:
         ret
 .q:     dw 0
 .r:     dw 0
+;; end bly_divmod_u32
 
+;; routine bly_shr_u32
 bly_shr_u32:
         bit 7,d
         jp nz,bly_neg_shift
@@ -202,7 +215,9 @@ bly_shr_u32:
         ld b,h
         ld c,l
         jr .store
+;; end bly_shr_u32
 
+;; routine bly_pr_u32p
 bly_pr_u32p:                        ; HL = &v -> DE:HL = v, then num.asm's unsigned printer
         ld e,(hl)
         inc hl
@@ -214,3 +229,4 @@ bly_pr_u32p:                        ; HL = &v -> DE:HL = v, then num.asm's unsig
         ld l,a
         ex de,hl
         jp bly_pr_u32
+;; end bly_pr_u32p

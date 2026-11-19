@@ -24,6 +24,7 @@ ZXA_FLAGX  equ 5C71h
 ZXA_ECHO_E equ 5C82h
 ZXA_SCR_CT equ 5C8Ch
 
+;; routine bly_zx_inkey
 bly_zx_inkey:                       ; S-INKEY$ (2634h), without the string
         call 028Eh                  ; KEY-SCAN: DE = the keys held; NZ if none, or too many
         jr nz,.none
@@ -35,7 +36,9 @@ bly_zx_inkey:                       ; S-INKEY$ (2634h), without the string
         jp 0333h                    ; A = the character
 .none:  xor a
         ret
+;; end bly_zx_inkey
 
+;; routine bly_ask
 bly_ask:
         ld (.dest),de
         ld (.sp),sp
@@ -153,3 +156,4 @@ bly_ask:
 .sp:    dw 0
 .n:     dw 0
 .p:     dw 0
+;; end bly_ask

@@ -5,6 +5,7 @@
 ;
 ; Its own fragment because of the table: 256 bytes that a program without chr() shouldn't carry.
 
+;; routine bly_chr
 bly_chr:
         ld hl,.table
         add a,l
@@ -25,3 +26,4 @@ bly_chr:
         DUP 256, .b
         db .b
         EDUP
+;; end bly_chr

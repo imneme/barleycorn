@@ -8,11 +8,14 @@
 ;;
 ;; The header (ABI.md 6): +0 head, +2 n, +4 cap, +6 ver, +8 esize, +10 a. A ring of cap elements.
 
+;; routine bly_queue_new
 bly_queue_new:
         ld a,1                      ; kind 1, queue
         ld bc,12*256+10             ; a 12-byte header, a at +10
         jp bly_cn_new
+;; end bly_queue_new
 
+;; routine bly_queue_put (brings bly_queue_at)
 bly_queue_put:                      ; HL=queue DE=&v
         push hl
         pop ix
@@ -44,7 +47,9 @@ bly_queue_put:                      ; HL=queue DE=&v
         ld h,b
         ld l,c
         jp bly_cn_full
+;; end bly_queue_put
 
+;; routine bly_queue_get
 bly_queue_get:                      ; HL=queue DE=&dest
         push hl
         pop ix
@@ -87,7 +92,9 @@ bly_queue_get:                      ; HL=queue DE=&dest
 .empty: ld hl,.msg
         jp bly_fail
 .msg:   db "queue empty",0
+;; end bly_queue_get
 
+;; routine bly_queue_at
 bly_queue_at:                       ; HL=queue DE=i
         push hl
         pop ix
@@ -114,3 +121,4 @@ bly_queue_at:                       ; HL=queue DE=i
         ld d,(ix+11)
         add hl,de
         ret
+;; end bly_queue_at

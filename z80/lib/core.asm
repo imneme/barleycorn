@@ -21,6 +21,7 @@ bly_col:    dw 0                    ; print's column: 0 after a newline
 bly_atop:   dw 0                    ; the arena's next free byte
 bly_alimit: dw 0                    ; the arena ends here
 
+;; routine bly_out
 bly_out:                            ; (A stays itself: ld and inc don't touch it)
         cp 10
         jr z,.newline
@@ -32,7 +33,9 @@ bly_out:                            ; (A stays itself: ld and inc don't touch it
         ld hl,0
         ld (bly_col),hl
         jp bly_putc
+;; end bly_out
 
+;; routine bly_pr_cstr
 bly_pr_cstr:
         ld a,(hl)
         or a
@@ -42,7 +45,9 @@ bly_pr_cstr:
         pop hl
         inc hl
         jr bly_pr_cstr
+;; end bly_pr_cstr
 
+;; routine bly_pr_str
 bly_pr_str:                         ; HL = &str: p at +0, n at +2
         ld e,(hl)
         inc hl
@@ -67,11 +72,15 @@ bly_pr_str:                         ; HL = &str: p at +0, n at +2
         or c
         jr nz,.loop
         ret
+;; end bly_pr_str
 
+;; routine bly_nl
 bly_nl:
         ld a,10
         jp bly_out
+;; end bly_nl
 
+;; routine bly_zone
 bly_zone:                           ; at least one space, then on to a multiple of 16
 .loop:
         ld a,' '
@@ -80,7 +89,9 @@ bly_zone:                           ; at least one space, then on to a multiple 
         and 15
         jr nz,.loop
         ret
+;; end bly_zone
 
+;; routine bly_pr_bool
 bly_pr_bool:
         or a
         ld hl,.false
@@ -89,7 +100,9 @@ bly_pr_bool:
 .go:    jp bly_pr_cstr
 .true:  db "true",0
 .false: db "false",0
+;; end bly_pr_bool
 
+;; routine bly_pr_i16 (brings bly_pr_u16)
 bly_pr_i16:
         bit 7,h
         jr z,bly_pr_u16
@@ -103,8 +116,10 @@ bly_pr_i16:
         sbc a,a
         sub h
         ld h,a
+;; end bly_pr_i16
         ; fall into bly_pr_u16
 
+;; routine bly_pr_u16
 bly_pr_u16:                         ; subtract powers of ten: no division
         ld e,0                      ; E = 1 once a digit has been printed
         ld bc,-10000
@@ -136,9 +151,13 @@ bly_pr_u16:                         ; subtract powers of ten: no division
         pop de
         pop hl
         ret
+;; end bly_pr_u16
 
+;; routine bly_fail (brings bly_fail_end)
 bly_fail:
         call bly_pr_cstr
+;; end bly_fail
+;; routine bly_fail_end
 bly_fail_end:
         ld hl,(bly_line)
         ld a,h
@@ -174,7 +193,9 @@ bly_fail_end:
         jp bly_exit
 .at:    db " at line ",0
 .of:    db " of ",0
+;; end bly_fail_end
 
+;; routine bly_fail_index_u16
 bly_fail_index_u16:
         push bc
         push de
@@ -189,7 +210,9 @@ bly_fail_index_u16:
         jp bly_fail_end
 .index:   db "index ",0
 .outside: db " is outside 0..",0
+;; end bly_fail_index_u16
 
+;; routine bly_fail_index_i16 (brings bly_fail_index_u16)
 bly_fail_index_i16:
         push bc
         push de
@@ -198,7 +221,9 @@ bly_fail_index_i16:
         pop hl
         call bly_pr_i16
         jr bly_fail_index_u16.rest
+;; end bly_fail_index_i16
 
+;; routine bly_alloc
 bly_alloc:                          ; HL = size -> HL = a zeroed block
         ld de,(bly_atop)
         push de                     ; the block
@@ -231,3 +256,4 @@ bly_alloc:                          ; HL = size -> HL = a zeroed block
 .full:  ld hl,.msg
         jp bly_fail
 .msg:   db "arena full",0
+;; end bly_alloc

@@ -19,6 +19,7 @@
 ;   step d takes down adds q1 2^(k+1) + 2d - 1 to it, until it isn't negative: twice at most. (Held to Python's
 ;   math.isqrt on 600,000 roots before it was written.)
 ; Scratch inside the fragment: .x .n .s .ip .d .res .qk .t5.
+;; routine bly_fsqrt
 bly_fsqrt:
         ld (bly_fc.res),bc
         ld (.x),hl
@@ -331,4 +332,5 @@ bly_fsqrt:
 .t5:    ds 5
 .msqrt: db "sqrt(",0
 .mno:   db ") has no answer",0
+;; end bly_fsqrt
 

@@ -19,6 +19,7 @@
 
 ; (A long product is intmul32.asm's, in registers.)
 
+;; routine bly_mul_i64 (brings bly_i_mulmag)
 bly_mul_i64:
         ld a,8
         ld (bly_i_mulmag.n),a
@@ -39,6 +40,8 @@ bly_mul_i64:
         ld hl,bly_i_mulmag.n
         or (hl)
         pop bc
+;; end bly_mul_i64
+;; routine bly_i_mulmag
 bly_i_mulmag:
         ld (.dst),bc
         ld (.sign),a
@@ -198,5 +201,6 @@ bly_i_mulmag:
 .rows:   db 0
 .cnt:    db 0
 .p:      ds 10                      ; the product: N + 2 bytes
+;; end bly_i_mulmag
 bly_i_mx: ds 8
 bly_i_my: ds 8

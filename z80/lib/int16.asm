@@ -25,6 +25,7 @@
 ; the trial subtraction (and the add-back) is already the quotient bit inverted, so it goes straight in with the next
 ; shift and the byte is complemented once at the end.
 
+;; routine bly_i_mul16x8
 bly_i_mul16x8:                      ; A:HL = DE * A
         ld hl,0
         or a
@@ -45,7 +46,9 @@ bly_i_mul16x8:                      ; A:HL = DE * A
         adc a,0                     ; never reaches the multiplier bits still waiting in A's top
 .next:  djnz .step
         ret
+;; end bly_i_mul16x8
 
+;; routine bly_mul_u16
 bly_mul_u16:
         ld a,d
         or a
@@ -74,7 +77,9 @@ bly_mul_u16:
         jp bly_i_mul16x8
 .hl8:   ld a,l
         jp bly_i_mul16x8
+;; end bly_mul_u16
 
+;; routine bly_mul_i16
 bly_mul_i16:
         ld a,h
         xor d
@@ -127,11 +132,15 @@ bly_mul_i16:
         sub h
         ld h,a
         ret
+;; end bly_mul_i16
 
+;; routine bly_divmod_u16 (brings bly_i_divu16)
 bly_divmod_u16:
         ld a,d
         or e
         jp z,bly_div0
+;; end bly_divmod_u16
+;; routine bly_i_divu16
 bly_i_divu16:
         ld a,d
         or a
@@ -174,7 +183,9 @@ bly_i_divu16:
 .zero:  ex de,hl
         ld hl,0
         ret
+;; end bly_i_divu16
 
+;; routine bly_i_div8
 bly_i_div8:
         bit 7,e
         jr nz,.wide
@@ -202,10 +213,14 @@ bly_i_div8:
         inc c
 .wn:    djnz .w
         ret
+;; end bly_i_div8
 
+;; routine bly_rem_i16 (brings bly_divmod_i16)
 bly_rem_i16:
         xor a
         jr bly_divmod_i16.go
+;; end bly_rem_i16
+;; routine bly_divmod_i16
 bly_divmod_i16:
         ld a,1
 .go:    ld c,a                      ; C = 1: -32768/-1 fails
@@ -259,3 +274,4 @@ bly_divmod_i16:
         sub h
         ld h,a
         ret
+;; end bly_divmod_i16

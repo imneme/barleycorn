@@ -12,6 +12,7 @@
 ;; puts IM 1 back and interrupts on.
 ;; bly_zx_frames  in: A = 0 (IM 1: frame stops) or not (IM 2: frame runs every frame)    clobbers: AF BC DE HL
 
+;; routine bly_zx_frames
 bly_zx_frames:
         or a
         jr z,.off
@@ -34,7 +35,9 @@ bly_zx_frames:
         im 1
         ei
         ret
+;; end bly_zx_frames
 
+;; routine zxr_isr
 zxr_isr:                            ; every frame, interrupts off: the registers, and bly_line (frame's own lines
         push af                     ; mustn't be the program's if it fails later), around frame; then the ROM's
         push bc
@@ -52,3 +55,4 @@ zxr_isr:                            ; every frame, interrupts off: the registers
         pop bc
         pop af
         jp 0038h                    ; the ROM's handler: FRAMES, the keyboard, then EI and RET
+;; end zxr_isr

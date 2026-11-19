@@ -19,6 +19,7 @@
 ; - mod is the truncating remainder, moved to the divisor's sign.
 ; r may be a or b throughout: the inputs are copied before anything is written.
 
+;; routine bly_gcd_i64
 bly_gcd_i64:
         push bc
         push de
@@ -38,7 +39,9 @@ bly_gcd_i64:
         ld bc,8
         ldir
         ret
+;; end bly_gcd_i64
 
+;; routine bly_lcm_i64
 bly_lcm_i64:
         ld (.dst),bc
         push de
@@ -99,7 +102,9 @@ bly_lcm_i64:
 .dst:   dw 0
 .x:     ds 8
 .y:     ds 8
+;; end bly_lcm_i64
 
+;; routine bly_mod_i64
 bly_mod_i64:
         ld (.dst),bc
         push de
@@ -148,7 +153,9 @@ bly_mod_i64:
 .dst:   dw 0
 .sa:    db 0
 .sm:    db 0
+;; end bly_mod_i64
 
+;; routine bly_abs_i64
 bly_abs_i64:
         push bc
         ld d,b
@@ -161,7 +168,9 @@ bly_abs_i64:
         bit 7,(hl)
         ret z
         jp bly_ovf_quad             ; |MIN| is 2^63
+;; end bly_abs_i64
 
+;; routine bly_fit_i64
 bly_fit_i64:
         or a
         jr z,.byte
@@ -213,7 +222,9 @@ bly_fit_i64:
         ret
 .ovf:   ld a,c
         jp bly_ovf_n
+;; end bly_fit_i64
 
+;; routine bly_i_ugcd
 bly_i_ugcd:
         xor a
         ld (.k),a
@@ -374,7 +385,9 @@ bly_i_ugcd:
         ret
 
 .k:     db 0
+;; end bly_i_ugcd
 
+;; routine bly_i_gcd16
 bly_i_gcd16:
         ld a,h
         or l
@@ -424,6 +437,7 @@ bly_i_gcd16:
 .shl:   add hl,hl
 .st:    djnz .shl
         ret
+;; end bly_i_gcd16
 
 bly_i_gx: ds 8
 bly_i_gy: ds 8

@@ -7,6 +7,7 @@
 ; The element routines (ABI.md section 6) for byte: bly_grid_input puts them in its header, and the code
 ; generator can use them for any container of bytes.
 
+;; routine bly_cmp_byte
 bly_cmp_byte:
         ld a,(de)
         ld b,a
@@ -16,8 +17,11 @@ bly_cmp_byte:
         sbc a,a                     ; FFh if a < b, else 0
         or 1
         ret
+;; end bly_cmp_byte
 
+;; routine bly_pr_byte
 bly_pr_byte:
         ld l,(hl)
         ld h,0
         jp bly_pr_u16
+;; end bly_pr_byte

@@ -18,6 +18,7 @@
 ; digit comes off first by subtraction. q and r go through the 32-bit digits, r always as nine.
 ; Scratch: bly_pr_i64.v, .top. The 16-bit numbers are core's bly_pr_u16.
 
+;; routine bly_pr_u8
 bly_pr_u8:                          ; A: 0..255, no leading zeros
         cp 100
         jr c,.lt100
@@ -50,7 +51,9 @@ bly_pr_u8:                          ; A: 0..255, no leading zeros
         jp bly_out
 .units: add a,'0'
         jp bly_out
+;; end bly_pr_u8
 
+;; routine bly_pr_i32 (brings bly_pr_u32)
 bly_pr_i32:                         ; HL = &v
         ld e,(hl)
         inc hl
@@ -81,8 +84,10 @@ bly_pr_i32:                         ; HL = &v
         ld a,0
         sbc a,d
         ld d,a
+;; end bly_pr_i32
         ; fall into bly_pr_u32
 
+;; routine bly_pr_u32 (brings bly_n_dig)
 bly_pr_u32:                         ; DE:HL, unsigned
         ld a,d
         or e
@@ -119,7 +124,9 @@ bly_pr_u32:                         ; DE:HL, unsigned
         inc d
         jr .skip
 .go:                                ; fall into bly_n_dig
+;; end bly_pr_u32
 
+;; routine bly_n_dig (brings bly_pr_i64)
 bly_n_dig:                          ; IX = low word, HL = high word, DE = the entry for the first power
 .up:    push de                     ; count up: subtract P until the value goes negative
         ex de,hl
@@ -246,7 +253,9 @@ bly_n_dig:                          ; IX = low word, HL = high word, DE = the en
         dw -100, 100
         dw -10, 10
 .t16end:
+;; end bly_n_dig
 
+;; routine bly_pr_i64 (brings bly_n_dig)
 bly_pr_i64:                         ; HL = &v
         ld de,.v
         ld bc,8
@@ -386,3 +395,4 @@ bly_pr_i64:                         ; HL = &v
         ret
 .v:     ds 8                        ; scratch: the value, then q and r
 .top:   dw 0                        ; the 10^18 digit (a word: it's stored from IX)
+;; end bly_pr_i64

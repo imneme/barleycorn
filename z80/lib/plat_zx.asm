@@ -35,6 +35,7 @@ bly_text: dw INPUT+2
 bly_tlen: dw 0
 bly_basic_sp: dw 0
 
+;; routine bly_start
 bly_start:
         xor a
         ld (zxp_failed),a           ; RUN again after a failure: this run hasn't failed
@@ -69,7 +70,9 @@ bly_start:
         ld hl,.big
         jp bly_fail
 .big:   db "the input doesn't fit in memory",0
+;; end bly_start
 
+;; routine bly_putc
 bly_putc:                           ; (its first three bytes are zxlower's and zxfzx's to patch with a JP)
         ld hl,SCRCT                 ; before every byte: wrapping scrolls too, and "scroll?" must never ask
         ld (hl),255
@@ -87,7 +90,9 @@ bly_putc:                           ; (its first three bytes are zxlower's and z
 .q:     ld a,'?'
         rst 10h
         ret
+;; end bly_putc
 
+;; routine bly_failed
 bly_failed:
         ld a,1
         ld (zxp_failed),a
@@ -140,7 +145,9 @@ bly_failed:
         inc de
         ldir
         ret
+;; end bly_failed
 
+;; routine bly_exit (brings zxp_stop)
 bly_exit:
         im 1                        ; IM 1, interrupts on: as BASIC needs them, even from a failure inside frame's
         ei                          ; interrupt (zxframes.asm)
@@ -148,9 +155,12 @@ bly_exit:
         ld a,(zxp_failed)
         or a
         ret z                       ; 0 OK
+;; end bly_exit
+;; routine zxp_stop
 zxp_stop:                           ; (fprig.py makes this a RET, so a failure comes back to it as BASIC would)
         rst 08h                     ; a failure: the program stopped, and BASIC says so
         db 8                        ; 9 STOP statement
+;; end zxp_stop
 zxp_failed: db 0
 bly_inputs_left: db 0               ; a tape with several inputs: how many are still to load (the loader's line 30
                                     ; PEEKs and POKEs it; the program never touches it, and RUN leaves it be)
@@ -168,6 +178,7 @@ FRAMES  equ 5C78h
 TV_FLAG equ 5C3Ch
 S_POSN  equ 5C88h
 
+;; routine bly_zx_cls
 bly_zx_cls:
         ld hl,(5C10h)               ; STRMS, stream FDh: CL-CHAN's (0D94h), channel K
         push hl
@@ -186,7 +197,9 @@ bly_zx_cls:
         ret
 .chan:  ds 4                        ; CL-CHAN writes PRINT-OUT and KEY-INPUT here, as into channel K's own record
         db 0                        ; a letter CHAN-OPEN doesn't know: it sets CURCHL and goes no further (1627h)
+;; end bly_zx_cls
 
+;; routine bly_zx_at
 bly_zx_at:
         ld a,h
         or d
@@ -224,7 +237,9 @@ bly_zx_at:
 .m1:    db "print at (",0
 .m2:    db ", ",0
 .m3:    db ") is off the screen",0
+;; end bly_zx_at
 
+;; routine bly_zx_key
 bly_zx_key:
         ld hl,FLAGS
         bit 5,(hl)
@@ -233,7 +248,9 @@ bly_zx_key:
         res 5,(hl)
         ld a,(LAST_K)
         ret
+;; end bly_zx_key
 
+;; routine bly_zx_ticks
 bly_zx_ticks:
         di
         ld hl,(FRAMES)
@@ -248,7 +265,9 @@ bly_zx_ticks:
         inc hl
         ld (hl),0
         ret
+;; end bly_zx_ticks
 
+;; routine bly_zx_pause
 bly_zx_pause:
         bit 7,h
         jr nz,.bad
@@ -268,3 +287,4 @@ bly_zx_pause:
         jp bly_fail
 .m1:    db "pause ",0
 .m2:    db " is negative",0
+;; end bly_zx_pause

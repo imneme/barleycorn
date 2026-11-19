@@ -22,6 +22,7 @@
 ;; half full, it averages under 1.8 probes to find a key and 2.5 to miss one: NOTES.md.)
 ;; A cap above 8192 can't fit (its index alone would be 64K), so it fails at once with arena full.
 
+;; routine bly_map_new
 bly_map_new:                        ; HL=&block
         ld (.blk),hl
         ld de,14
@@ -158,7 +159,9 @@ bly_map_new:                        ; HL=&block
 .kpr:   dw 0
 .kb:    dw 0
 .vb:    dw 0
+;; end bly_map_new
 
+;; routine bly_map_find
 bly_map_find:                       ; IX=map DE=&key
         ld hl,0
         ld (.tomb),hl
@@ -299,7 +302,9 @@ bly_map_find:                       ; IX=map DE=&key
         scf
         ret
 .tomb:  dw 0
+;; end bly_map_find
 
+;; routine bly_map_has
 bly_map_has:                        ; HL=map DE=&key -> A
         push hl
         pop ix
@@ -308,7 +313,9 @@ bly_map_has:                        ; HL=map DE=&key -> A
         ret c
         inc a
         ret
+;; end bly_map_has
 
+;; routine bly_map_del
 bly_map_del:                        ; HL=map DE=&key
         push hl
         pop ix
@@ -332,7 +339,9 @@ bly_map_del:                        ; HL=map DE=&key
         ret nz
         inc (ix+7)
         ret
+;; end bly_map_del
 
+;; routine bly_map_ref
 bly_map_ref:                        ; HL=map DE=&key -> HL=&value
         push hl
         pop ix
@@ -361,7 +370,9 @@ bly_map_ref:                        ; HL=map DE=&key -> HL=&value
         jp bly_fail
 .no:    db "no key ",0
 .in:    db " in the map",0
+;; end bly_map_ref
 
+;; routine bly_map_getd
 bly_map_getd:                       ; HL=map DE=&key BC=&default IX=&dest
         ld (.dest),ix
         ld (.dflt),bc
@@ -390,7 +401,9 @@ bly_map_getd:                       ; HL=map DE=&key BC=&default IX=&dest
         ret
 .dest:  dw 0
 .dflt:  dw 0
+;; end bly_map_getd
 
+;; routine bly_map_put (brings bly_map_new)
 bly_map_put:                        ; HL=map DE=&key BC=&value
         push hl
         pop ix
@@ -583,7 +596,9 @@ bly_map_put:                        ; HL=map DE=&key BC=&value
 .val:   dw 0
 .i:     dw 0
 .j:     dw 0
+;; end bly_map_put
 
+;; routine bly_map_clear
 bly_map_clear:                      ; HL=map: no entries, every index slot empty, and a walk under way notices
         push hl
         pop ix
@@ -622,3 +637,4 @@ bly_map_clear:                      ; HL=map: no entries, every index slot empty
         inc de
         ldir
         ret
+;; end bly_map_clear

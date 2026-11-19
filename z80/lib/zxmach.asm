@@ -9,6 +9,7 @@
 ;; bly_fail_addr_i16  in: DE = a, an int that's negative   fails: address {a} is outside 0..65536
 ;; bly_fail_port_i16  in: DE = a, an int that's negative   fails: port {a} is outside 0..65536
 
+;; routine bly_zx_addr64
 bly_zx_addr64:                      ; (num_chk.asm's bly_n_q2w would do, but brings 346 bytes it doesn't need)
         push hl
         ld c,a
@@ -38,10 +39,14 @@ bly_zx_addr64:                      ; (num_chk.asm's bly_n_q2w would do, but bri
 .addr:    db "address ",0
 .port:    db "port ",0
 .outside: db " is outside 0..65536",0
+;; end bly_zx_addr64
 
+;; routine bly_fail_addr_i16 (brings bly_fail_port_i16, bly_zx_addr64)
 bly_fail_addr_i16:
         ld hl,bly_zx_addr64.addr
         jr bly_fail_port_i16.what
+;; end bly_fail_addr_i16
+;; routine bly_fail_port_i16 (brings bly_zx_addr64)
 bly_fail_port_i16:
         ld hl,bly_zx_addr64.port
 .what:  push de
@@ -49,3 +54,4 @@ bly_fail_port_i16:
         pop hl
         call bly_pr_i16
         jr bly_zx_addr64.rest
+;; end bly_fail_port_i16

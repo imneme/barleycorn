@@ -21,6 +21,7 @@
 ; backend draws the same), the first the most significant, masks them to n - 1's bits, and keeps them if they're
 ; below n: fewer than two tries on average, and no bias.
 
+;; routine bly_rand16 (brings bly_random_i16)
 bly_rand16:
         ld bc,(.s+2)                ; B C: BCDE's high half
         ld de,(.s)                  ; D E: its low half
@@ -51,7 +52,9 @@ bly_rand16:
         ret
 .s:     dd 48300000h
 .h:     dw 0
+;; end bly_rand16
 
+;; routine bly_random_i16 (brings bly_random_none)
 bly_random_i16:                     ; HL = n, an int: none of 0 or less
         bit 7,h
         jr z,bly_random_u16
@@ -61,6 +64,8 @@ bly_random_i16:                     ; HL = n, an int: none of 0 or less
         pop hl
         call bly_pr_i16
         jp bly_random_none
+;; end bly_random_i16
+;; routine bly_random_u16 (brings bly_random_none)
 bly_random_u16:                     ; HL = n, a word
         ld a,h
         or l
@@ -112,7 +117,9 @@ bly_random_u16:                     ; HL = n, a word
         ret
 .m:     dw 0
 .mask:  dw 0
+;; end bly_random_u16
 
+;; routine bly_random_q (brings bly_random_none)
 bly_random_q:                       ; HL = &n, BC = &dest: quads
         ld (.dst),bc
         ld (.n),hl
@@ -244,7 +251,9 @@ bly_random_q:                       ; HL = &n, BC = &dest: quads
 .m:     ds 8
 .mask:  ds 8
 .v:     ds 8
+;; end bly_random_q
 
+;; routine bly_randomize_q (brings bly_rand16)
 bly_randomize_q:                    ; HL = &n: its low 16 bits to HL, the next 20 to BCDE's low bits
         ld e,(hl)
         inc hl
@@ -263,10 +272,13 @@ bly_randomize_q:                    ; HL = &n: its low 16 bits to HL, the next 2
         ld a,48h
         ld (bly_rand16.s+3),a       ; B
         ret
+;; end bly_randomize_q
 
+;; routine bly_random_none
 bly_random_none:
         ld hl,.post
         jp bly_fail
 .pre:   db "random(",0
 .post:  db ") has nothing to choose from",0
 .zero:  db "random(0) has nothing to choose from",0
+;; end bly_random_none

@@ -15,6 +15,7 @@
 ;; Shared by the containers (list, queue, heap, map, set). The bly_cn_ names are the containers' own helpers,
 ;; not part of ABI.md; only bly_changed is.
 
+;; routine bly_cn_kind
 bly_cn_kind:                        ; skip A names, then print one
         ld hl,.names
         or a
@@ -27,7 +28,9 @@ bly_cn_kind:                        ; skip A names, then print one
         djnz .skip
 .go:    jp bly_pr_cstr
 .names: db "list",0,"queue",0,"heap",0,"map",0,"set",0
+;; end bly_cn_kind
 
+;; routine bly_changed
 bly_changed:
         push af
         ld hl,.the
@@ -38,7 +41,9 @@ bly_changed:
         jp bly_fail
 .the:   db "the ",0
 .rest:  db " changed while for was walking it",0
+;; end bly_changed
 
+;; routine bly_cn_cap
 bly_cn_cap:                         ; HL=&cap (a quad), A=kind
         ld (.kind),a                ; scratch
         ld bc,7
@@ -72,7 +77,9 @@ bly_cn_cap:                         ; HL=&cap (a quad), A=kind
 .needs: db " needs a capacity of at least 1",0
 .holds: db " holds at most 65535",0
 .kind:  db 0
+;; end bly_cn_cap
 
+;; routine bly_cn_full
 bly_cn_full:                        ; A=kind, HL=cap
         push hl
         call bly_cn_kind
@@ -84,12 +91,16 @@ bly_cn_full:                        ; A=kind, HL=cap
         jp bly_fail
 .open:  db " full (",0
 .close: db ")",0
+;; end bly_cn_full
 
+;; routine bly_cn_afull
 bly_cn_afull:
         ld hl,.msg
         jp bly_fail
 .msg:   db "arena full",0
+;; end bly_cn_afull
 
+;; routine bly_cn_mul
 bly_cn_mul:                         ; HL = BC*DE, walking DE's bits from the bottom
         ld hl,0
         ld a,d
@@ -114,7 +125,9 @@ bly_cn_mul:                         ; HL = BC*DE, walking DE's bits from the bot
 .nw:    dec a
         jr nz,.lw
         ret
+;; end bly_cn_mul
 
+;; routine bly_cn_cmul
 bly_cn_cmul:                        ; HL = BC*DE, carry if it doesn't fit. Top bit first, so any carry is real.
         ld hl,0
         ld a,16
@@ -130,7 +143,9 @@ bly_cn_cmul:                        ; HL = BC*DE, carry if it doesn't fit. Top b
         jr nz,.l
         or a
         ret
+;; end bly_cn_cmul
 
+;; routine bly_cn_new
 bly_cn_new:                         ; HL=&block A=kind B=header bytes C=offset of the a field
         ld (.hb),bc                 ; scratch: .hb = C, .hb+1 = B
         ld (.kind),a
@@ -192,3 +207,4 @@ bly_cn_new:                         ; HL=&block A=kind B=header bytes C=offset o
 .kind:  db 0
 .cap:   dw 0
 .es:    dw 0
+;; end bly_cn_new

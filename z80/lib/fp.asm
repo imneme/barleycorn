@@ -36,15 +36,22 @@ fp_PRINT_FP equ 2DE3h
 fp_CHAN_OPEN equ 1601h
 
 ; -- arithmetic: the ROM's calculator ------------------------------------------------------------------------------
+;; routine bly_fadd (brings bly_fp)
 bly_fadd:
         ld a,0Fh                    ; addition
         jp bly_fp.bin
+;; end bly_fadd
+;; routine bly_fsub (brings bly_fp)
 bly_fsub:
         ld a,03h                    ; subtract
         jp bly_fp.bin
+;; end bly_fsub
+;; routine bly_fmul (brings bly_fp)
 bly_fmul:
         ld a,04h                    ; multiply
         jp bly_fp.bin
+;; end bly_fmul
+;; routine bly_fdiv (brings bly_fp)
 bly_fdiv:
         ex de,hl
         call bly_fx.zero
@@ -52,7 +59,9 @@ bly_fdiv:
         jp z,bly_div0               ; the ROM would say Number too big
         ld a,05h                    ; division
         jp bly_fp.bin
+;; end bly_fdiv
 
+;; routine bly_fpow (brings bly_fp)
 bly_fpow:
         call bly_fx.zero
         jr nz,.nz
@@ -104,34 +113,52 @@ bly_fpow:
 .b:     dw 0
 .abs:   ds 5
 .odd:   db 0
+;; end bly_fpow
 
 ; -- the functions: the ROM's -----------------------------------------------------------------------------------------
+;; routine bly_fsin (brings bly_fp)
 bly_fsin:
         ld a,1Fh
         jr bly_fp.fun
+;; end bly_fsin
+;; routine bly_fcos (brings bly_fp)
 bly_fcos:
         ld a,20h
         jr bly_fp.fun
+;; end bly_fcos
+;; routine bly_ftan (brings bly_fp)
 bly_ftan:
         ld a,21h
         jr bly_fp.fun
+;; end bly_ftan
+;; routine bly_fasin (brings bly_fp)
 bly_fasin:
         ld a,22h
         jr bly_fp.fun
+;; end bly_fasin
+;; routine bly_facos (brings bly_fp)
 bly_facos:
         ld a,23h
         jr bly_fp.fun
+;; end bly_facos
+;; routine bly_fatan (brings bly_fp)
 bly_fatan:
         ld a,24h
         jr bly_fp.fun
+;; end bly_fatan
+;; routine bly_fln (brings bly_fp)
 bly_fln:
         ld a,25h
         jr bly_fp.fun
+;; end bly_fln
+;; routine bly_fexp (brings bly_fp)
 bly_fexp:
         ld a,26h
+;; end bly_fexp
         ; on into bly_fp.fun
 
 ; -- the shared part: one calculator operation, with the ROM's errors caught --------------------------------------------
+;; routine bly_fp
 bly_fp:
 .fun:   ld (.pa),hl                 ; A = the literal, HL = &x, BC = &r
         ld (.lit),a
@@ -255,8 +282,10 @@ bly_fp:
 .names: db 0Fh,"+",0, 03h,"-",0, 04h,"*",0, 05h,"/",0, 06h,"**",0
         db 1Fh,"sin",0, 20h,"cos",0, 21h,"tan",0, 22h,"asin",0, 23h,"acos",0, 24h,"atan",0
         db 25h,"ln",0, 26h,"exp",0
+;; end bly_fp
 
 ; -- printing: the ROM's PRINT-FP, caught in a buffer and sent on through bly_out ------------------------------------
+;; routine bly_pr_f (brings bly_fp)
 bly_pr_f:
         ld de,(fp_STKEND)
         ld (.stk),de                ; (PRINT-FP of a number between -1 and 1 leaves a 0 behind: the ROM's STR$ bug)
@@ -305,3 +334,4 @@ bly_pr_f:
 .chan:  dw .take, .take             ; a channel: output, input
 .at:    dw 0
 .buf:   ds 16
+;; end bly_pr_f

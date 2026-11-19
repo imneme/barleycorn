@@ -14,6 +14,7 @@
 ; with the move to the next row of cells out of line. A horizontal line goes a byte at a time, and a vertical
 ; one has a loop of its own, without the accumulator.
 
+;; routine bly_zx_line
 bly_zx_line:                        ; HL = &block: x0, y0, x1, y1
         ld de,.blk
         ld bc,8
@@ -368,4 +369,5 @@ bly_zx_line:                        ; HL = &block: x0, y0, x1, y1
 
 .blk:   ds 8
 .xd:    dw 0
+;; end bly_zx_line
 

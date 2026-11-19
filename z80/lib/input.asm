@@ -18,6 +18,7 @@ bly_nln: dw 0
 ; One pass, writing the strs straight to the arena's top and moving bly_atop past them at the end: the number of
 ; lines isn't known until the end, and a second pass over the text would cost as much as the first.
 ; About 40 T a byte, and 300 more a line.
+;; routine bly_split_input
 bly_split_input:
         ld ix,(bly_atop)
         ld (bly_lns),ix
@@ -122,11 +123,15 @@ bly_split_input:
         jp bly_alloc
 .room:  dw 0
 .crend: dw 0
+;; end bly_split_input
 
+;; routine bly_lines_new
 bly_lines_new:
         ld hl,2
         jp bly_alloc                ; i = 0
+;; end bly_lines_new
 
+;; routine bly_lines_next
 bly_lines_next:
         push de                     ; &dest
         ld e,(hl)
@@ -155,7 +160,9 @@ bly_lines_next:
 .end:   ld hl,.msg
         jp bly_fail
 .msg:   db "no more input lines",0
+;; end bly_lines_next
 
+;; routine bly_input
 bly_input:
         ld hl,(bly_text)
         ex de,hl
@@ -168,3 +175,4 @@ bly_input:
         inc hl
         ld (hl),d
         ret
+;; end bly_input

@@ -20,8 +20,11 @@
 ; Any count of 8N or more empties a left shift and leaves only the sign after a right one, as interp's
 ; wrap(a << min(b, 64)) and a >> b do. The count is a signed word: generated code saturates wider counts to 64.
 
+;; routine bly_and_i64 (brings bly_and_i32)
 bly_and_i64:
         call bly_and_i32
+;; end bly_and_i64
+;; routine bly_and_i32
 bly_and_i32:
         REPT 4
         ld a,(de)
@@ -32,9 +35,13 @@ bly_and_i32:
         inc bc
         ENDR
         ret
+;; end bly_and_i32
 
+;; routine bly_or_i64 (brings bly_or_i32)
 bly_or_i64:
         call bly_or_i32
+;; end bly_or_i64
+;; routine bly_or_i32
 bly_or_i32:
         REPT 4
         ld a,(de)
@@ -45,9 +52,13 @@ bly_or_i32:
         inc bc
         ENDR
         ret
+;; end bly_or_i32
 
+;; routine bly_xor_i64 (brings bly_xor_i32)
 bly_xor_i64:
         call bly_xor_i32
+;; end bly_xor_i64
+;; routine bly_xor_i32
 bly_xor_i32:
         REPT 4
         ld a,(de)
@@ -58,10 +69,14 @@ bly_xor_i32:
         inc bc
         ENDR
         ret
+;; end bly_xor_i32
 
+;; routine bly_not_i64 (brings bly_not_i32)
 bly_not_i64:
         ld e,8
         jr bly_not_i32.go
+;; end bly_not_i64
+;; routine bly_not_i32
 bly_not_i32:
         ld e,4
 .go:    ld a,(hl)
@@ -72,7 +87,9 @@ bly_not_i32:
         dec e
         jr nz,.go
         ret
+;; end bly_not_i32
 
+;; routine bly_i_shprep
 bly_i_shprep:
         bit 7,d
         jp nz,bly_neg_shift
@@ -111,10 +128,14 @@ bly_i_shprep:
         ld e,0
         pop af
         ret
+;; end bly_i_shprep
 
+;; routine bly_shl_i32 (brings bly_shl_i64)
 bly_shl_i32:
         ld a,4
         jr bly_shl_i64.go
+;; end bly_shl_i32
+;; routine bly_shl_i64
 bly_shl_i64:
         ld a,8
 .go:    bit 7,d
@@ -202,10 +223,14 @@ bly_shl_i64:
         dec e
         jr nz,.pass
         ret
+;; end bly_shl_i64
 
+;; routine bly_shr_i32 (brings bly_shr_i64)
 bly_shr_i32:
         ld a,4
         jr bly_shr_i64.go
+;; end bly_shr_i32
+;; routine bly_shr_i64
 bly_shr_i64:
         ld a,8
 .go:    bit 7,d
@@ -309,3 +334,4 @@ bly_shr_i64:
         dec e
         jr nz,.pass
         ret
+;; end bly_shr_i64

@@ -7,6 +7,7 @@
 ; copies). bly_alloc zeroes at about 42 T a byte, which was two thirds of grid(). It belongs in core; it's here
 ; only because core isn't mine to change. When it doesn't fit, it hands the size to bly_alloc, which says so.
 
+;; routine bly_alloc_raw
 bly_alloc_raw:
         push hl                     ; the size, in case it doesn't fit
         ld de,(bly_atop)
@@ -24,3 +25,4 @@ bly_alloc_raw:
         ret
 .full:  pop hl
         jp bly_alloc                ; "arena full", and never back
+;; end bly_alloc_raw

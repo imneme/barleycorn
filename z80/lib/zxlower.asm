@@ -17,6 +17,7 @@
 
 ZXL_S_POSNL equ 5C8Ah               ; the lower screen's position: 33 - its column, then its line, which with two
                                     ; lines is 24 for row 22, 23 for row 23, 22 for pending below the bottom
+;; routine bly_zx_lower
 bly_zx_lower:
         call bly_zx_chan_k          ; channel K, a key not yet looked at kept for key()
         ld hl,(bly_col)
@@ -39,7 +40,9 @@ bly_zx_lower:
         ret
 .col:   dw 0
 .keep:  ds 3
+;; end bly_zx_lower
 
+;; routine bly_zx_lload
 bly_zx_lload:
         ld hl,(zxl_kept)
         ld (5C8Fh),hl               ; ATTR_T and MASK_T
@@ -49,7 +52,9 @@ bly_zx_lload:
         or (hl)
         ld (5C91h),a
         ret
+;; end bly_zx_lload
 
+;; routine bly_zx_lsave
 bly_zx_lsave:
         ld hl,(5C8Fh)
         ld (zxl_kept),hl
@@ -57,8 +62,10 @@ bly_zx_lsave:
         and 55h
         ld (zxl_kept+2),a
         ret
+;; end bly_zx_lsave
 zxl_kept: ds 3
 
+;; routine bly_zx_upper (brings bly_zx_lower)
 bly_zx_upper:
         ld hl,bly_zx_lower.keep
         ld de,bly_putc
@@ -68,7 +75,9 @@ bly_zx_upper:
         ld (bly_col),hl
         ld a,2
         jp 1601h                    ; CHAN-OPEN: stream 2, the screen
+;; end bly_zx_upper
 
+;; routine zxl_putc
 zxl_putc:                           ; bly_putc, on the lower screen: A = the byte
         ld hl,(ZXL_S_POSNL)         ; L = 33 - the column, H = the line
         cp 10
@@ -99,7 +108,9 @@ zxl_putc:                           ; bly_putc, on the lower screen: A = the byt
         ld hl,.msg
         jp bly_fail
 .msg:   db "print would grow the lower screen past its two lines",0
+;; end zxl_putc
 
+;; routine bly_zx_lat
 bly_zx_lat:
         ld a,h
         or d
@@ -138,3 +149,4 @@ bly_zx_lat:
 .m1:    db "print at (",0
 .m2:    db ", ",0
 .m3:    db ") is off the lower screen",0
+;; end bly_zx_lat

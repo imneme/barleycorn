@@ -7,6 +7,7 @@
 
 ZXA_P_FLAG equ 5C91h
 
+;; routine bly_zx_scr_on
 bly_zx_scr_on:
         ld a,14h                    ; INVERSE, then its own value: the temporary bit's (bit 2), which a print's colour
         rst 10h                     ; item may have made differ from the permanent one, and which RST 10 sets
@@ -16,6 +17,8 @@ bly_zx_scr_on:
         rrca
         rst 10h
         ret
+;; end bly_zx_scr_on
+;; routine bly_zx_scr_off
 bly_zx_scr_off:
         ld a,15h                    ; OVER, then its own value: the temporary bit's (bit 0)
         rst 10h
@@ -23,3 +26,4 @@ bly_zx_scr_off:
         and 01h
         rst 10h
         ret
+;; end bly_zx_scr_off

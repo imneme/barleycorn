@@ -50,7 +50,7 @@ MUTANTS = [
     ('int16.asm', 'jr c,.ws', 'nop', '16-bit', 'div8 by 128..255: lose the 9th bit'),
     ('int16.asm', 'bit 7,e\n        jr nz,.wide', 'bit 7,e\n        nop\n        nop', '16-bit', 'div8: 128..255 through the fast loop'),
     # add, sub, neg, cmp
-    ('intarith.asm', 'ret po\n        jp bly_ovf_long\n\nbly_sub_i64', 'ret pe\n        jp bly_ovf_long\n\nbly_sub_i64', 'add', 'add_i32: overflow test inverted'),
+    ('intarith.asm', 'ret po\n        jp bly_ovf_long\n;; end bly_add_i32', 'ret pe\n        jp bly_ovf_long\n;; end bly_add_i32', 'add', 'add_i32: overflow test inverted'),
     ('intarith.asm', 'ld a,(hl)                   ; the top bytes compare signed: flip their sign bits and compare unsigned\n        xor 80h',
      'ld a,(hl)\n        xor 0', 'add', 'cmp: the top byte unsigned'),
     ('intarith.asm', 'bly_neg_i64:\n        ld d,0', 'bly_neg_i64:\n        ld d,1', 'add', 'neg_i64: subtract from 1s'),

@@ -20,6 +20,7 @@
 ;; bly_zx_fzx_at   in: HL = y, DE = x (ints, pixels)   fails: print #4; at ({y}, {x}) is off the screen (192 by
 ;;                 256 pixels)                                                           clobbers: AF BC DE HL
 
+;; routine bly_zx_fzx
 bly_zx_fzx:
         ld (zxf_font),hl
         ld a,(zxf_made)
@@ -45,7 +46,9 @@ bly_zx_fzx:
 .chan:  dw zxf_start                ; the channel: output, input (the ROM's report J), type S
         dw 15C4h
         db 'S'
+;; end bly_zx_fzx
 
+;; routine bly_zx_fzx_on
 bly_zx_fzx_on:
         ld hl,(zxf_font)
         ld a,h
@@ -69,7 +72,9 @@ bly_zx_fzx_on:
 .col:   dw 0
 .keep:  ds 3
 .none:  db "print #4 needs a font: fzx(font) first",0
+;; end bly_zx_fzx_on
 
+;; routine bly_zx_fzx_off (brings bly_zx_fzx_on)
 bly_zx_fzx_off:
         ld hl,bly_zx_fzx_on.keep
         ld de,bly_putc
@@ -79,7 +84,9 @@ bly_zx_fzx_off:
         ld (bly_col),hl
         ld a,2
         jp 1601h                    ; CHAN-OPEN: stream 2
+;; end bly_zx_fzx_off
 
+;; routine zxf_putc
 zxf_putc:                           ; bly_putc, for print #4: A = the byte
         cp 10
         jr nz,.char
@@ -91,7 +98,9 @@ zxf_putc:                           ; bly_putc, for print #4: A = the byte
         ld a,'?'                    ; a control code would be the driver's AT: ?, as print shows one anywhere
 .out:   rst 10h
         ret
+;; end zxf_putc
 
+;; routine bly_zx_fzx_at
 bly_zx_fzx_at:
         ld a,h
         or a
@@ -131,7 +140,9 @@ bly_zx_fzx_at:
 .m1:    db "print #4; at (",0
 .m2:    db ", ",0
 .m3:    db ") is off the screen (192 by 256 pixels)",0
+;; end bly_zx_fzx_at
 
+;; routine zxf_below
 zxf_below:                          ; the driver's Out of screen: the line can't hold another character. This is
         ld hl,6                     ; inside RST 10, whose PRINT-A-2 did EXX and saved BASIC's HL' (under the
         add hl,sp                   ; driver's two pushes and CALL-SUB's return), so put that back and EXX back,
@@ -144,11 +155,13 @@ zxf_below:                          ; the driver's Out of screen: the line can't
         ld hl,.m
         jp bly_fail
 .m:     db "print #4 would go below the screen",0
+;; end zxf_below
 
 zxf_font: dw 0
 zxf_made: db 0
 
 ; -- the driver: FZXdriver.asm's START, adapted (see above) ----------------------------------------------------
+;; routine zxf_start
 zxf_start:
         ld hl,zxf_flag              ; initial address of local variables
         dec (hl)                    ; check P_FLAG value by decrementing it
@@ -328,6 +341,7 @@ zxf_start:
 .exit:
         ld (hl),a                   ; move down a few pixels specified by height
         ret
+;; end zxf_start
 
 zxf_flag: db 0                      ; P_FLAG, P_COL, P_LIN: together, in this order, as the driver's are
 zxf_col:  db 0

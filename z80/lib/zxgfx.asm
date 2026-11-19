@@ -29,6 +29,7 @@ ZXG_UDG    equ 5C7Bh
 ; and both together leave it. So line and circle patch two instructions, "or" unless OVER and "xor" when exactly one
 ; of OVER and INVERSE is on, and never test the mode per pixel.
 
+;; routine bly_zx_plot
 bly_zx_plot:                        ; HL = x, DE = y
         ld a,h
         or d
@@ -240,10 +241,12 @@ bly_zx_plot:                        ; HL = x, DE = y
 .offmsg: db ") is off the screen",0
 
 .masks: db 80h,40h,20h,10h,08h,04h,02h,01h     ; not aligned: zxbuild.py assembles twice at different origins,
+;; end bly_zx_plot
                                                 ; so no fragment's size may depend on where it lands
 
 ; ---- point ----------------------------------------------------------------------------------------------------
 
+;; routine bly_zx_point (brings bly_zx_plot)
 bly_zx_point:                       ; HL = x, DE = y -> A = 1 if the pixel is set
         call bly_zx_plot.chk
         ld c,l
@@ -253,9 +256,11 @@ bly_zx_point:                       ; HL = x, DE = y -> A = 1 if the pixel is se
         ret z
         ld a,1
         ret
+;; end bly_zx_point
 
 ; ---- attr -----------------------------------------------------------------------------------------------------
 
+;; routine bly_zx_attr (brings bly_zx_plot)
 bly_zx_attr:                        ; HL = r, DE = c (ints), C = a
         ld a,h
         or d
@@ -294,7 +299,9 @@ bly_zx_attr:                        ; HL = r, DE = c (ints), C = a
         ld hl,bly_zx_plot.offmsg
         jp bly_fail
 .msg:   db "attr (",0
+;; end bly_zx_attr
 
+;; routine bly_zx_attr_read (brings bly_zx_attr)
 bly_zx_attr_read:                   ; HL = r, DE = c (ints) -> A = the square's attribute, as BASIC's ATTR
         ld a,h
         or d
@@ -319,9 +326,11 @@ bly_zx_attr_read:                   ; HL = r, DE = c (ints) -> A = the square's 
         ld d,a
         ld a,(de)
         ret
+;; end bly_zx_attr_read
 
 ; ---- udg ------------------------------------------------------------------------------------------------------
 
+;; routine bly_zx_udg
 bly_zx_udg:                         ; HL = n (int), DE = &view: +0 address, +2 length
         ld a,h
         or a
@@ -373,4 +382,5 @@ bly_zx_udg:                         ; HL = n (int), DE = &view: +0 address, +2 l
 .m_udg:   db "udg ",0
 .m_range: db " is not one of 0..20 (A to U)",0
 .m_rows:  db "a udg is 8 rows, not ",0
+;; end bly_zx_udg
 

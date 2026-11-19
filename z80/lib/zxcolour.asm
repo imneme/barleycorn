@@ -29,6 +29,7 @@ ZXC_BORDCR equ 5C48h
 
 zxc_t:  db 0                        ; 1 while a colour item sets the temporary colours alone
 
+;; routine zxc_temp
 zxc_temp:                           ; BC = a colour's routine: run it for the temporary colours alone (HL, A: its in)
         push af
         ld a,1
@@ -44,7 +45,9 @@ zxc_temp:                           ; BC = a colour's routine: run it for the te
         ld (zxc_t),a
         pop af
         ret
+;; end zxc_temp
 
+;; routine zxc_attr
 zxc_attr:                           ; A = ATTR_P, or ATTR_T for a colour item: what the colour is set from
         ld a,(zxc_t)
         or a
@@ -52,7 +55,9 @@ zxc_attr:                           ; A = ATTR_P, or ATTR_T for a colour item: w
         ret z
         ld a,(ZXC_ATTR_T)
         ret
+;; end zxc_attr
 
+;; routine zxc_mask
 zxc_mask:                           ; A = MASK_P, or MASK_T for a colour item
         ld a,(zxc_t)
         or a
@@ -60,7 +65,9 @@ zxc_mask:                           ; A = MASK_P, or MASK_T for a colour item
         ret z
         ld a,(ZXC_MASK_T)
         ret
+;; end zxc_mask
 
+;; routine zxc_sattr
 zxc_sattr:                          ; A = the attribute: ATTR_T, and ATTR_P unless it's a colour item's (A kept)
         ld (ZXC_ATTR_T),a
         push af
@@ -72,7 +79,9 @@ zxc_sattr:                          ; A = the attribute: ATTR_T, and ATTR_P unle
         ret
 .t:     pop af
         ret
+;; end zxc_sattr
 
+;; routine zxc_smask
 zxc_smask:                          ; A = the mask: MASK_T, and MASK_P unless it's a colour item's (A kept)
         ld (ZXC_MASK_T),a
         push af
@@ -84,38 +93,60 @@ zxc_smask:                          ; A = the mask: MASK_T, and MASK_P unless it
         ret
 .t:     pop af
         ret
+;; end zxc_smask
 
+;; routine bly_zx_tink
 bly_zx_tink:
         ld bc,bly_zx_ink
         jr zxc_temp
+;; end bly_zx_tink
+;; routine bly_zx_tpaper
 bly_zx_tpaper:
         ld bc,bly_zx_paper
         jr zxc_temp
+;; end bly_zx_tpaper
+;; routine bly_zx_tbright
 bly_zx_tbright:
         ld bc,bly_zx_bright
         jr zxc_temp
+;; end bly_zx_tbright
+;; routine bly_zx_tflash
 bly_zx_tflash:
         ld bc,bly_zx_flash
         jr zxc_temp
+;; end bly_zx_tflash
 
+;; routine bly_zx_ink_ok (brings bly_zx_ink)
 bly_zx_ink_ok:
         ld de,bly_zx_ink.name
         jp zxc_col9
+;; end bly_zx_ink_ok
+;; routine bly_zx_paper_ok (brings bly_zx_paper)
 bly_zx_paper_ok:
         ld de,bly_zx_paper.name
         jp zxc_col9
+;; end bly_zx_paper_ok
+;; routine bly_zx_bright_ok (brings bly_zx_bright)
 bly_zx_bright_ok:
         ld de,bly_zx_bright.name
         jp zxc_lvlck
+;; end bly_zx_bright_ok
+;; routine bly_zx_flash_ok (brings bly_zx_flash)
 bly_zx_flash_ok:
         ld de,bly_zx_flash.name
         jp zxc_lvlck
+;; end bly_zx_flash_ok
 
+;; routine bly_zx_temps
 bly_zx_temps:
         jp 0D4Dh                    ; TEMPS: TV_FLAG bit 0 is clear upstairs, so the upper screen's
+;; end bly_zx_temps
 
+;; routine zxc_col9 (brings zxc_colour)
 zxc_col9: ld c,10                   ; HL = n, DE = the name: fail unless 0..9; else A = n
         jr zxc_colour.colck
+;; end zxc_col9
+;; routine zxc_colour
 zxc_colour:                         ; HL = n, DE = the name: fail unless 0..7; else A = n
         ld c,8
 .colck: ld a,h
@@ -141,7 +172,9 @@ zxc_colour:                         ; HL = n, DE = the name: fail unless 0..7; e
         jp bly_fail
 .notc:  db " is not a colour 0..7",0
 .notc9: db " is not a colour 0..9",0
+;; end zxc_colour
 
+;; routine bly_zx_ink (brings bly_zx_paper)
 bly_zx_ink:
         ld de,.name
         call zxc_col9
@@ -150,6 +183,8 @@ bly_zx_ink:
         ld e,20h                    ; the paper's top bit: dark or light
         jr bly_zx_paper.cset
 .name:  db "ink",0
+;; end bly_zx_ink
+;; routine bly_zx_paper
 bly_zx_paper:
         ld de,.name
         call zxc_col9
@@ -218,6 +253,8 @@ bly_zx_paper:
         ld (ZXC_P_FLAG),a
         ret
 .name:  db "paper",0
+;; end bly_zx_paper
+;; routine bly_zx_border
 bly_zx_border:
         ld de,.name
         call zxc_colour
@@ -232,12 +269,16 @@ bly_zx_border:
 .light: ld (ZXC_BORDCR),a
         ret
 .name:  db "border",0
+;; end bly_zx_border
 
+;; routine bly_zx_bright (brings bly_zx_flash)
 bly_zx_bright:                      ; HL = n
         ld de,.name
         ld c,40h
         jr bly_zx_flash.lvl
 .name:  db "bright",0
+;; end bly_zx_bright
+;; routine bly_zx_flash
 bly_zx_flash:                       ; HL = n
         ld de,.name
         ld c,80h
@@ -260,6 +301,8 @@ bly_zx_flash:                       ; HL = n
         or c
 .l2:    jp zxc_smask
 .name:  db "flash",0
+;; end bly_zx_flash
+;; routine zxc_lvlck
 zxc_lvlck:                          ; HL = n, DE = the name: fail unless 0, 1 or 8
         ld a,h
         or a
@@ -279,15 +322,23 @@ zxc_lvlck:                          ; HL = n, DE = the name: fail unless 0, 1 or
         ld hl,.notl
         jp bly_fail
 .notl:  db " is not 0, 1 or 8",0
+;; end zxc_lvlck
+;; routine bly_zx_tinverse (brings bly_zx_over)
 bly_zx_tinverse:
         ld l,04h                    ; P_FLAG bit 2: the temporary INVERSE
         jr bly_zx_over.bits
+;; end bly_zx_tinverse
+;; routine bly_zx_tover (brings bly_zx_over)
 bly_zx_tover:
         ld l,01h                    ; P_FLAG bit 0: the temporary OVER
         jr bly_zx_over.bits
+;; end bly_zx_tover
+;; routine bly_zx_inverse (brings bly_zx_over)
 bly_zx_inverse:
         ld l,0Ch                    ; P_FLAG bits 2 and 3
         jr bly_zx_over.bits
+;; end bly_zx_inverse
+;; routine bly_zx_over
 bly_zx_over:
         ld l,03h                    ; P_FLAG bits 0 and 1
 .bits:  ld h,a
@@ -299,3 +350,4 @@ bly_zx_over:
         or l
 .store: ld (ZXC_P_FLAG),a
         ret
+;; end bly_zx_over

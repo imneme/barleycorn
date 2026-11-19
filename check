@@ -44,8 +44,9 @@ def stages(quick):
          lambda: None if have(paths.SJASMPLUS) and omse_ready() else 'needs sjasmplus, omse-ai and the 48K ROM',
          [[PY, SUITE, '--zx'], [PY, os.path.join(ROOT, 'z80', 'tests', 'zxrun_check.py')],
           [PY, os.path.join(ROOT, 'z80', 'tests', 'multi_input_check.py')]]),
-        ('fragments', "each library fragment against its Python model, on a bare Z80",
+        ('fragments', "each fragment against its Python model, and the routines' blocks",
          lambda: None if have(paths.SJASMPLUS) and omse_ready() else 'needs sjasmplus, omse-ai and the 48K ROM',
+         [[PY, os.path.join(ROOT, 'z80', 'libblocks.py')], [PY, os.path.join(ROOT, 'z80', 'tests', 'libblocks_check.py')]] +
          [[OPY, os.path.join(ROOT, 'z80', 'tests', t + '.py')] + (['--quick'] if quick and t not in ('test_core', 'test_gen', 'test_int') else [])
           for t in FRAG] + ([] if quick else [[OPY, os.path.join(ROOT, 'z80', 'tests', 'test_int_mutants.py')],
                                                [OPY, os.path.join(ROOT, 'z80', 'tests', 'test_fp_mutants.py')],

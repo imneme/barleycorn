@@ -22,6 +22,7 @@
 ; count +10 sign (0 or 80h) +11 unused.
 ; Scratch: bly_num's .code .dest .dig .n .acc, bly_str_int's .s .dst .ty, bly_str_intk's .s .k .st.
 
+;; routine bly_num
 bly_num:
         ld (.code),a
         ld (.dest),de
@@ -470,7 +471,9 @@ bly_num:
 .dig:   dw 0                        ; .dig and .n together are a str
 .n:     dw 0
 .acc:   ds 8
+;; end bly_num
 
+;; routine bly_str_int
 bly_str_int:                        ; \s*[-+]?\d+, as the interpreter's re.match
         ld (.s),hl
         ld (.dst),de
@@ -549,7 +552,9 @@ bly_str_int:                        ; \s*[-+]?\d+, as the interpreter's re.match
 .s:     dw 0
 .dst:   dw 0
 .ty:    db 0
+;; end bly_str_int
 
+;; routine bly_ints_init
 bly_ints_init:                      ; HL = &state, DE = &str
         ex de,hl
         ld c,(hl)
@@ -573,7 +578,9 @@ bly_ints_init:                      ; HL = &state, DE = &str
         inc hl
         ld (hl),d
         ret
+;; end bly_ints_init
 
+;; routine bly_ints_next
 bly_ints_next:                      ; HL = &state
         push hl
         pop ix
@@ -651,7 +658,9 @@ bly_ints_next:                      ; HL = &state
         ld a,1
         or a
         ret
+;; end bly_ints_next
 
+;; routine bly_ints_val
 bly_ints_val:                       ; HL = &state, A = type, DE = &dest
         push hl
         pop ix
@@ -661,7 +670,9 @@ bly_ints_val:                       ; HL = &state, A = type, DE = &dest
         ld c,(ix+8)
         ld b,(ix+9)
         jp bly_num
+;; end bly_ints_val
 
+;; routine bly_str_intk
 bly_str_intk:                       ; HL = &str, BC = &k, A = type, DE = &dest
         ld (.s),hl
         ld (.k),bc
@@ -714,3 +725,4 @@ bly_str_intk:                       ; HL = &str, BC = &k, A = type, DE = &dest
 .s:     dw 0
 .k:     dw 0
 .st:    ds 12
+;; end bly_str_intk

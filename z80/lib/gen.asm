@@ -12,9 +12,12 @@
 ;; bly_shr_i16  in: HL=x DE=count            out: HL = x >> count, the sign in                           clobbers: AF B DE HL
 ;; bly_ovf_int bly_ovf_long bly_ovf_quad bly_div0 bly_neg_shift bly_assert   fail with their message   never return
 
+;; routine bly_cmp_u8 (brings bly_cmp_u16)
 bly_cmp_u8:
         cp e
         jr bly_cmp_u16.three
+;; end bly_cmp_u8
+;; routine bly_cmp_u16
 bly_cmp_u16:
         or a
         sbc hl,de
@@ -25,6 +28,8 @@ bly_cmp_u16:
         ld a,0FFh
 .ret:   or a
         ret
+;; end bly_cmp_u16
+;; routine bly_cmp_i16
 bly_cmp_i16:
         ld a,h                      ; signs differ? then the sign decides
         xor d
@@ -36,31 +41,45 @@ bly_cmp_i16:
         ld a,1
 .done:  or a
         ret
+;; end bly_cmp_i16
 
+;; routine bly_lt
 bly_lt: rlca                        ; FFh -> 1, 0 -> 0, 1 -> 0
         and 1
         ret
+;; end bly_lt
+;; routine bly_ge
 bly_ge: call bly_lt
         xor 1
         ret
+;; end bly_ge
+;; routine bly_gt
 bly_gt: dec a                       ; 1 -> 0, so ...
         ld a,0
         ret nz
         inc a
         ret
+;; end bly_gt
+;; routine bly_le
 bly_le: call bly_gt
         xor 1
         ret
+;; end bly_le
+;; routine bly_eq
 bly_eq: or a
         ld a,0
         ret nz
         inc a
         ret
+;; end bly_eq
+;; routine bly_ne
 bly_ne: or a
         ret z
         ld a,1
         ret
+;; end bly_ne
 
+;; routine bly_shl16
 bly_shl16:
         bit 7,d
         jp nz,bly_neg_shift
@@ -78,6 +97,8 @@ bly_shl16:
         ret
 .zero:  ld hl,0
         ret
+;; end bly_shl16
+;; routine bly_shr_u16 (brings bly_shl16)
 bly_shr_u16:
         bit 7,d
         jp nz,bly_neg_shift
@@ -94,6 +115,8 @@ bly_shr_u16:
         rr l
         djnz .loop
         ret
+;; end bly_shr_u16
+;; routine bly_shr_i16
 bly_shr_i16:
         bit 7,d
         jp nz,bly_neg_shift
@@ -116,28 +139,41 @@ bly_shr_i16:
         ld h,a
         ld l,a
         ret
+;; end bly_shr_i16
 
+;; routine bly_ovf_int
 bly_ovf_int:
         ld hl,.m
         jp bly_fail
 .m:     db "int overflow",0
+;; end bly_ovf_int
+;; routine bly_ovf_long
 bly_ovf_long:
         ld hl,.m
         jp bly_fail
 .m:     db "long overflow",0
+;; end bly_ovf_long
+;; routine bly_ovf_quad
 bly_ovf_quad:
         ld hl,.m
         jp bly_fail
 .m:     db "quad overflow",0
+;; end bly_ovf_quad
+;; routine bly_div0
 bly_div0:
         ld hl,.m
         jp bly_fail
 .m:     db "division by zero",0
+;; end bly_div0
+;; routine bly_neg_shift
 bly_neg_shift:
         ld hl,.m
         jp bly_fail
 .m:     db "negative shift count",0
+;; end bly_neg_shift
+;; routine bly_assert
 bly_assert:
         ld hl,.m
         jp bly_fail
 .m:     db "assertion failed",0
+;; end bly_assert

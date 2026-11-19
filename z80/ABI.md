@@ -128,6 +128,48 @@ calls the entry, and puts HL or A into `rv_` for a narrow result.
 Callers call it as any function. A fragment whose `targets:` leave this
 target out isn't used for it, and the twin is compiled instead.
 
+**Routine by routine.** Inside a fragment, each routine is marked off,
+so a program carries only the routines it can reach, not every routine
+of every fragment it touches:
+
+```
+;; routine bly_cmp_u8 (brings bly_cmp_u16)
+bly_cmp_u8:
+        cp e
+        jr bly_cmp_u16.three
+;; end bly_cmp_u8
+```
+
+To sjasmplus the markers are comments, so a fragment assembled on its
+own, as the tests and the size tables do, has every routine, as it
+always did. Once the whole program is there, `link.resolve` keeps a
+marked routine if anything kept names it: the generated code, code
+outside every block, and kept routines, followed to the end of the
+chain, with whatever each one brings. It drops the rest.
+
+- **One routine a block:** `routine X`, X's label first, no other global
+  label, then `end X`, with every `.local` label of X inside. Data a
+  routine owns goes in its block, under a `.local` label.
+- **`(brings Y)`** where a routine can run on into Y (its last
+  instruction, data after it aside, isn't `ret` or an unconditional `jp`
+  or `jr`; a `.local` label after it counts as a way in), or names one
+  of Y's `.local` labels. Without it, Y could be dropped while something
+  still runs into it.
+- **Shared data stays outside every block:** a variable or table under a
+  global label is always kept, because code can reach it by an offset
+  from its neighbour (FZX's `zxf_flag`, `+1` and `+2` are its column and
+  line), and no name shows that.
+- **A label the tools read from the symbol table stays outside every
+  block** (`bly_inputs_left`, which zxbuild.py fills in).
+
+`z80/libblocks.py` checks every rule (./check runs it, with a dozen
+deliberately broken fragments it must catch) and can mark a new
+fragment's routines (`--wrap`). A routine dropped wrongly shows up as an
+undefined label when the program is assembled, which is loud. Running on
+into a dropped routine, a `.local` label left outside its routine's
+block, and data reached by an offset are the quiet mistakes, and those
+are what the check is for.
+
 ## 4. Failing: the line, and the messages
 
 - **`bly_line`** (word, in `core`) holds the Barley source line of the

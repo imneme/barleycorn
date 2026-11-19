@@ -16,6 +16,7 @@
 
 ; -- comparing ------------------------------------------------------------------------------------------------
 
+;; routine bly_cmp_str
 bly_cmp_str:                        ; byte by byte, unsigned; a shorter prefix comes first
         ld c,(hl)
         inc hl
@@ -66,7 +67,9 @@ bly_cmp_str:                        ; byte by byte, unsigned; a shorter prefix c
         sbc a,a                     ; FFh if it is, else 0
         or 1                        ; FFh or 1, with S and Z as OR A leaves them
         ret
+;; end bly_cmp_str
 
+;; routine bly_starts
 bly_starts:                         ; t.n <= s.n, and s's first t.n bytes are t's
         ld c,(hl)
         inc hl
@@ -106,9 +109,11 @@ bly_starts:                         ; t.n <= s.n, and s's first t.n bytes are t'
 .no:    pop hl
 .no2:   xor a
         ret
+;; end bly_starts
 
 ; -- making slices --------------------------------------------------------------------------------------------
 
+;; routine bly_slice
 bly_slice:                          ; (p + a, b - a); p isn't read, so a zero str's p = 0 is fine
         ld a,(hl)
         inc hl
@@ -124,7 +129,9 @@ bly_slice:                          ; (p + a, b - a); p isn't read, so a zero st
         ld (ix+2),l
         ld (ix+3),h
         ret
+;; end bly_slice
 
+;; routine bly_trim
 bly_trim:                           ; Python's s.strip(b' \t')
         push de
         ld e,(hl)
@@ -167,9 +174,11 @@ bly_trim:                           ; Python's s.strip(b' \t')
         inc hl
         ld (hl),b
         ret
+;; end bly_trim
 
 ; -- finding --------------------------------------------------------------------------------------------------
 
+;; routine bly_find
 bly_find:                           ; the first place t starts in s; "" is found at once, at 0
         ld c,(hl)
         inc hl
@@ -266,6 +275,7 @@ bly_find:                           ; the first place t starts in s; "" is found
 .k:     dw 0                        ; the pattern's length
 .k1:    dw 0                        ; and one less
 .p1:    dw 0                        ; and where its second byte is
+;; end bly_find
 
 ; -- split(): Python's bytes.split(sep), as an iterator -------------------------------------------------------
 ; The state, in the order bly_split_next walks it: +0 done (1 once the last piece has gone), +1 cur (where the
@@ -273,6 +283,7 @@ bly_find:                           ; the first place t starts in s; "" is found
 ; A one-byte separator (most of AoC's) is a CPIR, straight, and a two-byte one (", ") a CPIR and a compare;
 ; a longer one goes through find's search.
 
+;; routine bly_split_init
 bly_split_init:
         push hl                     ; &state
         ld h,b
@@ -327,7 +338,9 @@ bly_split_init:
 .nosep: ld hl,.msg
         jp bly_fail
 .msg:   db "split needs a separator",0
+;; end bly_split_init
 
+;; routine bly_split_next (brings bly_find)
 bly_split_next:
         ld a,(hl)
         or a
@@ -469,3 +482,4 @@ bly_split_next:
         ret
 .none:  xor a
         ret
+;; end bly_split_next

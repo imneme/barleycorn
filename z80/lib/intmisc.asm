@@ -11,6 +11,7 @@
 ; Small N-byte helpers the multiply, the divide and the quad functions share. Internal: generated code doesn't call
 ; them, and their names may change.
 
+;; routine bly_i_copyabs
 bly_i_copyabs:
         push bc
         push de
@@ -27,7 +28,9 @@ bly_i_copyabs:
         call bly_i_negn
         pop af
         ret
+;; end bly_i_copyabs
 
+;; routine bly_i_negn
 bly_i_negn:
         or a
 .l:     ld a,0                      ; LD keeps the borrow
@@ -36,7 +39,9 @@ bly_i_negn:
         inc hl
         djnz .l
         ret
+;; end bly_i_negn
 
+;; routine bly_i_sig
 bly_i_sig:                          ; N is even: look at the bytes a pair at a time, from the top
         ld a,b
         add a,l
@@ -59,7 +64,9 @@ bly_i_sig:                          ; N is even: look at the bytes a pair at a t
         ret nz
         dec a
         ret
+;; end bly_i_sig
 
+;; routine bly_i_neg32
 bly_i_neg32:
         xor a
         sub e
@@ -74,3 +81,4 @@ bly_i_neg32:
         sbc a,h
         ld h,a
         ret
+;; end bly_i_neg32

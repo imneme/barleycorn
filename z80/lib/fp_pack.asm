@@ -11,6 +11,7 @@
 ;; bly_fc.zero    0 to (.res)       bly_fc.put   HL=&u (an unpacked float) to (.res)       bly_fc.shl   .w <<= 1
 ;; Scratch: .res .flip .sg .ex .ua .ub .w. Every entry clobbers AF BC DE HL.
 ;
+;; routine bly_fc
 bly_fc:
 .both:  ld (.res),bc                ; HL=&a DE=&b BC=&r: unpack both into .ua and .ub
         push de
@@ -116,4 +117,5 @@ bly_fc:
 .ub:    ds 6
 .w:     ds 8
 .movf:  db "float overflow",0
+;; end bly_fc
 

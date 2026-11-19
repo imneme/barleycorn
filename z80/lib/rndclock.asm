@@ -3,6 +3,7 @@
 ; The 48K's clock is FRAMES, the frames since it was switched on (three bytes), and R, the refresh counter, adds
 ; the instruction the program had got to: together a seed that's different every run (random.asm puts it in).
 
+;; routine bly_randomize_now
 bly_randomize_now:
         ld hl,.q
         ld a,r
@@ -22,3 +23,4 @@ bly_randomize_now:
         ld hl,.q
         jp bly_randomize_q
 .q:     ds 8
+;; end bly_randomize_now

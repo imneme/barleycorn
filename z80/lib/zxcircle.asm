@@ -20,6 +20,7 @@
 ; y <= min(Mx, My); likewise both need x >= max(Lx, Ly). y only grows and x only falls, so the loop stops at the
 ; first step outside those. A circle wholly on the screen (r <= 87) takes a fast path without clipping.
 
+;; routine bly_zx_circle
 bly_zx_circle:                      ; HL = &block: cx, cy, r
         ld de,.cx
         ld bc,6
@@ -686,3 +687,4 @@ bly_zx_circle:                      ; HL = &block: cx, cy, r
 .c2:    ds 2
 .c3:    ds 2
 .c4:    ds 2
+;; end bly_zx_circle

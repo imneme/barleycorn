@@ -12,21 +12,28 @@ bly_tlen:        dw 0
 bly_test_outp:   dw bly_test_out
 bly_test_out:    ds 1024
 
+;; routine bly_putc
 bly_putc:
         ld hl,(bly_test_outp)
         ld (hl),a
         inc hl
         ld (bly_test_outp),hl
         ret
+;; end bly_putc
 
+;; routine bly_failed
 bly_failed:                         ; a failure's words are out: nothing more to do here
         ret
+;; end bly_failed
 
+;; routine bly_exit
 bly_exit:
         ld a,1
         ld (bly_test_failed),a
         jp bly_test_halt
+;; end bly_exit
 
+;; routine bly_test_init
 bly_test_init:
         xor a
         ld (bly_test_failed),a
@@ -40,3 +47,4 @@ bly_test_init:
         ld (bly_line),hl
         ld (bly_col),hl
         ret
+;; end bly_test_init

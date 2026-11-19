@@ -19,6 +19,7 @@
 ;; cmp may clobber every register, so the state lives in scratch words. Self-modifying: the CALLs to cmp, and in pop
 ;; the immediates marked "patched", set on entry (esize, -n*esize, a and &last), which keep pop's bookkeeping lean.
 
+;; routine bly_heap_new
 bly_heap_new:
         push hl
         ld a,2                      ; kind 2, heap
@@ -38,7 +39,9 @@ bly_heap_new:
         ld (hl),b
         ex de,hl
         ret
+;; end bly_heap_new
 
+;; routine bly_heap_push
 bly_heap_push:                      ; HL=heap DE=&v
         ld (.v),de
         push hl
@@ -128,7 +131,9 @@ bly_heap_push:                      ; HL=heap DE=&v
 .poff:  dw 0
 .a:     dw 0
 .es:    dw 0
+;; end bly_heap_push
 
+;; routine bly_heap_pop
 bly_heap_pop:                       ; HL=heap DE=&dest
         push hl
         pop ix
@@ -249,3 +254,4 @@ bly_heap_pop:                       ; HL=heap DE=&dest
 .hp:    dw 0
 .pp:    dw 0
 .sp:    dw 0
+;; end bly_heap_pop

@@ -3,6 +3,7 @@
 ; CP/M has no clock, so R, the refresh counter, is all there is to go on: on a real machine it's whatever it had
 ; got to; under an emulator that starts it the same, the same each run. (rndclock.asm is the 48K's.)
 
+;; routine bly_randomize_now
 bly_randomize_now:
         ld hl,.q
         ld b,5
@@ -13,3 +14,4 @@ bly_randomize_now:
         ld hl,.q
         jp bly_randomize_q
 .q:     ds 8
+;; end bly_randomize_now

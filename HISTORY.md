@@ -244,3 +244,16 @@ than either C:
 On the thirteen programs and the examples nothing got slower. `expr`
 takes 19% fewer T-states, `bubble` 12%, `tree` 9%, `qsort` 8%,
 `ex-mandel` 7%, and the recursive ones are unchanged.
+
+**The morning after: routine by routine.** Melissa looked at the memory
+traces and saw much of the library never ran, and asked whether a
+program links only what it needs. It did, but a whole fragment at a
+time: one routine wanted brought in every routine in its file. Now each
+routine is marked off in its fragment, the linker keeps one only if
+something kept names it, and `z80/libblocks.py` checks the rules the
+assembler can't see, such as that nothing runs on into a routine that
+might be gone (ABI.md, section 3). Nothing got slower, and every
+benchmark got smaller: `fib` by 43%, `perm` by 39%, the thirteen and the
+examples by 18% in all, the elves by 0.9K. The checked elves on the
+wider grove fit with `taken` inlined now.
+

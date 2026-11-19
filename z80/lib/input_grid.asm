@@ -9,6 +9,7 @@
 ; rows x cols is the sum of the lines' lengths, so it fits a word and needs no multiply. The cells aren't zeroed
 ; first (bly_alloc_raw), since the copy fills them all.
 
+;; routine bly_grid_input
 bly_grid_input:
         ld ix,0                     ; IX = the cells, counted
         ld bc,0                     ; BC = cols
@@ -124,3 +125,4 @@ bly_grid_input:
 .m3:    db " long, not ",0
 .cols:  dw 0
 .left:  dw 0
+;; end bly_grid_input

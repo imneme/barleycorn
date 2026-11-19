@@ -33,11 +33,14 @@
 ; don't set quotient bits: the carry after the trial subtraction (and after the add-back) is the quotient bit
 ; inverted, so it goes straight in with the next shift and the digit is complemented once at the end.
 
+;; routine bly_rem_i32 (brings bly_divmod_i32, bly_divmod_i64)
 bly_rem_i32:
         ld (bly_divmod_i64.r),bc    ; the remainder goes to BC, and there's no quotient
         ld bc,0
         ld (bly_divmod_i64.q),bc
         jr bly_divmod_i32.go
+;; end bly_rem_i32
+;; routine bly_divmod_i32 (brings bly_divmod_i64, bly_i_udiv)
 bly_divmod_i32:
         ld (bly_divmod_i64.q),bc
         ld (bly_divmod_i64.r),ix
@@ -169,12 +172,16 @@ bly_divmod_i32:
         pop hl
         ld a,4
         jr bly_divmod_i64.common
+;; end bly_divmod_i32
+;; routine bly_rem_i64 (brings bly_divmod_i64)
 bly_rem_i64:
         ld (bly_divmod_i64.r),bc
         ld bc,0
         ld (bly_divmod_i64.q),bc
         ld a,8
         jr bly_divmod_i64.common
+;; end bly_rem_i64
+;; routine bly_divmod_i64
 bly_divmod_i64:
         ld a,8
 .go:    ld (.q),bc
@@ -241,7 +248,9 @@ bly_divmod_i64:
 .n:     db 0
 .sa:    db 0
 .sb:    db 0
+;; end bly_divmod_i64
 
+;; routine bly_i_udiv
 bly_i_udiv:
         ld (.n),a
         ld hl,bly_i_ub
@@ -586,6 +595,7 @@ bly_i_udiv:
 .cnt:   db 0
 .bits:  db 0
 .ptr:   dw 0
+;; end bly_i_udiv
 bly_i_ua: ds 8
 bly_i_ub: ds 8
 bly_i_ur: ds 8
