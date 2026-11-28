@@ -269,3 +269,78 @@ less the pauses. `z80/tests/terse_check.py` builds every semantics
 program both ways: one that doesn't fail prints the same, and one that
 does prints what came before its failure, then stops.
 
+
+## Operand homes, at last (27 November 2026)
+
+The first Barley asked whether a variable could live in the immediate
+operand of an instruction, and measured it at 2 to 8%. Barleycorn's
+generator had never taken that answer back. When Melissa read the new
+README, she'd assumed it had, and suggested the smallest way in:
+statically pick the likely hottest place a variable is used, store the
+variable in that instruction's immediate, and have every other use read
+and write that location instead of its slot. First, she said, try it
+both ways on a benchmark.
+
+So a prototype rewrote the finished assembly, and the benchmarks ran
+both ways, every output checked against the interpreter. Then it went
+into the generator as its last pass (`z80/homes.py`). A slot of one or
+two bytes gets a home if every use of it is a plain load or store of
+exactly it. The home is its read at the deepest loop nesting, which
+becomes the immediate form: `ld de,(x)` at 20 T-states becomes
+`ld de,nn` at 10, and `ld hl,(x)` or `ld a,(x)` save 6. No use gets
+slower, and `ld de,nn` is a byte shorter than `ld de,(nn)`.
+
+| program | homes off | homes on | on / off | code bytes |
+|---|---|---|---|---|
+| hanoi | 4,280,501 | 3,948,680 | 0.922 | 678 -> 677 |
+| tak | 33,012,633 | 30,628,936 | 0.928 | 773 -> 772 |
+| fib | 6,287,320 | 5,843,772 | 0.929 | 547 -> 546 |
+| sieve | 7,036,846 | 6,601,841 | 0.938 | 702 -> 700 |
+| ack | 16,405,176 | 15,498,637 | 0.945 | 661 -> 661 |
+| bubble | 14,887,541 | 14,173,677 | 0.952 | 1010 -> 1001 |
+| life | 12,837,132 | 12,273,278 | 0.956 | 1848 -> 1826 |
+| qsort | 3,320,333 | 3,191,097 | 0.961 | 1923 -> 1911 |
+| crc | 2,952,019 | 2,856,013 | 0.967 | 827 -> 824 |
+| tree | 2,802,253 | 2,711,501 | 0.968 | 1329 -> 1334 |
+| perm | 2,048,824 | 1,986,178 | 0.969 | 1390 -> 1384 |
+| ex-mandel | 393,081,495 | 380,895,064 | 0.969 | 7886 -> 7860 |
+| expr | 1,896,917 | 1,853,133 | 0.977 | 1907 -> 1905 |
+| queens | 6,134,285 | 6,062,805 | 0.988 | 877 -> 879 |
+| ex-life | 388,469,825 | 383,632,609 | 0.988 | 9085 -> 9069 |
+| ex-collatz | 178,830,936 | 177,432,056 | 0.992 | 7866 -> 7858 |
+| sing | 98,421,637 | 97,863,404 | 0.994 | 8587 -> 8578 |
+| ex-maze | 77,826,086 | 77,505,233 | 0.996 | 10162 -> 10142 |
+
+Every program is faster, by 3.7% on the geometric mean: 5 to 8% on the
+small recursive ones, less where the time is in the library. Code is
+within half a percent either way. Two programs are a few bytes bigger,
+because a home lives in the code, which RUN again doesn't reload. So a
+global that relies on starting at zero, as the slots do, has its home
+zeroed at every start (`z80/tests/homes_check.py` runs three programs
+twice; without the zeroing, the second run carries on from the first's
+count).
+
+The prototype's first try got hanoi wrong. Its four byte-sized
+parameters are saved across its recursive call two at a time: one
+`ld hl,(n)`, one `push hl`, for `n` and `a` together. It moved `a` into
+an operand and left that push saving the slot. Now any access that
+touches two slots pins both, as does a taken address. The semantics
+suite has hanoi's shape, and the mutant that forgets fails it.
+
+**Next:** this is a last pass, and Melissa's view is that it's good
+enough for now but not the long-term answer. Doing it better needs more
+knowledge than a pass over finished assembly has. The generator could
+choose homes knowing what the register cache will hold, which variables
+a register would serve better, and how often each loop runs. It could
+also give the save rule a way to save a home without pinning its
+neighbours.
+
+Melissa's original design for this goes further. Rewrite the program
+into SSA form at the source level, so that each version of a variable
+has exactly one assignment. A version read in only one place then needs
+no slot at all, because its assignment writes straight into that read's
+immediate. A version read in several places gets a home in one of them
+and is read from there by the others, as now. That's the first Barley's
+question about how much memory traffic becomes forward patching. She
+expects a source-level rewrite to cost no extra storage and no extra
+code.

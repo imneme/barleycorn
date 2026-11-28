@@ -126,12 +126,15 @@ geometric mean, and used far less stack.
 The question went one step further: could a variable live in the
 immediate operand of the instruction that uses it? A Spectrum runs its
 code from RAM, so it can, and the first experiments measured these
-"operand homes" at 2 to 8% faster, never slower. Barleycorn's library
-already writes into its own code where that pays. A heap or a grid
+"operand homes" at 2 to 8% faster, never slower. Now the compiler gives
+every small variable it can one: the read in its deepest loop becomes
+`ld de,nn` (10 T-states, not 20), and that `nn` is the variable, which
+every other use reads and writes in place of its old slot. Across the
+benchmarks that's 3.7% faster, and nothing slower (HISTORY.md, "Operand
+homes"). The library writes into its own code too: a heap or a grid
 patches the call to its elements' comparison into itself, and each float
 operation writes its one-byte calculator script into the code just
-before it calls the ROM. Operand homes for the compiler's own variables
-are on its list of next steps (HISTORY.md).
+before it calls the ROM.
 
 **Small, but with generics.** The whole language fits on one page, and
 it still has lists, queues, heaps, maps, sets and grids of any element

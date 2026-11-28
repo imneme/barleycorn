@@ -33,10 +33,12 @@ sys.path.insert(0, os.path.join(HERE, '..', 'interp'))
 sys.path.insert(0, HERE)
 import barley as B                                                     # noqa: E402
 from link import gather, resolve, Frag                                 # noqa: E402
-GENERATED = re.compile(r'(bly_|f_|fr_|rv_|fsz_|ppr_|pcmp_|k_)|gs$|[LS]\d+d?$')   # the names z80gen makes
+GENERATED = re.compile(r'(bly_|f_|fr_|rv_|fsz_|ppr_|pcmp_|k_|oh_)|gs$|[LS]\d+d?$')   # the names z80gen makes
 ASM_WORDS = set('and or xor not mod shl shr low high pair abs norel exist sizeof c nz z nc po pe p m'.split())
 import peephole                                                        # noqa: E402
+import homes as homes_pass                                              # noqa: E402
 PEEP = os.environ.get('BLY_PEEP', '1') != '0'        # BLY_PEEP=0 turns the register cache off, to compare
+HOMES = os.environ.get('BLY_HOMES', '1') != '0'      # BLY_HOMES=0 leaves every variable in its slot, to compare
 
 TYPE_CODE = {B.BYTE: 0, B.WORD: 1, B.INT: 2, B.LONG: 3, B.QUAD: 4, B.DWORD: 5}
 CMP_ROUTINE = {'<': 'bly_lt', '<=': 'bly_le', '>': 'bly_gt', '>=': 'bly_ge', '==': 'bly_eq', '!=': 'bly_ne'}
@@ -163,6 +165,7 @@ class Gen:
         self.func = None
         self.fsize = 0
         self.gsize = 0
+        self.slot_log = []                   # (name, size) of every slot made: homes.py's map of what's where
         self.equs = []
         self.loops = []
         self.cold_code = []
@@ -281,6 +284,7 @@ class Gen:
         else:
             name = f'fr_{self.func.name}+{self.fsize}'
             self.fsize += sz
+        self.slot_log.append((name, sz))
         return name
 
     def temp(self, t):
@@ -673,7 +677,8 @@ class Gen:
         theirs = [p for p in fr.provides if GENERATED.match(p)]
         if theirs:
             raise GenError(f'{f.asm} provides {" ".join(theirs)} ({where}): names that start bly_, f_, fr_, rv_, '
-                           f'fsz_, ppr_, pcmp_ or k_, and L or S with digits, are the compiler\'s and the library\'s')
+                           f'fsz_, ppr_, pcmp_, k_ or oh_, and L or S with digits, are the compiler\'s and the '
+                           f'library\'s')
         labels = set(re.findall(r'^([A-Za-z_]\w*):', fr.text, re.M)) - set(fr.provides)
         if labels:
             raise GenError(f'{f.asm} has labels its provides: doesn\'t list ({where}): {" ".join(sorted(labels))} '
@@ -3270,13 +3275,14 @@ COUNT64 = ['bly_count64:                        ; HL = &count (quad) -> DE = it,
 
 
 def compile_program(src, target='cpm', org=None, bss_at=None, markers=True, unchecked=False, inline=True,
-                    terse=False):
+                    terse=False, homes=None):
     """org and bss_at place the code and the slots (the Spectrum's builder puts code high, slots beneath it).
     markers=False leaves out the two invisible control codes around each piece of text printed at a place, which
     only the tests' transcript needs (HACKING.md): a tape for a real Spectrum is faster without them. unchecked:
     8- and 16-bit indexes go unchecked (bly --unchecked). inline=False calls one-return functions rather than working
     them out in place: the Spectrum's builder asks for that when inlining would leave a program no room. terse: every
-    failure ends the program at once with no words (bly_terse, the platform's), and no line is kept for one"""
+    failure ends the program at once with no words (bly_terse, the platform's), and no line is kept for one.
+    homes=False leaves every variable in its slot (homes.py: operand homes, the last pass; None: BLY_HOMES)"""
     FLOATS['on'] = target in ('zx48', 'cpm')     # the ROM's on the 48K; fp_cpm.asm's on CP/M
     decls = B.Parser(src).program()
     ck = B.Checker(decls, 'cpm' if target == 'cpm' else 'zx48')
@@ -3293,7 +3299,18 @@ def compile_program(src, target='cpm', org=None, bss_at=None, markers=True, unch
     if bss_at is not None:
         g.bss_at = bss_at
     g.globals_names()
-    return g.program()
+    asm = g.program()
+    if not (HOMES if homes is None else homes):
+        return asm
+    slots, zeroed = list(g.slot_log), []
+    for d in ck.decls:
+        if d.k == 'var':
+            slots.append((g.globals_names()[d.name], max(size(d.ty), 1)))
+            if d.e is None:                             # it relies on the slots starting at zero
+                zeroed.append(g.globals_names()[d.name])
+        elif d.k == 'func' and d.rty is not B.VOID:
+            slots.append((f'rv_{d.name}+0', size(d.rty)))
+    return homes_pass.place(asm, slots, zeroed)[0]
 
 
 def main(argv):
@@ -3305,6 +3322,7 @@ def main(argv):
     ap.add_argument('--unchecked', action='store_true',
                     help='8- and 16-bit indexes go unchecked: only for a program already proven with them checked')
     ap.add_argument('--terse', action='store_true', help='every failure stops the program at once with no words (48K: C Nonsense in BASIC; CP/M: ?)')
+    ap.add_argument('--no-homes', action='store_true', help='every variable in its slot, none in an operand (homes.py)')
     a = ap.parse_args(argv)
     try:
         B.EMBED_DIR = os.path.dirname(os.path.abspath(a.program))
@@ -3312,7 +3330,8 @@ def main(argv):
     except OSError as err:
         sys.exit(f'z80gen.py: {a.program}: {err.strerror}')
     try:
-        sys.stdout.write(compile_program(src, a.target, unchecked=a.unchecked, terse=a.terse))
+        sys.stdout.write(compile_program(src, a.target, unchecked=a.unchecked, terse=a.terse,
+                                         homes=False if a.no_homes else None))
     except B.BarleyError as err:
         print(err)
         sys.exit(1)

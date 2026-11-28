@@ -331,6 +331,13 @@ The generator's main ideas, and where they live in `z80gen.py`:
   the syntax tree.
 - **The peephole** (`peephole.py`): what HL, DE and A hold, through
   straight-line code; anything it doesn't understand forgets everything.
+- **Operand homes** (`homes.py`, the last pass): a 1- or 2-byte slot
+  whose every use is a plain load or store moves into the immediate of
+  its read in the deepest loop (`ld de,nn`), and every other use reads
+  and writes it there. Any access touching two slots, or a taken
+  address, pins them. `BLY_HOMES=0` (or `z80gen.py --no-homes`) leaves
+  every variable in its slot, to compare; `z80/tests/homes_check.py`
+  checks that RUN again starts them from zero.
 
 HISTORY.md has the steps so far with their numbers, and the next ones.
 

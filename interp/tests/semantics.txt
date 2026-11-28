@@ -2895,3 +2895,22 @@ end
 --- expect
 5
 index 4 is outside 0..4 at line 3
+
+=== byte parameters saved two at a time across a recursive call keep their own values (operand homes: z80/homes.py)
+var moves: word
+var trail: word
+
+func hanoi(n: byte, a: byte, b: byte, c: byte)
+  if n == 0 then return end
+  hanoi(n - 1, a, c, b)
+  moves = moves + 1
+  trail = trail * 3 + a * 4 + b
+  hanoi(n - 1, c, b, a)
+end
+
+func main()
+  hanoi(10, 1, 3, 2)
+  print moves; " "; trail
+end
+--- expect
+1023 36446
