@@ -327,6 +327,15 @@ an operand and left that push saving the slot. Now any access that
 touches two slots pins both, as does a taken address. The semantics
 suite has hanoi's shape, and the mutant that forgets fails it.
 
+**And against SDCC again.** The elves bake-off (above, "Against SDCC")
+ran again with homes in, every build on the same emulator the same
+evening, SDCC's tapes and November's Barleycorn reproducing their times
+to the tenth of a second. Less the pauses, on our fiddlehead: the
+obvious C 429.9 seconds, the `static` C 406.2, Barleycorn unchecked
+401.3 in November and 390.5 now. On Melissa's goodbye: 89.1, 85.3, 86.1
+and 83.6. So Barleycorn unchecked now beats the `static` C on both, and
+the obvious C by 10% and 7%. Every round's picture agrees with the C's.
+
 **Next:** this is a last pass, and Melissa's view is that it's good
 enough for now but not the long-term answer. Doing it better needs more
 knowledge than a pass over finished assembly has. The generator could
