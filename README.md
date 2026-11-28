@@ -107,6 +107,58 @@ work. And for size, or showing off: `--terse` keeps every check but
 drops the words, so a failure just stops, the Spectrum saying
 `C Nonsense in BASIC`, about a tenth less code.)
 
+## What makes it interesting
+
+**Where variables live, and how a call passes them.** Barleycorn grew
+out of a question with numbers attached: where should a variable live on
+a Z80, and what should a call cost? Its answer is the one Turbo Pascal 3
+and HiSoft BASIC gave. Every variable has a fixed address, and there are
+no stack frames. A call passes its arguments by storing them straight
+into the callee's own variables, and the result comes back the same way.
+One rule makes that safe with recursion, and it works because the
+compiler sees the whole program: at every call it knows what the callee
+could overwrite, so it saves exactly what's still needed afterwards and
+could be overwritten. A function outside a recursive cycle saves
+nothing. On the thirteen benchmarks Barleycorn began with, fixed
+addresses beat frames on the IX register on every one, by 26% on the
+geometric mean, and used far less stack.
+
+The question went one step further: could a variable live in the
+immediate operand of the instruction that uses it? A Spectrum runs its
+code from RAM, so it can, and the first experiments measured these
+"operand homes" at 2 to 8% faster, never slower. Barleycorn's library
+already writes into its own code where that pays. A heap or a grid
+patches the call to its elements' comparison into itself, and each float
+operation writes its one-byte calculator script into the code just
+before it calls the ROM. Operand homes for the compiler's own variables
+are on its list of next steps (HISTORY.md).
+
+**Small, but with generics.** The whole language fits on one page, and
+it still has lists, queues, heaps, maps, sets and grids of any element
+type, records included. Each is specialised for its element's size, as a
+C++ template is, so `xs[i]` on a `list[word]` is a shift and an add, not
+a call. Records compare field by field, so a heap of records whose first
+field is the cost is Dijkstra's queue, with no comparison function
+written. What you can't do is write generic code of your own, and that's
+what keeps the type system on a page.
+
+**It leans on the ROM.** On a Spectrum, Barleycorn uses the 16K of ROM
+that's already in the machine instead of carrying its own copy. Floats
+are the ROM's 5-byte floats, worked by the ROM's calculator, and reading
+one from text is the ROM's own routine, the one VAL uses. When the ROM
+objects ("A Invalid argument"), its error is caught the way Melissa's
+spectrum-minilib catches them, and becomes Barleycorn's message, in the
+same words as on every backend. `ask()` is the ROM's line editor, cursor
+keys, DELETE and all; `beep` is the ROM's BEEPER; text and its colours
+go through the ROM's printing; and every frame ends in the ROM's
+interrupt handler, so the keyboard and the clock keep working.
+Barleycorn has its own where the ROM is too slow or too unlike other
+machines: square roots (the ROM's SQR takes 385,000 T-states,
+Barleycorn's 9,600) and drawing (Bresenham lines and midpoint circles,
+so a picture can be compared with another compiler's pixel for pixel).
+On CP/M, which has no ROM, the floats are its own too, in the ROM's
+5-byte form.
+
 ## What you need
 
 - **Python 3.10 or later**, for the interpreter and the compilers.
